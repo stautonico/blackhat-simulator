@@ -1,111 +1,46 @@
-import pickle
-from typing import Union
+from typing import Optional, Dict, List
 
-from .users import User
 from .fs import StandardFS
+from .helpers import SysCallStatus, SysCallMessages
+from .session import Session
+from .user import User
 
 
 class Computer:
-    """
-    The main 'game object' that represents a computer in a network.
-    The computers is the main container that holds the filesystem, networking attributes,
-    services, users, etc.
-    """
-
     def __init__(self) -> None:
-        # Usually, the parent is the router in the network
-        self.parent: Union[Computer, None] = None
-        """The `Computer` one level up in the network (usually the router/gateway)"""
-        # User's registered in the system
-        self.users = {}
-        # The computers file system
-        self.fs = StandardFS()
-        """The computers file system (Unix FHS) `StandardFS`"""
+        self.parent: Optional[Computer] = None  # Router
+        self.hostname: Optional[str] = None
+        self.users: Dict[str, User] = {}
+        self.sessions: List[Session] = []
 
-    # Technically, functions in the `Computer` class should be like unix syscalls
-    # But some things are done just for convenience
+        # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
+        self.create_root_user()
 
-    def init(self) -> None:
-        """
-        Runs all the initialization steps a computer needs to get setup
+        self.fs: StandardFS = StandardFS(self)
 
-        Initialization steps needed when booting and loading from a save:
-        <ul>
-            <li>Set machine hostname</li>
-            <li>Clear environment variables</li>
-            <li>Clear command history (NOTE: might remove, left over from old demo)</li>
-            <li>Start uptime counter</li>
-            <li>Run current user's .shellrc (.bashrc/.zshrc equivalent)</li>
-            </ul>
-        Returns:
-            None
-        """
-        """
-        TODO:
-            * Setup hostname
-            * Clear environment vars
-            * Clear command history (might not need, left over from old demo)
-            * Start uptime counter
-            * Run current user's .shellrc (.bashrc/.zshrc equivalent)
-        """
-        pass
+    def set_hostname(self, hostname: str) -> None:
+        # NOTE: This will change to "update hostname" when fs is implemented
+        self.hostname = hostname
 
-    def add_user(self, username: str, password: str) -> User:
-        """
-        Adds a new user to the system
-        Args:
-            username (str): username for the new user
-            password (str): plain text password for the new user
-
-        Returns:
-            User: `User` object for the new user
-        """
+    def add_user(self, username: str, password: str) -> SysCallStatus:
+        if username in self.users.keys():
+            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
         new_user = User(username)
         new_user.set_password(password)
         self.users[username] = new_user
-        return new_user
+        return SysCallStatus(success=True)
 
-    def remove_user(self, username: str) -> bool:
-        """
-        Removes a user from the system
-        Args:
-            username (str): Username of user to remove
-
-        Returns:
-            bool: `True` if user was removed successfully, otherwise `False`
-        """
+    def delete_user(self, username: str) -> SysCallStatus:
         if username in self.users.keys():
             del self.users[username]
-            return True
-        else:
-            return False
+            return SysCallStatus(success=True)
+
+        return SysCallStatus(success=False, )
 
     def create_root_user(self) -> None:
-        """
-        Creates the root user for the system
-
-        This is done separately just because the root user is slightly different from "standard" users.
-        Returns:
-            None
-        """
-        # NOTE: root user has a simple password just for debugging usage
+        # Add the root user with a random password
+        # self.add_user("root", ''.join([choice(ascii_uppercase + digits) for _ in range(16)]))
         self.add_user("root", "password")
+        # self.users["root"].add_group(Group("root"))
         # The root users doesn't get an UID automatically, it is manually assigned UID 0
         self.users["root"].uid = 0
-
-    def save(self, output_file: Union[str, None] = "save.h3x") -> bool:
-        """
-        Serializes all objects in the game and dumps it to a file for saving
-
-        Args:
-            output_file (str, optional): Save file to dump to
-
-        Returns:
-            bool: `True` if saved successfully, otherwise `False`
-        """
-        try:
-            with open(output_file, "wb") as f:
-                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
-            return True
-        except Exception as e:
-            return False

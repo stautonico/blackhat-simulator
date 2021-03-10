@@ -8,18 +8,14 @@ class SysCallMessages(Enum):
     """
     NOT_ALLOWED = 1
     """Call failed due to permission related error"""
-    ALREADY_EXISTS = 2
-    """Object attempting to be created already exists (ex. `User` with given username already exists)"""
-    NOT_FOUND = 3
-    """The given object doesn't exist"""
 
 
 class SysCallStatus:
     """
-    Class that contains status information about a "syscall"
+    Class that contains status information about a syscall
 
     Args:
-        success (bool): Success status of the "syscall"
+        success (bool): Success status of the syscall
         message (SysCallMessages, optional): Message regarding the status (successful or otherwise). May or may not be used. Changes on a case by case basis
         data (str, optional): Data returned by the function. Changes on a case by case basis
 

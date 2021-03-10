@@ -1,187 +1,233 @@
 import sys
-from typing import Literal, List
+from random import choice
+from string import ascii_uppercase, digits
+from typing import Optional, Dict, List, Literal, Union
 
 from .helpers import SysCallStatus, SysCallMessages
 
 
 class FSBaseObject:
-    """
-    The base object in a file system
-
-    Could be used as a base for a directory or a file. This is close to the equivalent of an Inode in unix.
-    All variables that this class are shared by files and directories
-    The `File` and `Directory` type have their own unique variables along with their unique ones (in the given child class)
-
-    Args:
-        name (str): Name of the inode
-        parent (Directory): The `Directory` that the current file exists inside of
-        owner (int): The UID of the file's owner
-        group_owner (int): The GID of the file's owner group
-
-    """
-
-    def __init__(self, name: str, parent: "Directory", owner: int, group_owner: int) -> None:
-        self.name = name
-        self.permissions = {"read": ["owner", "group", "public"], "write": ["owner"], "execute": []}
-        self.owner = owner
-        self.group_owner = group_owner
-        self.parent = parent
+    def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int) -> None:
+        self.name: str = name
+        self.permissions: Dict[str, List[Literal["read", "write", "execute"]]] = {"read": ["owner", "group", "public"],
+                                                                                  "write": ["owner"],
+                                                                                  "execute": []}
+        """Permissions for accessing the file. Default permissions; rw-r--r-- (644)"""
+        self.parent: Optional["Directory"] = parent
+        self.owner: int = owner
+        self.group_owner: int = group_owner
+        self.link_count: int
+        self.size: int
+        self.atime: int  # Last access time (unix time stamp)
+        """int: Access time; when file was last read from/accessed"""
+        self.mtime: int  # Last modified time (unix time stamp)
+        """int: Modified time; when the file"s content was last modified"""
+        self.ctime: int  # Last file status change (unix time stamp)
+        """imt: Changed time; when the file"s metadata was last changed (ex. perms)"""
 
     def is_directory(self) -> bool:
-        """
-        Returns:
-            bool: True if the given file is a directory, otherwise False
-        """
         return type(self) == Directory
 
     def is_file(self) -> bool:
-        """
-        Returns:
-            bool: True if the given file is a file, otherwise False
-        """
         return type(self) == File
 
-    def change_owner(self, caller_uid: int) -> SysCallStatus:
-        """
-        Changes the owner only if specific cases are met.
-
-        The only people that are allowed to change the owner of a file are:
-        <ul>
-            <li>The root user (UID 0)</li>
-            <li>The owner of the file</li>
-        </ul>
-
-        Args:
-            caller_uid (int): The UID of the user trying to change the owner
-
-        Returns:
-            SysCallStatus: The status object that contains the success status of the function
-        """
-        if caller_uid == self.owner or caller_uid == 0:
-            self.owner = caller_uid
-            return SysCallStatus(True)
-        else:
-            return SysCallStatus(False, SysCallMessages.NOT_ALLOWED)
-
-    def check_perm(self, perm: Literal["read", "write", "execute"], uid: int, groups: List[int]) -> bool:
-        """
-        Checks if the given user has a given permission
-
-        Args:
-            perm (str): The permission to check (`read`, `write`, `execute`)
-            uid (int): The UID of the user to check against
-            groups (list of int): The GIDs of the groups the user belongs to
-
-        Returns:
-            bool: If the given UID has the given permission in the current `FSBaseObject`, then `True`, otherwise `False`
-        """
-        # Check if the user is root, then just return `True` because root has all perms
+    def check_perm(self, perm: Literal["read", "write", "execute"], uid: int) -> SysCallStatus:
+        # If we"re root (UID 0), return True because root has all permissions
         if uid == 0:
-            return True
-
-        # If public can, then don't even bother checking specific permissions
+            return SysCallStatus(success=True)
+        # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
-            return True
-        # Next, check if the users group is in the perm
-        if "group" in self.permissions[perm]:
-            if self.group_owner in groups:
-                return True
-        # Finally, check if the owner can, and check if the user is the owner
-        elif "owner" in self.permissions[perm]:
-            if self.owner == uid:
-                return True
+            return SysCallStatus(success=True)
 
-        # No permission (access denied)
-        return False
+        # TODO: Implement groups and check group permissions
+
+        if "owner" in self.permissions[perm]:
+            if self.owner == uid:
+                return SysCallStatus(success=True)
+
+        # No permission
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def change_owner(self, caller: int, new_owner: int) -> SysCallStatus:
+        # Only the current owner and root are allowed to change the files owner
+        if caller == self.owner or caller == 0:
+            self.owner = new_owner
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
 
 class File(FSBaseObject):
-    """
-    The class that represents a file in the FS (binary, plain text, whatever)
-
-    Args:
-        name (str): The filename
-        content (str): The content that the file contains
-        parent (Directory): The `Directory` that the current file exists inside of
-        owner (int): The UID of the file's owner
-        group_owner (int): The GID of the file's owner group
-    """
-
-    # TODO: Implement `copy` function (maybe)
-
     def __init__(self, name: str, content: str, parent: "Directory", owner: int, group_owner: int) -> None:
         super().__init__(name, parent, owner, group_owner)
         self.content = content
-        self.size = sys.getsizeof(content + name)
+        self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, uid: int) -> SysCallStatus:
-        """
-        Checks if the user has the appropriate permissions, then returns the files content
-
-        Args:
-            uid (int): The UID of the user trying to read the file (usually current user)
-
-        Returns:
-            SysCallStatus: If success is `True`, `SysCallStatus.message` will contain the file's content
-        """
-        if self.check_perm("read", uid):
-            return SysCallStatus(True, data=self.content)
+    def read(self, caller: int) -> SysCallStatus:
+        if self.check_perm("read", caller).success:
+            return SysCallStatus(success=True, data=self.content)
         else:
-            return SysCallStatus(False, message=SysCallMessages.NOT_ALLOWED)
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def write(self, uid: int, data: str) -> SysCallStatus:
-        """
-        Checks if the user has the appropriate permissions, then updates the file's content
-
-        Args:
-            uid (int): The UID of the user trying to write to the file (usually current user)
-            data (str): The content to write to the file
-
-        Returns:
-            SysCallStatus: Success status depending on if the user had permissions to write to the file
-        """
-        if self.check_perm("write", uid):
+    def write(self, caller: int, data: str) -> SysCallStatus:
+        if self.check_perm("write", caller).success:
             self.content = data
             self.update_size()
-            return SysCallStatus(True)
+            return SysCallStatus(success=True)
         else:
-            return SysCallStatus(False, message=SysCallMessages.NOT_ALLOWED)
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def append(self, uid: int, data: str) -> SysCallStatus:
-        """
-        Checks if the user has the appropriate permissions, then appends data to the end of the file's content
-
-        Args:
-            uid (int): The UID of the user trying to write to the file (usually current user)
-            data (str): The content to write to the file
-
-        Returns:
-            SysCallStatus: Success status depending on if the user had permissions to write to the file
-        """
-        # NOTE: This may be unnecessary, we'll find out later
-        if self.check_perm("write", uid):
+    def append(self, caller: int, data: str) -> SysCallStatus:
+        # NOTE: This may be unnecessary, we"ll find out later
+        if self.check_perm("write", caller).success:
             self.content += data
             self.update_size()
-            return SysCallStatus(True)
+            return SysCallStatus(success=True)
         else:
-            return SysCallStatus(False, message=SysCallMessages.NOT_ALLOWED)
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
     def update_size(self) -> None:
-        """
-        Recalculates the size of the file and tells it's parents to update their sizes (if applicable) (primarily used after updating a files content)
-        Returns:
-            None
-        """
+        self.size = sys.getsizeof(self.name + self.content)
+
         # First, update our own size
         self.size = sys.getsizeof(self.content + self.name)
-        # Now, recursively update our parent's size
+        # Now, recursively update our parent"s size
         if self.parent:
             self.parent.update_size()
 
 
-class Directory:
-    pass
+class Directory(FSBaseObject):
+    def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int):
+        super().__init__(name, parent, owner, group_owner)
+        self.files = {}
+        self.size = None
+
+        self.update_size()
+
+    def add_file(self, file: Union[File, "Directory"]) -> SysCallStatus:
+        if file.name in self.files.keys():
+            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+        self.files[file.name] = file
+        self.update_size()
+        return SysCallStatus(success=True)
+
+    def calculate_size(self) -> int:
+        total = 0
+
+        for file in self.files.values():
+            if file.is_directory():
+                # Recursive
+                total += file.calculate_size()
+            else:
+                if file.size:
+                    total += file.size
+
+        return total
+
+    def find(self, filename: str) -> Optional[Union[File, "Directory"]]:
+        return self.files.get(filename, None)
+
+    def update_size(self) -> None:
+        self.size = self.calculate_size()
+
+        # This does the same as the file update size. Updates its own size
+        # Then the parent updates its size, taking into account selfs new size
+        # Like a chain until all parent folders have been updated
+
+        if self.parent:
+            self.parent.update_size()
 
 
 class StandardFS:
-    pass
+    def __init__(self, computer) -> None:
+        self.computer = computer
+
+        # The filesystem root (/) (owned by root)
+        self.files = Directory("/", None, 0, 0)
+
+        self.init()
+
+    def init(self) -> None:
+        # Setup the directory structure in the file system (Unix FHS)
+        for dir in ["bin", "etc", "home", "lib", "root", "tmp", "usr", "var"]:
+            directory = Directory(dir, self.files, 0, 0)
+            # Special case for /tmp (read and write by everyone)
+            if dir == "tmp":
+                directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group", "public"],
+                                         "execute": []}
+            else:
+                # TODO: Change this to be more accurate
+                # (rwx rw- r--)
+                directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group"],
+                                         "execute": ["owner"]}
+
+            self.files.add_file(directory)
+
+        # Individually setup each directory in the root
+        # self.setup_bin()
+        self.setup_etc()
+        # self.setup_home()
+        # self.setup_lib()
+        self.setup_root()
+        # self.setup_tmp()
+        self.setup_usr()
+        self.setup_var()
+
+    def setup_etc(self) -> None:
+        etc_dir: Directory = self.files.find("etc")
+        # Create the /etc/passwd file
+        # The passwd file should have roots creds (bc root is created before the file)
+        passwd_file: File = File("passwd", f"root:{self.computer.users['root'].password}\n", etc_dir, 0, 0)
+        etc_dir.add_file(passwd_file)
+
+        # /etc/skel (home dir template)
+        skel_dir: Directory = Directory("skel", etc_dir, 0, 0)
+
+        for dir in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "public", "Templates", "Videos"]:
+            current_dir = Directory(dir, skel_dir, 0, 0)
+            current_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                                       "execute": []}
+            skel_dir.add_file(current_dir)
+
+        # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
+        skel_dir.add_file(File(".shellrc", "", skel_dir, 0, 0))
+
+        etc_dir.add_file(skel_dir)
+
+        # /etc/hostname (holds system hostname)
+        # Stupid windows style default hostnames
+        new_hostname = f"DESKTOP-{''.join([choice(ascii_uppercase + digits) for _ in range(7)])}"
+        etc_dir.add_file(File("hostname", new_hostname, etc_dir, 0, 0))
+
+    def setup_root(self) -> None:
+        # Create /root/.shellrc
+        root_dir: Directory = self.files.find("root")
+
+        root_shellrc: File = File(".shellrc", "export HOME=/root", root_dir, 0, 0)
+        root_dir.add_file(root_shellrc)
+
+    def setup_usr(self) -> None:
+        # Setup /usr/share
+        usr_dir: Directory = self.files.find("usr")
+
+        share_dir: Directory = Directory("share", usr_dir, 0, 0)
+        usr_dir.add_file(share_dir)
+
+        # /usr/share/man (stores man pages from __DOC__)
+        man_dir: Directory = Directory("man", share_dir, 0, 0)
+        share_dir.add_file(man_dir)
+
+        # TODO: Loop through all binaries and create a manpage using the __DOC__ var
+
+    def setup_var(self) -> None:
+        # This should exist at runtime
+        var_dir: Directory = self.files.find("var")
+
+        # Create /var/log
+        log_dir: Directory = Directory("log", var_dir, 0, 0)
+        # mv log -> var
+        var_dir.add_file(log_dir)
+
+        # Create the `syslog` in /var/log
+        log_dir.add_file(File("syslog", "", log_dir, 0, 0))

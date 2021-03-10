@@ -105,7 +105,7 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 To generate documentation:
 
 ```sh
-pdoc --html --output-dir docs -c show_source_code=True -c 8show_type_annotations=True client 
+pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=True client 
 ```
 
 

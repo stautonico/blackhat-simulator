@@ -3,14 +3,13 @@ from typing import Union
 
 
 class User:
-    """
-    The base user class for users registered in a computer
-
-    Args:
-        username: users username (duh)
-    """
-
     def __init__(self, username: str):
+        """
+        The base user class for users registered in a computer
+
+        Args:
+            username: users username (duh)
+        """
         # Determined by the system
         self.uid = None
         self.username = username
@@ -48,14 +47,13 @@ class User:
 
 
 class Group:
-    """
-    The object representing a group in a unix system
-
-    Args:
-        name (str): The name of the group
-        gid (int): The group ID of the given group (calculated by the `Computer`)
-    """
-
     def __init__(self, name: str, gid: int) -> None:
+        """
+        The object representing a group in a unix system
+
+        Args:
+            name (str): The name of the group
+            gid (int): The group ID of the given group (calculated by the `Computer`)
+        """
         self.name = name
         self.gid = gid
