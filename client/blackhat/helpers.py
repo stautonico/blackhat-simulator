@@ -25,7 +25,7 @@ class SysCallStatus:
 
     """
 
-    def __init__(self, success: bool, message: Union[SysCallMessages, None] = None, data: str = None):
+    def __init__(self, success: bool, message: Union[SysCallMessages, None] = None, data = None):
         self.success = success
         self.message = message
         self.data = data

@@ -1,3 +1,4 @@
+import os
 import sys
 from random import choice
 from string import ascii_uppercase, digits
@@ -55,6 +56,34 @@ class FSBaseObject:
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def pwd(self) -> str:
+        current_dir = self
+        working_dir = []
+
+        while True:
+            # Check if we're at /
+            working_dir.append(current_dir.name)
+            if not current_dir.parent:
+                break
+            current_dir = current_dir.parent
+
+        working_dir.reverse()
+        working_dir = "/".join(working_dir)
+        # Try to remove double slash
+        if working_dir.startswith("//"):
+            working_dir = working_dir[1:]
+
+        return working_dir
+
+    def delete(self, caller) -> SysCallStatus:
+        if self.parent:
+            # In unix, we need read+write permissions to delete
+            if self.check_perm("read", caller) and self.check_perm("write", caller):
+                del self.parent.files[self.name]
+                return SysCallStatus(success=True)
+            else:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
 
 class File(FSBaseObject):
@@ -165,7 +194,7 @@ class StandardFS:
             self.files.add_file(directory)
 
         # Individually setup each directory in the root
-        # self.setup_bin()
+        self.setup_bin()
         self.setup_etc()
         # self.setup_home()
         # self.setup_lib()
@@ -174,11 +203,25 @@ class StandardFS:
         self.setup_usr()
         self.setup_var()
 
+    def setup_bin(self) -> None:
+        bin_dir: Directory = self.files.find("bin")
+
+        for file in os.listdir("./blackhat/bin"):
+            # Ignore the __init__.py and __pycache__ because those aren't bins (auto generated)
+            if file not in ["__init__.py", "__pycache__"]:
+                current_file = File(file.replace(".py", ""), "[BINARY DATA]", bin_dir, 0, 0)
+                with open(f"./blackhat/bin/{file}", "r") as f:
+                    current_file.size = sys.getsizeof(f.read()) / 32
+                    current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                                                "execute": ["owner", "group", "public"]}
+
+                bin_dir.add_file(current_file)
+
     def setup_etc(self) -> None:
         etc_dir: Directory = self.files.find("etc")
         # Create the /etc/passwd file
         # The passwd file should have roots creds (bc root is created before the file)
-        passwd_file: File = File("passwd", f"root:{self.computer.users['root'].password}\n", etc_dir, 0, 0)
+        passwd_file: File = File("passwd", f"root:{self.computer.users[0].password}\n", etc_dir, 0, 0)
         etc_dir.add_file(passwd_file)
 
         # /etc/skel (home dir template)
@@ -231,3 +274,74 @@ class StandardFS:
 
         # Create the `syslog` in /var/log
         log_dir.add_file(File("syslog", "", log_dir, 0, 0))
+
+    def find(self, pathname: str) -> SysCallStatus:
+        # Special cases
+        # Replace '~' with $HOME (if exists)
+        if self.computer.env.get("HOME", ""):
+            pathname = pathname.replace("~", self.computer.env.get("HOME", ""))
+
+        if pathname == "/":
+            return SysCallStatus(success=True, data=self.files)
+
+        if pathname == ".":
+            return SysCallStatus(success=True, data=self.computer.current_dir)
+
+        if pathname == "..":
+            # Check if the directory has a parent
+            # If it doesn't, we can assume that we're at /
+            # In the case of /, just return /
+            if not self.computer.current_dir.parent:
+                return SysCallStatus(success=True, data=self.files)
+            else:
+                return SysCallStatus(success=True, data=self.computer.current_dir.parent)
+
+        if pathname == "...":
+            # Check if the directory has a parent
+            # If it doesn't, we can assume that we're at /
+            # In the case of /, just return /
+            # And then do it again (go back twice)
+            if not self.computer.current_dir.parent:
+                return SysCallStatus(success=True, data=self.computer.fs.files)
+            else:
+                current_dir = self.computer.current_dir.parent
+                if current_dir.parent:
+                    return SysCallStatus(success=True, data=current_dir.parent)
+                else:
+                    return SysCallStatus(success=True, data=self.computer.fs.files)
+
+        # Regular (non-special cases)
+        pathname = pathname.split("/")
+        # Check if `pathname` is absolute or relative
+        # Check if the first arg is empty (because we split by /) which means the first arg is empty if it was a "/"
+        if pathname[0] == "":
+            # Absolute (start at root dir)
+            current_dir = self.files
+        else:
+            # Relative (based on current dir)
+            current_dir = self.computer.current_dir
+
+        # Filter out garbage
+        while "" in pathname:
+            pathname.remove("")
+
+        for subdir in pathname:
+            # Special case for current directory (.) (ignore it)
+            if subdir == ".":
+                continue
+
+            # Special case for (..) (go to parent)
+            elif subdir == "..":
+                # Check if we're at the root
+                if not current_dir.parent:
+                    current_dir = self.files
+                else:
+                    current_dir = current_dir.parent
+
+            else:
+                current_dir = current_dir.find(subdir)
+                if not current_dir:
+                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # This only runs when we successfully found
+        return SysCallStatus(success=True, data=current_dir)

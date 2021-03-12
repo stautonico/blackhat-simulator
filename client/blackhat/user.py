@@ -12,6 +12,7 @@ class User:
             <ul>
                 <li>MD5 is used for the user's password hash due to its popularity and because of the fact that it is
                 considered cryptography weak</li>
+                <li>Additionally, no salt is used to make them slightly easier to crack (its still a game after all)</li>
             </ul>
 
         Args:
