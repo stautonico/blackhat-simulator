@@ -1,1 +1,1 @@
-from . import computer, user, session, helpers, fs
+from . import computer, user, session, helpers, fs, shell

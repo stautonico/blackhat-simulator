@@ -12,6 +12,16 @@ class SysCallMessages(Enum):
     """Object attempting to be created already exists (ex. `User` with given username already exists)"""
     NOT_FOUND = 3
     """The given object doesn't exist"""
+    GENERIC = 4
+    """Some unknown error occurred"""
+    IS_FILE = 5
+    """Error when a directory was expected but a file was given instead"""
+    IS_DIRECTORY = 6
+    """Error when a file was expected but a directory was given instead"""
+    MISSING_ARGUMENT = 7
+    """Used for binaries"""
+    TOO_MANY_ARGUMENTS = 8
+    """Used for binaries"""
 
 
 class SysCallStatus:
@@ -25,7 +35,10 @@ class SysCallStatus:
 
     """
 
-    def __init__(self, success: bool, message: Union[SysCallMessages, None] = None, data = None):
+    def __init__(self, success: bool, message: Union[SysCallMessages, None] = None, data=None):
         self.success = success
         self.message = message
         self.data = data
+
+    def __str__(self):
+        return f"SysCallStatus(success={self.success}, message={self.message}, data={self.data})"

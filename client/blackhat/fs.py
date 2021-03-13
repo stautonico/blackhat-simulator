@@ -278,33 +278,33 @@ class StandardFS:
     def find(self, pathname: str) -> SysCallStatus:
         # Special cases
         # Replace '~' with $HOME (if exists)
-        if self.computer.env.get("HOME", ""):
-            pathname = pathname.replace("~", self.computer.env.get("HOME", ""))
+        if self.computer.sessions[-1].env.get("HOME", ""):
+            pathname = pathname.replace("~", self.computer.sessions[-1].env.get("HOME", ""))
 
         if pathname == "/":
             return SysCallStatus(success=True, data=self.files)
 
         if pathname == ".":
-            return SysCallStatus(success=True, data=self.computer.current_dir)
+            return SysCallStatus(success=True, data=self.computer.sessions[-1].current_dir)
 
         if pathname == "..":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
-            if not self.computer.current_dir.parent:
+            if not self.computer.sessions[-1].current_dir.parent:
                 return SysCallStatus(success=True, data=self.files)
             else:
-                return SysCallStatus(success=True, data=self.computer.current_dir.parent)
+                return SysCallStatus(success=True, data=self.computer.sessions[-1].current_dir.parent)
 
         if pathname == "...":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
             # And then do it again (go back twice)
-            if not self.computer.current_dir.parent:
+            if not self.computer.sessions[-1].current_dir.parent:
                 return SysCallStatus(success=True, data=self.computer.fs.files)
             else:
-                current_dir = self.computer.current_dir.parent
+                current_dir = self.computer.sessions[-1].current_dir.parent
                 if current_dir.parent:
                     return SysCallStatus(success=True, data=current_dir.parent)
                 else:
@@ -319,7 +319,7 @@ class StandardFS:
             current_dir = self.files
         else:
             # Relative (based on current dir)
-            current_dir = self.computer.current_dir
+            current_dir = self.computer.sessions[-1].current_dir
 
         # Filter out garbage
         while "" in pathname:

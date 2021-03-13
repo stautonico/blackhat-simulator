@@ -1,4 +1,7 @@
-from typing import Optional, Dict, List
+import importlib
+import os
+from typing import Optional, Dict, Union, List
+from time import perf_counter
 
 from .fs import StandardFS, Directory, File
 from .helpers import SysCallStatus, SysCallMessages
@@ -8,22 +11,47 @@ from .user import User
 
 class Computer:
     def __init__(self) -> None:
+        self.boot_time = perf_counter()
         self.parent: Optional[Computer] = None  # Router
         self.hostname: Optional[str] = None
         self.users: Dict[int, User] = {}
-        # self.sessions: List[Session] = []
-        self.env = {}
+        self.sessions: List[Session] = []
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
         self.create_root_user()
 
         self.fs: StandardFS = StandardFS(self)
 
-        self.current_dir = self.fs.files
-
         self.init()
 
     def init(self):
         self.update_hostname()
+
+    def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
+        # TODO: Instead of checking the bin_dir, check the `PATH` environment var (split by :) (do the same in `run_binary`)
+        # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
+        # The one that matches first in the path gets run
+        # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
+        # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
+        bin_dir = self.fs.files.find("bin")
+        if not bin_dir:
+            print(f"{command}: command not found")
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        if command not in list(bin_dir.files.keys()):
+            print(f"{command}: command not found")
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        try:
+            module = importlib.import_module(f"blackhat.bin.{command}")
+            response = module.main(self, args, pipe)
+            if os.getenv("DEBUGMODE") == "false":
+                # self.save()
+                pass
+
+            return response
+        except ImportError as e:
+            print(f"There was an error when running command: {command}")
+            return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
     def update_hostname(self) -> None:
         etc_dir: Directory = self.fs.files.find("etc")
@@ -100,3 +128,12 @@ class Computer:
             etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
         else:
             passwd_file.content = passwd_content
+
+    def get_uid(self) -> int:
+        return self.sessions[-1].effective_uid
+
+    def lookup_username(self, uid: int) -> SysCallStatus:
+        if uid in self.users.keys():
+            return SysCallStatus(success=True, data=self.users[uid].username)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
