@@ -26,7 +26,7 @@ class Shell:
     def autocomplete(self, text, state):
         bin_dir_result = self.computer.fs.find("/bin")
 
-        if not bin_dir_result.success:
+        if bin_dir_result.success:
             commands = list(bin_dir_result.data.files.keys())
         else:
             commands = []
