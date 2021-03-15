@@ -42,6 +42,7 @@ class Shell:
         """
         shell_format = self.computer.sessions[-1].env.get(
             "PS1") or "\\e[0;31m\\u\\e[0m@\\e[0;32m\\h\\e[0m:\\e[0;34m\\w\\\\e[0m\\$ "
+        # Default shell prompt is <USERNAME>@<HOSTNAME>:<WORKING DIR><$/#>
 
         # \d   The date, in "Weekday Month Date" format (e.g., "Tue May 26").
         # \h   The hostname, up to the first .

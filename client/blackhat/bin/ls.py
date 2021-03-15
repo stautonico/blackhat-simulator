@@ -66,7 +66,7 @@ def calculate_output(directory, computer, all=False, long=False):
             return None
         else:
             if long:
-                output_text += f'{calculate_permission_string(directory)} {directory.owner.username} {directory.group_owner.name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
+                output_text += f'{calculate_permission_string(directory)} {computer.lookup_username(directory.owner).data} [WIP] {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
             else:
                 output_text += directory.name
     else:
@@ -76,7 +76,7 @@ def calculate_output(directory, computer, all=False, long=False):
             else:
                 if long:
                     # Find the owner's username by uid
-                    username_lookup = computer.lookup_username(directory.owner)
+                    username_lookup = computer.lookup_username(file.owner)
                     if username_lookup.success:
                         username = username_lookup.data
                     else:

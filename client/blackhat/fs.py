@@ -1,3 +1,4 @@
+import importlib
 import os
 import sys
 from random import choice
@@ -79,7 +80,7 @@ class FSBaseObject:
     def delete(self, caller) -> SysCallStatus:
         if self.parent:
             # In unix, we need read+write permissions to delete
-            if self.check_perm("read", caller) and self.check_perm("write", caller):
+            if self.check_perm("read", caller).success and self.check_perm("write", caller).success:
                 del self.parent.files[self.name]
                 return SysCallStatus(success=True)
             else:
@@ -123,6 +124,64 @@ class File(FSBaseObject):
         # Now, recursively update our parent"s size
         if self.parent:
             self.parent.update_size()
+
+    # TODO: REFRACTOR
+    def copy(self, dst, user, root_user, computer, copy_perms=False, verbose=False):
+
+        # Find the file to see if it exists first
+        if "/" not in dst:
+            dst = "./" + dst
+
+        found_file = find(computer, dst)
+        new_file_name = None
+
+        if not found_file["success"]:
+            # Try to find it (parent folder)
+            found_file = find(computer, "/".join(dst.split("/")[:-1]))
+            if not found_file["success"]:
+                return {"success": False, "message": "not found"}
+
+        to_write = found_file["file"]
+
+        if dst.split("/")[-1] != to_write.name:
+            new_file_name = dst.split("/")[-1]
+
+        if to_write.is_file():
+            # If its a file, we're overwriting
+            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
+            # Check read first (split for error messages)
+            if not self.check_perm("read", user, root_user):
+                return {"success": False, "message": "not allowed read file"}
+            else:
+                if not to_write.check_perm("write", user, root_user):
+                    return {"success": False, "message": "not allowed write"}
+                else:
+                    to_write.write(self.content)
+                    to_write.owner = user
+                    to_write.group_owner = user.groups[user.username]
+        else:
+            # Its a dir, so its a new file
+            if not self.check_perm("read", user, root_user):
+                return {"success": False, "message": "not allowed read file"}
+            else:
+                if not to_write.check_perm("write", user, root_user):
+                    return {"success": False, "message": "not allowed write"}
+                else:
+                    new_filename = new_file_name or self.name
+                    new_file = File(new_filename, self.content, to_write, user, user.groups[user.username])
+                    to_write.add_file(new_file)
+                    # We have to do this so the permissions work no matter if we're overwriting or not
+                    to_write = new_file
+
+        if verbose:
+            print(f"'{src.name}' -> '{dst}'")
+
+        if copy_perms:
+            to_write.permissions = self.permissions
+
+        return {"success": True, "message": ""}
+
+
 
 
 class Directory(FSBaseObject):
@@ -261,7 +320,14 @@ class StandardFS:
         man_dir: Directory = Directory("man", share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # TODO: Loop through all binaries and create a manpage using the __DOC__ var
+        # Loop through all the files in /bin and check if they have a __DOC__.
+        for binary in self.files.find("bin").files.keys():
+            try:
+                module = importlib.import_module(f"blackhat.bin.{binary}")
+                current_manpage = File(binary, module.__DOC__, man_dir, 0, 0)
+                man_dir.add_file(current_manpage)
+            except AttributeError as e:
+                pass
 
     def setup_var(self) -> None:
         # This should exist at runtime

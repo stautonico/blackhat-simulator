@@ -22,6 +22,10 @@ class SysCallMessages(Enum):
     """Used for binaries"""
     TOO_MANY_ARGUMENTS = 8
     """Used for binaries"""
+    NOT_ALLOWED_READ = 9
+    """Same as generic `NOT_ALLOWED` but more specific"""
+    NOT_ALLOWED_WRITE = 10
+    """Same as generic `NOT_ALLOWED` but more specific"""
 
 
 class SysCallStatus:

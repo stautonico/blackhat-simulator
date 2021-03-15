@@ -1,5 +1,6 @@
 import importlib
 import os
+import pickle
 from typing import Optional, Dict, Union, List
 from time import perf_counter
 
@@ -137,3 +138,18 @@ class Computer:
             return SysCallStatus(success=True, data=self.users[uid].username)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def user_exists(self, username: str) -> SysCallStatus:
+        for user in self.users.values():
+            if user.username == username:
+                return SysCallStatus(success=True, data=user.uid)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def save(self, output_file="blackhat.save"):
+        try:
+            with open(output_file, "wb") as f:
+                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+            return True
+        except Exception as e:
+            return False
