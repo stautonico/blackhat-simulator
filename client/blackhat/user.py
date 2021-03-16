@@ -23,7 +23,7 @@ class User:
         self.username: str = username
         self.password: Optional[str] = None
         """str: The MD5 sum of the `User`'s password"""
-        # TODO: Add groups
+        self.groups: list[int] = []
         self.full_name: Optional[str] = None
         self.room_number: Optional[str] = None
         self.work_phone: Optional[str] = None
@@ -45,7 +45,42 @@ class User:
         else:
             self.password = md5(password.encode()).hexdigest()
 
-# NOTE: Groups are stored in /etc/group in this format:
-"""
-<GROUP_NAME>:<PASSWORD (usually 'x')>:<GID>:<USERNAMES_OF_USERS_IN_GROUP_SPLIT_BY_COMMA>
-"""
+    def add_group(self, gid: int) -> None:
+        """
+        Add a group to the `User`'s group list
+
+        Args:
+            gid (int): Group ID of the group
+
+        Returns:
+            None
+        """
+        if gid not in self.groups:
+            self.groups.append(gid)
+
+    def remove_group(self, gid: int) -> None:
+        """
+        Remove a group from the `User`'s group list
+
+        Args:
+            gid (int): Group ID of the group
+
+        Returns:
+            None
+        """
+        if gid in self.groups:
+            self.groups.remove(gid)
+
+
+class Group:
+    def __init__(self, name: str, gid: int) -> None:
+        """
+        The object that represents a group in a `Computer`
+
+
+        Args:
+            name (str): The name of the group
+            gid (int): The group ID of the group
+        """
+        self.name: str = name
+        self.gid: int = gid

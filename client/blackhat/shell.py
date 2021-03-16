@@ -13,7 +13,7 @@ class Shell:
         This will be removed once the GUI is working
 
         Args:
-            computer:
+            computer (Computer): The `Computer` that the given `Shell` interacts with
         """
         self.computer: Computer = computer
         self.ssh_computer = None
@@ -91,7 +91,19 @@ class Shell:
 
         return prompt
 
-    def run_command(self, command, args, external_binary, pipe):
+    def run_command(self, command: str, args: list, external_binary: bool, pipe: bool):
+        """
+        Determine how to run the given input, then, update the `Shell`'s prompt accordingly
+
+        Args:
+            command (str): The name of the command/binary to run
+            args (list): The list of arguments passed by the user
+            external_binary (bool): Weather or not we're running a standard system binary or an external binary
+            pipe (bool): Weather or not we're going to pipe the command output to the input of another
+
+        Returns:
+
+        """
         if external_binary:
             pass
             # response = self.computer.run_binary(command, args, pipe)
@@ -137,6 +149,17 @@ class Shell:
             print("error running command")
 
     def handle_command(self, command):
+        """
+        Handle the raw input from the user
+        Parse out the args and special characters (|, >, >>, etc)
+        Determine how to route input and output between commands
+
+        Args:
+            command (str): The raw input entered by the user
+
+        Returns:
+
+        """
         # Technically, the first element in our command should be the command name
         # And we can keep going through the
         command = command.split()
@@ -206,7 +229,7 @@ class Shell:
                                     print(f"shell: unable to create file: {filename_to_write_to}")
                                     continue
                                 else:
-                                    file_to_write = self.computer.fs.find(filename_to_write_to)["file"]
+                                    file_to_write = self.computer.fs.find(filename_to_write_to).data
                         else:
                             file_to_write = find_response
 
@@ -221,7 +244,7 @@ class Shell:
                                                 message_to_write)
                         elif special_character == ">>":
                             file_to_write.append(self.computer.get_uid(),
-                                                message_to_write)
+                                                 message_to_write)
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -232,6 +255,12 @@ class Shell:
                         del command[0]
 
     def main(self):
+        """
+        Run the main input loop
+
+        Returns:
+            None
+        """
         self.prompt = self.generate_prompt()
         while True:
             command = input(self.prompt)

@@ -18,7 +18,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         return output(f"{__COMMAND__}: missing argument: command", pipe, success=False,
                       success_message=SysCallMessages.MISSING_ARGUMENT)
 
-    if "-u" in args:
+    # We want to look for the -u before the command we're running
+    # For example, if we use sudo with adduser -u, we get an invalid user error
+    if "-u" in args and args.index("-u") == 0:
         try:
             user_run_as = args[args.index("-u") + 1]
             args.remove("-u")

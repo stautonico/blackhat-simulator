@@ -26,6 +26,10 @@ class SysCallMessages(Enum):
     """Same as generic `NOT_ALLOWED` but more specific"""
     NOT_ALLOWED_WRITE = 10
     """Same as generic `NOT_ALLOWED` but more specific"""
+    EMPTY = 11
+    """We're trying to use a space that is completely full"""
+    GENERIC_NETWORK = 12
+    """Something went wrong with the service or the connection on another machine. Similar to error 500 (generic server error)"""
 
 
 class SysCallStatus:

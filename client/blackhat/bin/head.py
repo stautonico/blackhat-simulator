@@ -17,25 +17,23 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     output_text = ""
 
     for file in args:
+        print(f"Handling {file}")
         to_read_result = computer.fs.find(file)
 
         if not to_read_result.success:
             if to_read_result.message == SysCallMessages.NOT_FOUND:
-                return output(f"{__COMMAND__}: {file}: No such file or directory", pipe, success=False,
-                              success_message=SysCallMessages.NOT_FOUND)
+                output_text += f"{__COMMAND__}: {file}: No such file or directory\n"
             else:
-                return output(f"{__COMMAND__}: Failed to read file", pipe, success=False,
-                              success_message=SysCallMessages.NOT_ALLOWED)
+                output_text += f"{__COMMAND__}: Failed to read file\n"
 
         else:
             to_read = to_read_result.data
 
             if to_read.is_directory():
-                return output(f"{__COMMAND__}: {file}: Is a directory", pipe, success=False,
-                              success_message=SysCallMessages.IS_DIRECTORY)
+                output_text += f"{__COMMAND__}: {file}: Is a directory\n"
             else:
                 # Permission checking
-                read_response = to_read.read(computer.sessions[-1].effective_uid)
+                read_response = to_read.read(computer.users[computer.get_uid()])
 
                 if read_response.success:
                     if read_response.data:
@@ -48,7 +46,6 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                         output_text += data
                 else:
                     if read_response.message == SysCallMessages.NOT_ALLOWED:
-                        return output(f"{__COMMAND__}: {to_read.name}: Permission denied", pipe,
-                                      success=False, success_message=SysCallMessages.NOT_ALLOWED)
+                        output_text += f"{__COMMAND__}: {to_read.name}: Permission denied\n"
 
     return output(output_text, pipe)
