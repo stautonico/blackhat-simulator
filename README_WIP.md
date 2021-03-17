@@ -18,9 +18,9 @@
     <br />
     <a href="https://github.com/github_username/repo_name">View Docs</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Report Bug</a>
+    <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=bug&template=bug_report.md&title=">Report Bug</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Request Feature</a>
+    <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=enhancement&template=feature_request.md&title=">Request Feature</a>
   </p>
 </p>
 
@@ -65,6 +65,7 @@ Game description will go here
 
 * [Python3+](https://www.python.org/)
 * [PyGame](https://www.pygame.org/)
+* [My Big Brain](https://blackhat.tautonico.tech/errors/404.html?ref=github)
 
 <!-- GETTING STARTED -->
 
