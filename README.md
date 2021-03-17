@@ -16,11 +16,122 @@
   <p align="center">
     A Realistic hacking/penetration testing simulator/game
     <br />
-    <a href="https://github.com/github_username/repo_name">View Docs</a>
+    <a href="https://blackhat.tautonico.tech/docs/client">View Docs</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Report Bug</a>
+    <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=bug&template=bug_report.md&title=">Report Bug</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Request Feature</a>
+    <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=enhancement&template=feature_request.md&title=">Request Feature</a>
   </p>
 </p>
+
+
+
+<!-- TABLE OF CONTENTS -->
+<details open="open">
+  <summary><h2 style="display: inline-block">Table of Contents</h2></summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#acknowledgements">Acknowledgements</a></li>
+  </ol>
+</details>
+
+
+
+<!-- ABOUT THE PROJECT -->
+
+## About The Project
+
+[![Product Name Screen Shot][product-screenshot]](https://example.com)
+
+This game was inspired by the games [Grey Hack](https://store.steampowered.com/app/605230/Grey_Hack/), [Hacknet](https://store.steampowered.com/app/365450/Hacknet/), and [NITE Team 4](https://store.steampowered.com/app/544390/NITE_Team_4__Military_Hacking_Division/) on steam. I originally started this project in C++ because I wanted an easy way for the user to build and compile their own binaries, then run them within the game without creating a programming language from scratch. This was accomplished by compiling without standard libraries and using custom replacements that interact with the game instance instead of the actual machine they're running on. However, due to my lack of knowledge of C++ (and probably many other reasons), I hit a dead-end and put the project on pause for a while. I decided to re-start the project in python (without some features I originally wanted) because I am much more knowledgeable when it comes to python. Note that this software is still in very early stages and is subject to change.
+
+### Built With
+
+* [Python3+](https://www.python.org/)
+* [PyGame](https://www.pygame.org/)
+* [My Big Brain](https://blackhat.tautonico.tech/errors/404.html?ref=github)
+
+<!-- GETTING STARTED -->
+
+## Getting Started
+
+This program was only tested on Linux (arch specificity), but hypothetically, it should work on Windows (🤞)
+
+### Prerequisites
+
+Python must be installed. All dependencies are listed in [`requirements.txt`](requirements.txt)
+
+### Installation
+
+1. Clone the repo
+   ```shell
+   git clone https://github.com/stautonico/blackhat-simulator
+   ```
+2. Install dependencies
+   ```shell
+   pip install -r requirements.txt
+   ```
+
+<!-- USAGE EXAMPLES -->
+
+## Usage
+
+**To start the client:**
+
+1. Make sure you followed all steps in <a href="#installation">#Installation</a>
+2. ```cd client```
+3. ```python3 main.py```
+
+<br>
+
+All "documentation" is generated through the use of docstrings (google format) and `pdoc3`. **To generate documentation:** 
+
+```shell
+pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=True client.blackhat
+```
+
+If you have an issue with overwriting, you can add the `--force` tag, which will automatically overwrite any old files.
+
+
+<!-- CONTRIBUTING -->
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any
+contributions you make are **greatly appreciated**.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+<!-- LICENSE -->
+
+## License
+
+Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
+
+
+
+<!-- ACKNOWLEDGEMENTS -->
+
+## Acknowledgements
+
+* [Robin Selmer (website error page)](https://codepen.io/robinselmer/pen/vJjbOZ?css-preprocessor=none)
 
