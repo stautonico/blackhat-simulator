@@ -42,7 +42,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             return output(f"{__COMMAND__}: -r not specified; omitting directory '{src}'", pipe, success=False)
         else:
             # Make sure we have proper permissions before copying
-            if src_result.data.check_perm("read", computer.users[computer.get_uid()] ).success and src_result.data.check_perm("write",
+            if src_result.data.check_perm("read", computer.get_uid() ).success and src_result.data.check_perm("write",
                                                                                                              computer.get_uid()).success:
                 copy_result = copy(computer, src_result.data, dst, preserve_permissions, verbose)
 

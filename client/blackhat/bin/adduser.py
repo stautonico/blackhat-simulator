@@ -40,10 +40,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         except IndexError:
             return output(f"{__COMMAND__}: option requires an argument -- 'p'", pipe, success=False)
 
-    if computer.user_exists(args[0]).success:
+    if computer.find_user(username=args[0]).success:
         return output(f"{__COMMAND__}: The user '{args[0]}' already exists.", pipe, success=False)
 
-    prev_uid = list(computer.users.keys())[-1]
+    prev_uid = computer.get_all_users().data[-1].uid
 
     if prev_uid == 0:
         next_uid = 1000
@@ -78,7 +78,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     user_result = computer.add_user(args[0], password)
     group_result = computer.add_group(args[0])
     # Find the user object and its its group to the new group
-    computer.users[user_result.data].groups = [computer.groups[group_result.data]]
+    # computer.users[user_result.data].groups = [computer.groups[group_result.data]]
 
     update_passwd_result = computer.update_passwd()
     update_group_result = computer.update_groups()
@@ -127,7 +127,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     new_shellrc_result = computer.fs.find(f"/home/{args[0]}/.shellrc")
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.users[computer.get_uid()], f"export PATH=/bin:\nexport HOME=/home/{args[0]}")
+        new_shellrc_result.data.write(computer.get_uid(), f"export PATH=/bin:\nexport HOME=/home/{args[0]}")
 
     # Check if we should ask the user for Full name, etc
     if interactive:

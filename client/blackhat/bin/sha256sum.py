@@ -28,7 +28,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     output_text += f"{__COMMAND__}: {arg}: Is a directory\n"
                 else:
                     # We need read perms!
-                    if not file.check_perm("read", computer.users[computer.get_uid()] ).success:
+                    if not file.check_perm("read", computer.get_uid() ).success:
                         output_text += f"{__COMMAND__}: {arg}: Permission denied\n"
                     else:
                         hash = sha256(file.content.encode()).hexdigest()

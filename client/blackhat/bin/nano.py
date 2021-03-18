@@ -59,7 +59,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         remove(f"/tmp/{temp_file}")
 
-        write_result = file_to_write.write(computer.users[computer.get_uid()], file_content)
+        write_result = file_to_write.write(computer.get_uid(), file_content)
 
         if not write_result:
             return output(f"{__COMMAND__}: {args[0]}: Permission denied", pipe, success=False)

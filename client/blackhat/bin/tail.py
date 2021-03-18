@@ -33,7 +33,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 output_text += f"{__COMMAND__}: {file}: Is a directory\n"
             else:
                 # Permission checking
-                read_response = to_read.read(computer.users[computer.get_uid()])
+                read_response = to_read.read(computer.get_uid())
 
                 if read_response.success:
                     if read_response.data:

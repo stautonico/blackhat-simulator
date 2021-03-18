@@ -55,30 +55,30 @@ class FSBaseObject:
         """
         return type(self) == File
 
-    def check_perm(self, perm: Literal["read", "write", "execute"], caller: User) -> SysCallStatus:
+    def check_perm(self, perm: Literal["read", "write", "execute"], caller: int) -> SysCallStatus:
         """
         Checks if the given `uid` has the given `perm`
 
         Args:
             perm (str): The permission to check ("read", "write", "execute")
-            caller (User): The `User` to check permissions for
+            caller (int): The UID of the `User` to check permissions for
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         """
         # If we"re root (UID 0), return True because root has all permissions
-        if caller.uid == 0:
+        if caller == 0:
             return SysCallStatus(success=True)
         # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
             return SysCallStatus(success=True)
 
-        if "group" in self.permissions[perm]:
-            if self.group_owner in caller.groups:
-                return SysCallStatus(success=True)
+        # if "group" in self.permissions[perm]:
+        #     if self.group_owner in caller.groups:
+        #         return SysCallStatus(success=True)
 
         if "owner" in self.permissions[perm]:
-            if self.owner == caller.uid:
+            if self.owner == caller:
                 return SysCallStatus(success=True)
 
         # No permission
@@ -127,12 +127,12 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self, caller: User) -> SysCallStatus:
+    def delete(self, caller: int) -> SysCallStatus:
         """
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
         Args:
-            caller (User): The `User` attempting to delete the given `File`/`Directory`
+            caller (int): The UID of the `User` attempting to delete the given `File`/`Directory`
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
@@ -162,12 +162,12 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, caller: User) -> SysCallStatus:
+    def read(self, caller: int) -> SysCallStatus:
         """
         Check if the `caller` has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
-            caller (User): The `User` attempting to read the given file
+            caller (int): The `User` attempting to read the given file
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file's content if permitted
@@ -177,12 +177,12 @@ class File(FSBaseObject):
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def write(self, caller: User, data: str) -> SysCallStatus:
+    def write(self, caller: int, data: str) -> SysCallStatus:
         """
         Check if the `caller` has permission to write to the file. Update the file's contents if allowed
 
         Args:
-            caller (User): The `User` attempting to write to the given file
+            caller (int): The UID of the `User` attempting to write to the given file
             data (str): The new content to write to the `File`
 
         Returns:
@@ -398,7 +398,8 @@ class StandardFS:
         etc_dir: Directory = self.files.find("etc")
         # Create the /etc/passwd file
         # The passwd file should have roots creds (bc root is created before the file)
-        passwd_file: File = File("passwd", f"root:{self.computer.users[0].password}\n", etc_dir, 0, 0)
+        # passwd_file: File = File("passwd", f"root:{self.computer.users[0].password}\n", etc_dir, 0, 0)
+        passwd_file: File = File("passwd", f"", etc_dir, 0, 0)
         etc_dir.add_file(passwd_file)
 
         # Create the /etc/groups file

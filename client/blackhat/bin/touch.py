@@ -40,7 +40,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 return output("", pipe, success=False)
 
         # Make sure that we have write permissions of the dir
-        if dir_to_write_to.check_perm("write", computer.users[computer.get_uid()] ).success:
+        if dir_to_write_to.check_perm("write", computer.get_uid() ).success:
             # TODO: Handle file group owner
             newfile = File(new_filename, "", dir_to_write_to, computer.get_uid(),
                            0)

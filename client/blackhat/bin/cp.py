@@ -40,21 +40,21 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             # If its a file, we're overwriting
             # Check the permissions (write to `copy_to_dir + file` and read from `self`)
             # Check read first (split for error messages)
-            if not src.check_perm("read", computer.users[computer.get_uid()] ).success:
+            if not src.check_perm("read", computer.get_uid() ).success:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.users[computer.get_uid()] ).success:
+                if not to_write.check_perm("write", computer.get_uid() ).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
-                    to_write.write(computer.users[computer.get_uid()], src.content)
+                    to_write.write(computer.get_uid(), src.content)
                     to_write.owner = computer.get_uid()
                     # TODO: Update the file's group owner
         else:
             # If we have the parent dir, we need to create a new file
-            if not src.check_perm("read", computer.users[computer.get_uid()] ).success:
+            if not src.check_perm("read", computer.get_uid() ).success:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.users[computer.get_uid()] ).success:
+                if not to_write.check_perm("write", computer.get_uid() ).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_filename = new_file_name
@@ -93,10 +93,10 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             new_file_name = src.name
 
         if new_file_name not in to_write.files:
-            if not src.check_perm("read", computer.users[computer.get_uid()] ):
+            if not src.check_perm("read", computer.get_uid() ):
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.users[computer.get_uid()] ).success:
+                if not to_write.check_perm("write", computer.get_uid() ).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     # TODO: Handle group owners

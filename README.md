@@ -21,6 +21,8 @@
     <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=bug&template=bug_report.md&title=">Report Bug</a>
     ·
     <a href="https://github.com/stautonico/blackhat-simulator/issues/new?assignees=&labels=enhancement&template=feature_request.md&title=">Request Feature</a>
+    ·
+    <a href="https://discord.gg/N7rktfNDgh">Join the discord</a>
   </p>
 </p>
 

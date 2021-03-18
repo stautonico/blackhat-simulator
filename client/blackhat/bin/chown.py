@@ -5,6 +5,7 @@ from ..lib.output import output
 __COMMAND__ = "chown"
 __VERSION__ = "1.0.0"
 
+
 # TODO: Support group owner changing
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
@@ -20,13 +21,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         owner = args[0]
         file_to_change = args[1]
 
-        check_user_exists = computer.user_exists(owner)
+        check_user_exists = computer.find_user(username=owner)
 
         if not check_user_exists.success:
             return output(f"{__COMMAND__}: invalid user: {owner}", pipe, success=False)
         else:
             # Get the user object (because owner is the username (string))
-            owner = check_user_exists.data
+            owner = check_user_exists.data.uid
 
         result = computer.fs.find(file_to_change)
 

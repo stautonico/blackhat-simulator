@@ -2,11 +2,14 @@ import importlib
 import ipaddress
 import os
 import pickle
+import sqlite3
+from hashlib import md5
 from random import choice, randint
+from secrets import token_hex
 from time import perf_counter
 from typing import Optional, Dict, Union, List
 
-from .fs import StandardFS, Directory, File
+from .fs import Directory, File, StandardFS
 from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
@@ -17,8 +20,9 @@ class Computer:
     def __init__(self) -> None:
         """
         The class object representing a basic linux computer. This class is the base for all nodes on a network
-
         """
+        self.connection = sqlite3.connect("blackhat.db")
+        self.database = self.connection.cursor()
         self.boot_time = perf_counter()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
@@ -26,16 +30,39 @@ class Computer:
         self.groups: Dict[int, Group] = {}
         self.sessions: List[Session] = []
         self.lan = None
+        self.id = token_hex(8)
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
-        self.create_root_user()
+        self.init()
+
+        # self.create_root_user()
 
         self.fs: StandardFS = StandardFS(self)
         self.services: dict[int, Service] = {}
-        self.init()
+        self.post_fs_init()
 
-    def init(self):
+    def init(self) -> None:
         """
-        Functions ran when a computer is booted
+        Functions ran when a computer is booted (pre file-system setup/pre root user creation)
+
+        Returns:
+            None
+        """
+        # Try to setup the user, group, and group membership tables
+        init_tables = open("blackhat/database/init_tables.sql").read()
+        self.database.executescript(init_tables)
+
+        # Check if the computer we're initializing already exists in the database (we're loading an existing save)
+        result = self.database.execute("SELECT * FROM computer WHERE id=?", (self.id,)).fetchall()
+
+        if len(result) == 0:
+            # We're starting a new save, lets save a copy of this computers id in the database, along with create the root user
+            self.database.execute("INSERT INTO computer VALUES (?)", (self.id,))
+            self.create_root_user()
+            self.connection.commit()
+
+    def post_fs_init(self) -> None:
+        """
+        Function ran after the file system and root user were initialized
 
         Returns:
             None
@@ -113,31 +140,42 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
         """
-        if self.user_exists(username).success:
+        if self.find_user(username=username).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-        new_user = User(username)
-        new_user.set_password(password)
+
+        # new_user = User(username)
+        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
-            if uid in self.users.keys():
+            # Check if a user with the given UID already exists
+            if self.find_user(uid=uid).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
                 next_uid = uid
         # Auto-generate the UID (depending on the situation)
         else:
             # We're creating our root user, there isn't going to be a previous UID
-            if len(self.users.keys()) == 0:
+            if len(self.database.execute("SELECT * FROM blackhat_user").fetchall()) == 0:
                 next_uid = 0
             else:
-                last_uid = list(self.users.keys())[-1]
+                # Get the UID from the previously created user
+                last_uid = self.database.execute("SELECT uid FROM blackhat_user ORDER BY id DESC;").fetchone()[0]
                 if last_uid == 0:
                     next_uid = 1000
                 else:
                     next_uid = last_uid + 1
 
-        new_user.uid = next_uid
-        self.users[next_uid] = new_user
+        # Hash the password before saving to the database
+        hashed_password = md5(password.encode()).hexdigest()
+
+        # Create the new user
+        self.database.execute("INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)",
+                              (next_uid, username, hashed_password, self.id))
+        self.connection.commit()
+
+        # new_user.uid = next_uid
+        # self.users[next_uid] = new_user
 
         return SysCallStatus(success=True, data=next_uid)
 
@@ -151,8 +189,9 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         """
-        if self.user_exists(username).success:
-            del self.users[username]
+        if self.find_user(username=username).success:
+            self.database.execute("DELETE FROM blackhat_user WHERE computer_id=? and username=?", (self.id, username))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
@@ -169,30 +208,33 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
         """
-        if self.group_exists(name).success:
+        if self.find_group(name=name).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
 
         if gid:
-            if gid in self.groups.keys():
+            # Check if a group with the given GID already exists
+            if self.find_group(gid=gid, name=name).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
-                new_group = Group(name, gid)
+                next_gid = gid
         else:
             # Auto-generate the GID (depending on the situation)
-            if len(self.groups.keys()) == 0:
+            if len(self.database.execute("SELECT * FROM blackhat_group").fetchall()) == 0:
                 next_gid = 0
             else:
-                last_gid = list(self.groups.keys())[-1]
+                # Get the GID from the previously created group
+                last_gid = self.database.execute("SELECT gid FROM blackhat_group ORDER BY id DESC;").fetchone()[0]
                 if last_gid == 0:
                     next_gid = 1000
                 else:
                     next_gid = last_gid + 1
 
-            new_group = Group(name, next_gid)
+        # Create the new group and commit
+        self.database.execute("INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)",
+                              (next_gid, name, self.id))
+        self.connection.commit()
 
-        self.groups[new_group.gid] = new_group
-
-        return SysCallStatus(success=True, data=new_group.gid)
+        return SysCallStatus(success=True, data=next_gid)
 
     def delete_group(self, name: str) -> SysCallStatus:
         """
@@ -204,12 +246,94 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         """
-        group_exists = self.group_exists(name)
-        if group_exists.success:
-            del self.groups[group_exists.data]
+        if self.find_group(name=name).success:
+            self.database.execute("DELETE FROM blackhat_group WHERE computer_id=? and name=?", (self.id, name))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> SysCallStatus:
+        """
+        Find a user in the database by UID or username
+        Args:
+            uid (int, optional): The UID of the user to find
+            username (str, optional): The username of the user to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+        """
+        if uid is None and username is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            result = self.database.execute("SELECT * FROM blackhat_user WHERE (uid=? OR username=?) AND computer_id=?",
+                                           (uid, username, self.id)).fetchone()
+            if not result:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+            return SysCallStatus(success=True,
+                                 data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
+                                           room_number=result[5],
+                                           work_phone=result[6], home_phone=result[7], other=result[8]))
+
+    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -> SysCallStatus:
+        """
+        Find a group in the database by GID or name or both
+        Args:
+            gid (int, optional): The GID of the group to find
+            name (str, optional): The name of the group to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+        """
+        if gid is None and name is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # We're looking by name AND gid
+        elif gid is not None and name is not None:
+            result = self.database.execute("SELECT * FROM blackhat_group WHERE (gid=? AND name=?) AND computer_id=?",
+                                           (gid, name, self.id)).fetchone()
+        else:
+            result = self.database.execute("SELECT * FROM blackhat_group WHERE (gid=? OR name=?) AND computer_id=?",
+                                           (gid, name, self.id)).fetchone()
+
+        if not result:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=Group(gid=result[1], name=result[2]))
+
+    def get_all_users(self) -> SysCallStatus:
+        """
+        Get all users that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `User`s
+        """
+        all_users = self.database.execute("SELECT * FROM blackhat_user WHERE computer_id=?",
+                                          (self.id,)).fetchall()
+
+        clean_users = []
+
+        for user in all_users:
+            clean_users.append(
+                User(uid=user[1], username=user[2], password=user[3], full_name=user[4], room_number=user[5],
+                     work_phone=user[6], home_phone=user[7], other=user[8]))
+        return SysCallStatus(success=True, data=clean_users)
+
+    def get_all_groups(self) -> SysCallStatus:
+        """
+        Get all groups that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `Group`s
+        """
+        all_groups = self.database.execute("SELECT * FROM blackhat_group WHERE computer_id=?",
+                                           (self.id,)).fetchall()
+
+        clean_groups = []
+
+        for group in all_groups:
+            clean_groups.append(Group(gid=group[1], name=group[2]))
+        return SysCallStatus(success=True, data=clean_groups)
 
     def create_root_user(self) -> None:
         """
@@ -221,10 +345,12 @@ class Computer:
         """
         # Add the root user with a random password
         # self.add_user("root", ''.join([choice(ascii_uppercase + digits) for _ in range(16)]))
-        self.add_user("root", "password", 0)
-        root_group = Group("root", 0)
-        self.groups = {0: root_group}
-        self.users[0].groups = [root_group]
+        self.add_user("root", "password", uid=0)
+        # self.systemDB.insert({self.id: {"username": "root", "uid": 0, "groups": [0]}})
+        # self.add_user("root", "password", 0)
+        # root_group = Group("root", 0)
+        # self.groups = {0: root_group}
+        # self.users[0].groups = [root_group]
 
     def update_passwd(self) -> SysCallStatus:
         """
@@ -242,8 +368,8 @@ class Computer:
 
         passwd_content = ""
 
-        for uid, user in self.users.items():
-            passwd_content += f"{user.username}:{user.password}:{uid}\n"
+        for user in self.get_all_users().data:
+            passwd_content += f"{user.username}:{user.password}:{user.uid}\n"
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -269,8 +395,8 @@ class Computer:
 
         group_content = ""
 
-        for gid, group in self.groups.items():
-            group_content += f"{group.name}:x:{gid}\n"
+        for group in self.get_all_groups().data:
+            group_content += f"{group.name}:x:{group.gid}\n"
 
         if not group_file:
             # Create the /etc/groups
@@ -286,69 +412,8 @@ class Computer:
         Returns:
             int: UID of the `Computers`'s current user (from most recent session)
         """
-        return self.sessions[-1].effective_uid
-
-    def lookup_username(self, uid: int) -> SysCallStatus:
-        """
-        Find the username of a given user by UID
-
-        Args:
-            uid (int): The UID to lookup
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the user's username if found
-        """
-        if uid in self.users.keys():
-            return SysCallStatus(success=True, data=self.users[uid].username)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def user_exists(self, username: str) -> SysCallStatus:
-        """
-        Check if a user exists in the `Computer` (by username)
-
-        Args:
-            username (str): The username of the user to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        """
-        for user in self.users.values():
-            if user.username == username:
-                return SysCallStatus(success=True, data=user.uid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def lookup_group(self, gid: int) -> SysCallStatus:
-        """
-        Find the group name of a given group by GID
-
-        Args:
-            gid (int): The GIT to lookup
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the groups name if found
-        """
-        if gid in self.users.keys():
-            return SysCallStatus(success=True, data=self.groups[gid].name)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def group_exists(self, name: str) -> SysCallStatus:
-        """
-        Check if a group exists in the `Computer` (by name)
-
-        Args:
-            name (str): The name of the group to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        """
-        for group in self.groups.values():
-            if group.name == name:
-                return SysCallStatus(success=True, data=group.gid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return 0
+        # return self.sessions[-1].effective_uid
 
     def run_current_user_shellrc(self):
         """
@@ -358,7 +423,7 @@ class Computer:
         Returns:
             None
         """
-        current_username = self.lookup_username(self.get_uid()).data
+        current_username = self.find_user(self.get_uid()).data.username
 
         # Don't check /home/username, check /root for .shellrc
         if self.get_uid() == 0:
@@ -369,7 +434,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.users[self.get_uid()])
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split("\n"):

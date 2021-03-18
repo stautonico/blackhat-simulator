@@ -32,9 +32,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
     if len(args) == 0:
         # User just typed `passwd` (change current user password)
-        user_to_change = computer.users[computer.get_uid()]
+        user_to_change = computer.get_uid()
     else:
-        user_to_change = computer.user_exists(args[0])
+        user_to_change = computer.find_user(username=args[0])
         if not user_to_change.success:
             return output(f"{__COMMAND__}: user '{args[0]}' does not exist", pipe, success=False)
 
