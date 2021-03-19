@@ -51,7 +51,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     output_text = &#34;&#34;
-    for user in computer.users.values():
+    for user in computer.get_all_users().data:
         output_text += f&#34;{user.username} &#34;
 
     return output(output_text, pipe)</code></pre>
@@ -96,7 +96,7 @@ Returns:</p></div>
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     output_text = &#34;&#34;
-    for user in computer.users.values():
+    for user in computer.get_all_users().data:
         output_text += f&#34;{user.username} &#34;
 
     return output(output_text, pipe)</code></pre>

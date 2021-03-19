@@ -1,7 +1,6 @@
 from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.output import output
-import os
 
 __COMMAND__ = "exit"
 __VERSION__ = "1.0.0"
@@ -13,14 +12,12 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
     # -f is force (immediately exit)
     if "-f" in args:
-        if os.getenv("DEBUGMODE") == "false":
-            computer.save()
+        computer.save()
         exit(0)
 
     # We don't have any previous sessions to exit to
     if len(computer.sessions) == 1:
-        if os.getenv("DEBUGMODE") == "false":
-            computer.save()
+        computer.save()
         exit(0)
     else:
         computer.sessions.pop()

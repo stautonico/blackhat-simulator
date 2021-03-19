@@ -66,6 +66,7 @@ This game was inspired by the games [Grey Hack](https://store.steampowered.com/a
 
 * [Python3+](https://www.python.org/)
 * [PyGame](https://www.pygame.org/)
+* [SQLite(3)](https://www.sqlite.org/index.html)
 * [My Big Brain](https://blackhat.tautonico.tech/errors/404.html?ref=github)
 
 <!-- GETTING STARTED -->

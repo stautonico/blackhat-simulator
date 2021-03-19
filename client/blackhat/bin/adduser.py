@@ -78,7 +78,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     user_result = computer.add_user(args[0], password)
     group_result = computer.add_group(args[0])
     # Find the user object and its its group to the new group
-    # computer.users[user_result.data].groups = [computer.groups[group_result.data]]
+    computer.add_user_to_group(user_result.data, group_result.data, membership_type="primary")
 
     update_passwd_result = computer.update_passwd()
     update_group_result = computer.update_groups()
@@ -103,8 +103,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     home_folder: Directory = home_folder_find.data
     skel_dir: Directory = skel_dir_find.data
 
-    # TODO: Add /home/user group owner
-    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, 0)
+    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, group_result.data)
     home_folder.add_file(new_user_folder)
 
     # Copy the contents of /etc/skel to the new users folder
@@ -120,8 +119,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             computer.run_command("chmod", ["a-rwx", new_file_find.data.pwd()], pipe=False)
             computer.run_command("chmod", ["u+rwx", new_file_find.data.pwd()], pipe=False)
 
-            # Change the file's user
-            computer.run_command("chown", [args[0], f"/home/{args[0]}/{file.name}"], pipe)
+            # Change the file's owner (user and group)
+            computer.run_command("chown", [f"{args[0]}:{args[0]}", f"/home/{args[0]}/{file.name}"], pipe)
 
     # Write `export HOME=/home/args[0]` and `export PATH=/bin:` to the new ~/.shellrc
     new_shellrc_result = computer.fs.find(f"/home/{args[0]}/.shellrc")
@@ -140,11 +139,12 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             other = input("\tOther []: ")
             correct = input("Is the information correct? [Y/n] ")
             if correct in ["y", "Y", ""]:
-                computer.users[user_result.data].full_name = full_name
-                computer.users[user_result.data].room_number = room_num
-                computer.users[user_result.data].work_phone = work_phone
-                computer.users[user_result.data].home_phone = home_phone
-                computer.users[user_result.data].other = other
+                pass
+                # computer.users[user_result.data].full_name = full_name
+                # computer.users[user_result.data].room_number = room_num
+                # computer.users[user_result.data].work_phone = work_phone
+                # computer.users[user_result.data].home_phone = home_phone
+                # computer.users[user_result.data].other = other
                 break
 
     if not update_passwd_result.success:

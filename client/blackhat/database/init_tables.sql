@@ -1,9 +1,9 @@
-CREATE TABLE IF NOT EXISTS computer
+create TABLE IF NOT EXISTS computer
 (
     id text
 );
 
-CREATE TABLE IF NOT EXISTS blackhat_group
+create TABLE IF NOT EXISTS blackhat_group
 (
     id          integer PRIMARY KEY AUTOINCREMENT,
     gid         integer,
@@ -11,15 +11,16 @@ CREATE TABLE IF NOT EXISTS blackhat_group
     computer_id text
 );
 
-CREATE TABLE IF NOT EXISTS group_membership
+create TABLE IF NOT EXISTS group_membership
 (
     id          integer PRIMARY KEY AUTOINCREMENT,
     computer_id text,
     user_uid    integer,
-    group_gid   integer
+    group_gid   integer,
+    membership_type  text
 );
 
-CREATE TABLE IF NOT EXISTS blackhat_user
+create TABLE IF NOT EXISTS blackhat_user
 (
     id          integer PRIMARY KEY AUTOINCREMENT,
     uid         integer,

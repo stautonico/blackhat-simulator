@@ -29,7 +29,6 @@
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.output import output
-import os
 
 __COMMAND__ = &#34;exit&#34;
 __VERSION__ = &#34;1.0.0&#34;
@@ -41,14 +40,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
     # -f is force (immediately exit)
     if &#34;-f&#34; in args:
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
-            computer.save()
+        computer.save()
         exit(0)
 
     # We don&#39;t have any previous sessions to exit to
     if len(computer.sessions) == 1:
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
-            computer.save()
+        computer.save()
         exit(0)
     else:
         computer.sessions.pop()
@@ -77,14 +74,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
     # -f is force (immediately exit)
     if &#34;-f&#34; in args:
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
-            computer.save()
+        computer.save()
         exit(0)
 
     # We don&#39;t have any previous sessions to exit to
     if len(computer.sessions) == 1:
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
-            computer.save()
+        computer.save()
         exit(0)
     else:
         computer.sessions.pop()

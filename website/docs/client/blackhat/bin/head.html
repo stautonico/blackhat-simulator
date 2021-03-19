@@ -45,7 +45,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     output_text = &#34;&#34;
 
     for file in args:
-        print(f&#34;Handling {file}&#34;)
         to_read_result = computer.fs.find(file)
 
         if not to_read_result.success:
@@ -61,7 +60,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.users[computer.get_uid()])
+                read_response = to_read.read(computer.get_uid())
 
                 if read_response.success:
                     if read_response.data:
@@ -106,7 +105,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     output_text = &#34;&#34;
 
     for file in args:
-        print(f&#34;Handling {file}&#34;)
         to_read_result = computer.fs.find(file)
 
         if not to_read_result.success:
@@ -122,7 +120,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.users[computer.get_uid()])
+                read_response = to_read.read(computer.get_uid())
 
                 if read_response.success:
                     if read_response.data:

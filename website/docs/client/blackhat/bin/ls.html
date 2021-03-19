@@ -27,6 +27,7 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from colorama import Fore, Style
+
 from ..computer import Computer
 from ..helpers import SysCallMessages, SysCallStatus
 from ..lib.output import output
@@ -94,7 +95,13 @@ def calculate_output(directory, computer, all=False, long=False):
             return None
         else:
             if long:
-                output_text += f&#39;{calculate_permission_string(directory)} {computer.lookup_username(directory.owner).data} [WIP] {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
+                # Find the owner&#39;s username by uid and group name by gid
+                username_lookup = computer.find_user(uid=directory.owner)
+                group_lookup = computer.find_group(gid=directory.group_owner)
+
+                username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+                group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+                output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
             else:
                 output_text += directory.name
     else:
@@ -103,19 +110,17 @@ def calculate_output(directory, computer, all=False, long=False):
                 pass
             else:
                 if long:
-                    # Find the owner&#39;s username by uid
-                    username_lookup = computer.lookup_username(file.owner)
-                    if username_lookup.success:
-                        username = username_lookup.data
-                    else:
-                        username = &#34;?&#34;
+                    # Find the owner&#39;s username by uid and group name by gid
+                    username_lookup = computer.find_user(uid=file.owner)
+                    group_lookup = computer.find_group(gid=file.group_owner)
 
-                    # TODO: Handle group owners
-                    group_owner = &#34;[WIP]&#34;
+                    username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+                    group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+
                     if file.is_file():
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {file.name}\n&#39;
+                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
                     else:
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
+                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
                 else:
                     if file.is_file():
                         output_text += f&#34;{file.name} &#34;
@@ -198,7 +203,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return None
         else:
             if long:
-                output_text += f&#39;{calculate_permission_string(directory)} {computer.lookup_username(directory.owner).data} [WIP] {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
+                # Find the owner&#39;s username by uid and group name by gid
+                username_lookup = computer.find_user(uid=directory.owner)
+                group_lookup = computer.find_group(gid=directory.group_owner)
+
+                username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+                group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+                output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
             else:
                 output_text += directory.name
     else:
@@ -207,19 +218,17 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 pass
             else:
                 if long:
-                    # Find the owner&#39;s username by uid
-                    username_lookup = computer.lookup_username(file.owner)
-                    if username_lookup.success:
-                        username = username_lookup.data
-                    else:
-                        username = &#34;?&#34;
+                    # Find the owner&#39;s username by uid and group name by gid
+                    username_lookup = computer.find_user(uid=file.owner)
+                    group_lookup = computer.find_group(gid=file.group_owner)
 
-                    # TODO: Handle group owners
-                    group_owner = &#34;[WIP]&#34;
+                    username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+                    group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+
                     if file.is_file():
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {file.name}\n&#39;
+                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
                     else:
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
+                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
                 else:
                     if file.is_file():
                         output_text += f&#34;{file.name} &#34;

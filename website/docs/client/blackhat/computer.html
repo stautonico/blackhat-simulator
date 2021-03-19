@@ -30,11 +30,15 @@
 import ipaddress
 import os
 import pickle
+import sqlite3
+import traceback
+from hashlib import md5
 from random import choice, randint
+from secrets import token_hex
 from time import perf_counter
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union, List, Literal
 
-from .fs import StandardFS, Directory, File
+from .fs import Directory, File, StandardFS
 from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
@@ -45,8 +49,9 @@ class Computer:
     def __init__(self) -&gt; None:
         &#34;&#34;&#34;
         The class object representing a basic linux computer. This class is the base for all nodes on a network
-
         &#34;&#34;&#34;
+        self.connection = sqlite3.connect(&#34;blackhat.db&#34;)
+        self.database = self.connection.cursor()
         self.boot_time = perf_counter()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
@@ -54,21 +59,46 @@ class Computer:
         self.groups: Dict[int, Group] = {}
         self.sessions: List[Session] = []
         self.lan = None
+        self.id = token_hex(8)
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
-        self.create_root_user()
+        self.init()
+
+        # self.create_root_user()
 
         self.fs: StandardFS = StandardFS(self)
         self.services: dict[int, Service] = {}
-        self.init()
+        self.post_fs_init()
 
-    def init(self):
+    def init(self) -&gt; None:
         &#34;&#34;&#34;
-        Functions ran when a computer is booted
+        Functions ran when a computer is booted (pre file-system setup/pre root user creation)
+
+        Returns:
+            None
+        &#34;&#34;&#34;
+        # Try to setup the user, group, and group membership tables
+        init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
+        self.database.executescript(init_tables)
+
+        # Check if the computer we&#39;re initializing already exists in the database (we&#39;re loading an existing save)
+        result = self.database.execute(&#34;SELECT * FROM computer WHERE id=?&#34;, (self.id,)).fetchall()
+
+        if len(result) == 0:
+            # We&#39;re starting a new save, lets save a copy of this computers id in the database, along with create the root user
+            self.database.execute(&#34;INSERT INTO computer VALUES (?)&#34;, (self.id,))
+            self.create_root_user()
+            self.connection.commit()
+
+    def post_fs_init(self) -&gt; None:
+        &#34;&#34;&#34;
+        Function ran after the file system and root user were initialized
 
         Returns:
             None
         &#34;&#34;&#34;
         self.update_hostname()
+        self.update_passwd()
+        self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -141,31 +171,40 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
         &#34;&#34;&#34;
-        if self.user_exists(username).success:
+        if self.find_user(username=username).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-        new_user = User(username)
-        new_user.set_password(password)
+
+        # new_user = User(username)
+        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
-            if uid in self.users.keys():
+            # Check if a user with the given UID already exists
+            if self.find_user(uid=uid).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
                 next_uid = uid
         # Auto-generate the UID (depending on the situation)
         else:
             # We&#39;re creating our root user, there isn&#39;t going to be a previous UID
-            if len(self.users.keys()) == 0:
+            users = self.get_all_users().data
+            if len(users) == 0:
                 next_uid = 0
             else:
-                last_uid = list(self.users.keys())[-1]
+                # Get the UID from the previously created user
+                last_uid = users[-1].uid
                 if last_uid == 0:
                     next_uid = 1000
                 else:
                     next_uid = last_uid + 1
 
-        new_user.uid = next_uid
-        self.users[next_uid] = new_user
+        # Hash the password before saving to the database
+        hashed_password = md5(password.encode()).hexdigest()
+
+        # Create the new user
+        self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
+                              (next_uid, username, hashed_password, self.id))
+        self.connection.commit()
 
         return SysCallStatus(success=True, data=next_uid)
 
@@ -179,11 +218,37 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         &#34;&#34;&#34;
-        if self.user_exists(username).success:
-            del self.users[username]
+        if self.find_user(username=username).success:
+            self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the password of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the password of
+            new_password (str): The MD5 hash of the password
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Hash the plain text password
+        password_hash = md5(new_password.encode()).hexdigest()
+
+        # Update the password in the database
+        result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
+                                       (password_hash, uid, self.id))
+        self.connection.commit()
+        return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -197,30 +262,34 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
         &#34;&#34;&#34;
-        if self.group_exists(name).success:
+        if self.find_group(name=name).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
 
         if gid:
-            if gid in self.groups.keys():
+            # Check if a group with the given GID already exists
+            if self.find_group(gid=gid, name=name).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
-                new_group = Group(name, gid)
+                next_gid = gid
         else:
             # Auto-generate the GID (depending on the situation)
-            if len(self.groups.keys()) == 0:
+            groups = self.get_all_groups().data
+            if len(groups) == 0:
                 next_gid = 0
             else:
-                last_gid = list(self.groups.keys())[-1]
+                # Get the GID from the previously created group
+                last_gid = groups[-1].gid
                 if last_gid == 0:
                     next_gid = 1000
                 else:
                     next_gid = last_gid + 1
 
-            new_group = Group(name, next_gid)
+        # Create the new group and commit
+        self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
+                              (next_gid, name, self.id))
+        self.connection.commit()
 
-        self.groups[new_group.gid] = new_group
-
-        return SysCallStatus(success=True, data=new_group.gid)
+        return SysCallStatus(success=True, data=next_gid)
 
     def delete_group(self, name: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -232,12 +301,137 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         &#34;&#34;&#34;
-        group_exists = self.group_exists(name)
-        if group_exists.success:
-            del self.groups[group_exists.data]
+        if self.find_group(name=name).success:
+            self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_user_to_group(self, uid: int, gid: int,
+                          membership_type: Literal[&#34;primary&#34;, &#34;secondary&#34;] = &#34;secondary&#34;) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Add a user to a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to add the user to
+            membership_type (str): The type of group relationship (primary, secondary)
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute(
+                &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
+                (self.id, uid, gid, membership_type))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Remove a user from a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to remove the user from
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+                                  (self.id, uid, gid))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Find a user in the database by UID or username
+        Args:
+            uid (int, optional): The UID of the user to find
+            username (str, optional): The username of the user to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+        &#34;&#34;&#34;
+        if uid is None and username is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE (uid=? OR username=?) AND computer_id=?&#34;,
+                                           (uid, username, self.id)).fetchone()
+            if not result:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+            return SysCallStatus(success=True,
+                                 data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
+                                           room_number=result[5],
+                                           work_phone=result[6], home_phone=result[7], other=result[8]))
+
+    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Find a group in the database by GID or name or both
+        Args:
+            gid (int, optional): The GID of the group to find
+            name (str, optional): The name of the group to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+        &#34;&#34;&#34;
+        if gid is None and name is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # We&#39;re looking by name AND gid
+        elif gid is not None and name is not None:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? AND name=?) AND computer_id=?&#34;,
+                                           (gid, name, self.id)).fetchone()
+        else:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? OR name=?) AND computer_id=?&#34;,
+                                           (gid, name, self.id)).fetchone()
+
+        if not result:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=Group(gid=result[1], name=result[2]))
+
+    def get_all_users(self) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get all users that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `User`s
+        &#34;&#34;&#34;
+        all_users = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE computer_id=?&#34;,
+                                          (self.id,)).fetchall()
+
+        clean_users = []
+
+        for user in all_users:
+            clean_users.append(
+                User(uid=user[1], username=user[2], password=user[3], full_name=user[4], room_number=user[5],
+                     work_phone=user[6], home_phone=user[7], other=user[8]))
+        return SysCallStatus(success=True, data=clean_users)
+
+    def get_all_groups(self) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get all groups that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `Group`s
+        &#34;&#34;&#34;
+        all_groups = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE computer_id=?&#34;,
+                                           (self.id,)).fetchall()
+
+        clean_groups = []
+
+        for group in all_groups:
+            clean_groups.append(Group(gid=group[1], name=group[2]))
+        return SysCallStatus(success=True, data=clean_groups)
 
     def create_root_user(self) -&gt; None:
         &#34;&#34;&#34;
@@ -249,10 +443,12 @@ class Computer:
         &#34;&#34;&#34;
         # Add the root user with a random password
         # self.add_user(&#34;root&#34;, &#39;&#39;.join([choice(ascii_uppercase + digits) for _ in range(16)]))
-        self.add_user(&#34;root&#34;, &#34;password&#34;, 0)
-        root_group = Group(&#34;root&#34;, 0)
-        self.groups = {0: root_group}
-        self.users[0].groups = [root_group]
+        self.add_user(&#34;root&#34;, &#34;password&#34;, uid=0)
+        # Create the root group
+        self.add_group(&#39;root&#39;, 0)
+
+        # Add root to the root group
+        self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
     def update_passwd(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -270,8 +466,9 @@ class Computer:
 
         passwd_content = &#34;&#34;
 
-        for uid, user in self.users.items():
-            passwd_content += f&#34;{user.username}:{user.password}:{uid}\n&#34;
+        for user in self.get_all_users().data:
+            # Find the &#34;primary&#34; group
+            passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -297,8 +494,8 @@ class Computer:
 
         group_content = &#34;&#34;
 
-        for gid, group in self.groups.items():
-            group_content += f&#34;{group.name}:x:{gid}\n&#34;
+        for group in self.get_all_groups().data:
+            group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
 
         if not group_file:
             # Create the /etc/groups
@@ -316,67 +513,23 @@ class Computer:
         &#34;&#34;&#34;
         return self.sessions[-1].effective_uid
 
-    def lookup_username(self, uid: int) -&gt; SysCallStatus:
+    def get_gid(self) -&gt; int:
         &#34;&#34;&#34;
-        Find the username of a given user by UID
-
-        Args:
-            uid (int): The UID to lookup
-
+        Returns the (primary) GID of the `Computer`&#39;s current user
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the user&#39;s username if found
+            int: (primary) GID of the `Computers`&#39;s current user (from most recent session)
         &#34;&#34;&#34;
-        if uid in self.users.keys():
-            return SysCallStatus(success=True, data=self.users[uid].username)
+        current_uid = self.get_uid()
+        result = self.database.execute(
+            &#34;SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?&#34;,
+            (self.id, current_uid, &#34;primary&#34;)).fetchone()
+
+        if result:
+            return result[0]
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def user_exists(self, username: str) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Check if a user exists in the `Computer` (by username)
-
-        Args:
-            username (str): The username of the user to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        &#34;&#34;&#34;
-        for user in self.users.values():
-            if user.username == username:
-                return SysCallStatus(success=True, data=user.uid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def lookup_group(self, gid: int) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Find the group name of a given group by GID
-
-        Args:
-            gid (int): The GIT to lookup
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the groups name if found
-        &#34;&#34;&#34;
-        if gid in self.users.keys():
-            return SysCallStatus(success=True, data=self.groups[gid].name)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def group_exists(self, name: str) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Check if a group exists in the `Computer` (by name)
-
-        Args:
-            name (str): The name of the group to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        &#34;&#34;&#34;
-        for group in self.groups.values():
-            if group.name == name:
-                return SysCallStatus(success=True, data=group.gid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            # NOTE: possible exploit, but maybe we leave it here on purpose?
+            # TODO: Write proof of concept exploit to exploit this exploit
+            return 0
 
     def run_current_user_shellrc(self):
         &#34;&#34;&#34;
@@ -386,7 +539,7 @@ class Computer:
         Returns:
             None
         &#34;&#34;&#34;
-        current_username = self.lookup_username(self.get_uid()).data
+        current_username = self.find_user(self.get_uid()).data.username
 
         # Don&#39;t check /home/username, check /root for .shellrc
         if self.get_uid() == 0:
@@ -397,7 +550,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.users[self.get_uid()])
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -414,12 +567,16 @@ class Computer:
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         &#34;&#34;&#34;
-        try:
-            with open(output_file, &#34;wb&#34;) as f:
-                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+            try:
+                with open(output_file, &#34;wb&#34;) as f:
+                    pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+                return True
+            except Exception as e:
+                # TODO: Fix save bug (can&#39;t pickle `self.connection` and `self.database`)
+                return False
+        else:
             return True
-        except Exception as e:
-            return False
 
     def handle_tcp_connection(self, host: str, port: int, args: dict) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -817,8 +974,9 @@ class ISPRouter(Router):
     def __init__(self) -&gt; None:
         &#34;&#34;&#34;
         The class object representing a basic linux computer. This class is the base for all nodes on a network
-
         &#34;&#34;&#34;
+        self.connection = sqlite3.connect(&#34;blackhat.db&#34;)
+        self.database = self.connection.cursor()
         self.boot_time = perf_counter()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
@@ -826,21 +984,46 @@ class ISPRouter(Router):
         self.groups: Dict[int, Group] = {}
         self.sessions: List[Session] = []
         self.lan = None
+        self.id = token_hex(8)
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
-        self.create_root_user()
+        self.init()
+
+        # self.create_root_user()
 
         self.fs: StandardFS = StandardFS(self)
         self.services: dict[int, Service] = {}
-        self.init()
+        self.post_fs_init()
 
-    def init(self):
+    def init(self) -&gt; None:
         &#34;&#34;&#34;
-        Functions ran when a computer is booted
+        Functions ran when a computer is booted (pre file-system setup/pre root user creation)
+
+        Returns:
+            None
+        &#34;&#34;&#34;
+        # Try to setup the user, group, and group membership tables
+        init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
+        self.database.executescript(init_tables)
+
+        # Check if the computer we&#39;re initializing already exists in the database (we&#39;re loading an existing save)
+        result = self.database.execute(&#34;SELECT * FROM computer WHERE id=?&#34;, (self.id,)).fetchall()
+
+        if len(result) == 0:
+            # We&#39;re starting a new save, lets save a copy of this computers id in the database, along with create the root user
+            self.database.execute(&#34;INSERT INTO computer VALUES (?)&#34;, (self.id,))
+            self.create_root_user()
+            self.connection.commit()
+
+    def post_fs_init(self) -&gt; None:
+        &#34;&#34;&#34;
+        Function ran after the file system and root user were initialized
 
         Returns:
             None
         &#34;&#34;&#34;
         self.update_hostname()
+        self.update_passwd()
+        self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -913,31 +1096,40 @@ class ISPRouter(Router):
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
         &#34;&#34;&#34;
-        if self.user_exists(username).success:
+        if self.find_user(username=username).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-        new_user = User(username)
-        new_user.set_password(password)
+
+        # new_user = User(username)
+        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
-            if uid in self.users.keys():
+            # Check if a user with the given UID already exists
+            if self.find_user(uid=uid).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
                 next_uid = uid
         # Auto-generate the UID (depending on the situation)
         else:
             # We&#39;re creating our root user, there isn&#39;t going to be a previous UID
-            if len(self.users.keys()) == 0:
+            users = self.get_all_users().data
+            if len(users) == 0:
                 next_uid = 0
             else:
-                last_uid = list(self.users.keys())[-1]
+                # Get the UID from the previously created user
+                last_uid = users[-1].uid
                 if last_uid == 0:
                     next_uid = 1000
                 else:
                     next_uid = last_uid + 1
 
-        new_user.uid = next_uid
-        self.users[next_uid] = new_user
+        # Hash the password before saving to the database
+        hashed_password = md5(password.encode()).hexdigest()
+
+        # Create the new user
+        self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
+                              (next_uid, username, hashed_password, self.id))
+        self.connection.commit()
 
         return SysCallStatus(success=True, data=next_uid)
 
@@ -951,11 +1143,37 @@ class ISPRouter(Router):
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         &#34;&#34;&#34;
-        if self.user_exists(username).success:
-            del self.users[username]
+        if self.find_user(username=username).success:
+            self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the password of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the password of
+            new_password (str): The MD5 hash of the password
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Hash the plain text password
+        password_hash = md5(new_password.encode()).hexdigest()
+
+        # Update the password in the database
+        result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
+                                       (password_hash, uid, self.id))
+        self.connection.commit()
+        return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -969,30 +1187,34 @@ class ISPRouter(Router):
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
         &#34;&#34;&#34;
-        if self.group_exists(name).success:
+        if self.find_group(name=name).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
 
         if gid:
-            if gid in self.groups.keys():
+            # Check if a group with the given GID already exists
+            if self.find_group(gid=gid, name=name).success:
                 return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
             else:
-                new_group = Group(name, gid)
+                next_gid = gid
         else:
             # Auto-generate the GID (depending on the situation)
-            if len(self.groups.keys()) == 0:
+            groups = self.get_all_groups().data
+            if len(groups) == 0:
                 next_gid = 0
             else:
-                last_gid = list(self.groups.keys())[-1]
+                # Get the GID from the previously created group
+                last_gid = groups[-1].gid
                 if last_gid == 0:
                     next_gid = 1000
                 else:
                     next_gid = last_gid + 1
 
-            new_group = Group(name, next_gid)
+        # Create the new group and commit
+        self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
+                              (next_gid, name, self.id))
+        self.connection.commit()
 
-        self.groups[new_group.gid] = new_group
-
-        return SysCallStatus(success=True, data=new_group.gid)
+        return SysCallStatus(success=True, data=next_gid)
 
     def delete_group(self, name: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1004,12 +1226,137 @@ class ISPRouter(Router):
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
         &#34;&#34;&#34;
-        group_exists = self.group_exists(name)
-        if group_exists.success:
-            del self.groups[group_exists.data]
+        if self.find_group(name=name).success:
+            self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
+            self.connection.commit()
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_user_to_group(self, uid: int, gid: int,
+                          membership_type: Literal[&#34;primary&#34;, &#34;secondary&#34;] = &#34;secondary&#34;) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Add a user to a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to add the user to
+            membership_type (str): The type of group relationship (primary, secondary)
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute(
+                &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
+                (self.id, uid, gid, membership_type))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Remove a user from a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to remove the user from
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+                                  (self.id, uid, gid))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Find a user in the database by UID or username
+        Args:
+            uid (int, optional): The UID of the user to find
+            username (str, optional): The username of the user to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+        &#34;&#34;&#34;
+        if uid is None and username is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE (uid=? OR username=?) AND computer_id=?&#34;,
+                                           (uid, username, self.id)).fetchone()
+            if not result:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+            return SysCallStatus(success=True,
+                                 data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
+                                           room_number=result[5],
+                                           work_phone=result[6], home_phone=result[7], other=result[8]))
+
+    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Find a group in the database by GID or name or both
+        Args:
+            gid (int, optional): The GID of the group to find
+            name (str, optional): The name of the group to find
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+        &#34;&#34;&#34;
+        if gid is None and name is None:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # We&#39;re looking by name AND gid
+        elif gid is not None and name is not None:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? AND name=?) AND computer_id=?&#34;,
+                                           (gid, name, self.id)).fetchone()
+        else:
+            result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? OR name=?) AND computer_id=?&#34;,
+                                           (gid, name, self.id)).fetchone()
+
+        if not result:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=Group(gid=result[1], name=result[2]))
+
+    def get_all_users(self) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get all users that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `User`s
+        &#34;&#34;&#34;
+        all_users = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE computer_id=?&#34;,
+                                          (self.id,)).fetchall()
+
+        clean_users = []
+
+        for user in all_users:
+            clean_users.append(
+                User(uid=user[1], username=user[2], password=user[3], full_name=user[4], room_number=user[5],
+                     work_phone=user[6], home_phone=user[7], other=user[8]))
+        return SysCallStatus(success=True, data=clean_users)
+
+    def get_all_groups(self) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get all groups that exist in the given system in the given format:
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `Group`s
+        &#34;&#34;&#34;
+        all_groups = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE computer_id=?&#34;,
+                                           (self.id,)).fetchall()
+
+        clean_groups = []
+
+        for group in all_groups:
+            clean_groups.append(Group(gid=group[1], name=group[2]))
+        return SysCallStatus(success=True, data=clean_groups)
 
     def create_root_user(self) -&gt; None:
         &#34;&#34;&#34;
@@ -1021,10 +1368,12 @@ class ISPRouter(Router):
         &#34;&#34;&#34;
         # Add the root user with a random password
         # self.add_user(&#34;root&#34;, &#39;&#39;.join([choice(ascii_uppercase + digits) for _ in range(16)]))
-        self.add_user(&#34;root&#34;, &#34;password&#34;, 0)
-        root_group = Group(&#34;root&#34;, 0)
-        self.groups = {0: root_group}
-        self.users[0].groups = [root_group]
+        self.add_user(&#34;root&#34;, &#34;password&#34;, uid=0)
+        # Create the root group
+        self.add_group(&#39;root&#39;, 0)
+
+        # Add root to the root group
+        self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
     def update_passwd(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1042,8 +1391,9 @@ class ISPRouter(Router):
 
         passwd_content = &#34;&#34;
 
-        for uid, user in self.users.items():
-            passwd_content += f&#34;{user.username}:{user.password}:{uid}\n&#34;
+        for user in self.get_all_users().data:
+            # Find the &#34;primary&#34; group
+            passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -1069,8 +1419,8 @@ class ISPRouter(Router):
 
         group_content = &#34;&#34;
 
-        for gid, group in self.groups.items():
-            group_content += f&#34;{group.name}:x:{gid}\n&#34;
+        for group in self.get_all_groups().data:
+            group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
 
         if not group_file:
             # Create the /etc/groups
@@ -1088,67 +1438,23 @@ class ISPRouter(Router):
         &#34;&#34;&#34;
         return self.sessions[-1].effective_uid
 
-    def lookup_username(self, uid: int) -&gt; SysCallStatus:
+    def get_gid(self) -&gt; int:
         &#34;&#34;&#34;
-        Find the username of a given user by UID
-
-        Args:
-            uid (int): The UID to lookup
-
+        Returns the (primary) GID of the `Computer`&#39;s current user
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the user&#39;s username if found
+            int: (primary) GID of the `Computers`&#39;s current user (from most recent session)
         &#34;&#34;&#34;
-        if uid in self.users.keys():
-            return SysCallStatus(success=True, data=self.users[uid].username)
+        current_uid = self.get_uid()
+        result = self.database.execute(
+            &#34;SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?&#34;,
+            (self.id, current_uid, &#34;primary&#34;)).fetchone()
+
+        if result:
+            return result[0]
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def user_exists(self, username: str) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Check if a user exists in the `Computer` (by username)
-
-        Args:
-            username (str): The username of the user to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        &#34;&#34;&#34;
-        for user in self.users.values():
-            if user.username == username:
-                return SysCallStatus(success=True, data=user.uid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def lookup_group(self, gid: int) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Find the group name of a given group by GID
-
-        Args:
-            gid (int): The GIT to lookup
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the groups name if found
-        &#34;&#34;&#34;
-        if gid in self.users.keys():
-            return SysCallStatus(success=True, data=self.groups[gid].name)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    def group_exists(self, name: str) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Check if a group exists in the `Computer` (by name)
-
-        Args:
-            name (str): The name of the group to check
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-        &#34;&#34;&#34;
-        for group in self.groups.values():
-            if group.name == name:
-                return SysCallStatus(success=True, data=group.gid)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            # NOTE: possible exploit, but maybe we leave it here on purpose?
+            # TODO: Write proof of concept exploit to exploit this exploit
+            return 0
 
     def run_current_user_shellrc(self):
         &#34;&#34;&#34;
@@ -1158,7 +1464,7 @@ class ISPRouter(Router):
         Returns:
             None
         &#34;&#34;&#34;
-        current_username = self.lookup_username(self.get_uid()).data
+        current_username = self.find_user(self.get_uid()).data.username
 
         # Don&#39;t check /home/username, check /root for .shellrc
         if self.get_uid() == 0:
@@ -1169,7 +1475,7 @@ class ISPRouter(Router):
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.users[self.get_uid()])
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -1186,12 +1492,16 @@ class ISPRouter(Router):
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         &#34;&#34;&#34;
-        try:
-            with open(output_file, &#34;wb&#34;) as f:
-                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+            try:
+                with open(output_file, &#34;wb&#34;) as f:
+                    pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+                return True
+            except Exception as e:
+                # TODO: Fix save bug (can&#39;t pickle `self.connection` and `self.database`)
+                return False
+        else:
             return True
-        except Exception as e:
-            return False
 
     def handle_tcp_connection(self, host: str, port: int, args: dict) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1264,30 +1574,34 @@ This function also generates the GID for the new group (unless manually specifie
     Returns:
         SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
     &#34;&#34;&#34;
-    if self.group_exists(name).success:
+    if self.find_group(name=name).success:
         return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
 
     if gid:
-        if gid in self.groups.keys():
+        # Check if a group with the given GID already exists
+        if self.find_group(gid=gid, name=name).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
         else:
-            new_group = Group(name, gid)
+            next_gid = gid
     else:
         # Auto-generate the GID (depending on the situation)
-        if len(self.groups.keys()) == 0:
+        groups = self.get_all_groups().data
+        if len(groups) == 0:
             next_gid = 0
         else:
-            last_gid = list(self.groups.keys())[-1]
+            # Get the GID from the previously created group
+            last_gid = groups[-1].gid
             if last_gid == 0:
                 next_gid = 1000
             else:
                 next_gid = last_gid + 1
 
-        new_group = Group(name, next_gid)
+    # Create the new group and commit
+    self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
+                          (next_gid, name, self.id))
+    self.connection.commit()
 
-    self.groups[new_group.gid] = new_group
-
-    return SysCallStatus(success=True, data=new_group.gid)</code></pre>
+    return SysCallStatus(success=True, data=next_gid)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.add_user"><code class="name flex">
@@ -1327,33 +1641,136 @@ This function also generates the UID for the new user (unless manually specified
     Returns:
         SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
     &#34;&#34;&#34;
-    if self.user_exists(username).success:
+    if self.find_user(username=username).success:
         return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-    new_user = User(username)
-    new_user.set_password(password)
+
+    # new_user = User(username)
+    # new_user.set_password(password)
 
     # Manually specific UID
     if uid:
-        if uid in self.users.keys():
+        # Check if a user with the given UID already exists
+        if self.find_user(uid=uid).success:
             return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
         else:
             next_uid = uid
     # Auto-generate the UID (depending on the situation)
     else:
         # We&#39;re creating our root user, there isn&#39;t going to be a previous UID
-        if len(self.users.keys()) == 0:
+        users = self.get_all_users().data
+        if len(users) == 0:
             next_uid = 0
         else:
-            last_uid = list(self.users.keys())[-1]
+            # Get the UID from the previously created user
+            last_uid = users[-1].uid
             if last_uid == 0:
                 next_uid = 1000
             else:
                 next_uid = last_uid + 1
 
-    new_user.uid = next_uid
-    self.users[next_uid] = new_user
+    # Hash the password before saving to the database
+    hashed_password = md5(password.encode()).hexdigest()
+
+    # Create the new user
+    self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
+                          (next_uid, username, hashed_password, self.id))
+    self.connection.commit()
 
     return SysCallStatus(success=True, data=next_uid)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.add_user_to_group"><code class="name flex">
+<span>def <span class="ident">add_user_to_group</span></span>(<span>self, uid: int, gid: int, membership_type: Literal['primary', 'secondary'] = 'secondary') ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Add a user to a group (by uid and gid)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user</dd>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the group to add the user to</dd>
+<dt><strong><code>membership_type</code></strong> :&ensp;<code>str</code></dt>
+<dd>The type of group relationship (primary, secondary)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_user_to_group(self, uid: int, gid: int,
+                      membership_type: Literal[&#34;primary&#34;, &#34;secondary&#34;] = &#34;secondary&#34;) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Add a user to a group (by uid and gid)
+
+    Args:
+        uid (int): The UID of the user
+        gid (int): The GID of the group to add the user to
+        membership_type (str): The type of group relationship (primary, secondary)
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+    &#34;&#34;&#34;
+    # Confirm that both user and group exists
+    if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+        self.database.execute(
+            &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
+            (self.id, uid, gid, membership_type))
+        self.connection.commit()
+        return SysCallStatus(success=True)
+    else:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.change_user_password"><code class="name flex">
+<span>def <span class="ident">change_user_password</span></span>(<span>self, uid: int, new_password: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Change the password of the user by uid</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the <code>User</code> to change the password of</dd>
+<dt><strong><code>new_password</code></strong> :&ensp;<code>str</code></dt>
+<dd>The MD5 hash of the password</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Change the password of the user by uid
+
+    Args:
+        uid (int): The UID of the `User` to change the password of
+        new_password (str): The MD5 hash of the password
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    # Double check that the user with the given UID exists
+    lookup_user = self.find_user(uid=uid)
+    if not lookup_user.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    # Hash the plain text password
+    password_hash = md5(new_password.encode()).hexdigest()
+
+    # Update the password in the database
+    result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
+                                   (password_hash, uid, self.id))
+    self.connection.commit()
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.create_root_user"><code class="name flex">
@@ -1378,10 +1795,12 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     &#34;&#34;&#34;
     # Add the root user with a random password
     # self.add_user(&#34;root&#34;, &#39;&#39;.join([choice(ascii_uppercase + digits) for _ in range(16)]))
-    self.add_user(&#34;root&#34;, &#34;password&#34;, 0)
-    root_group = Group(&#34;root&#34;, 0)
-    self.groups = {0: root_group}
-    self.users[0].groups = [root_group]</code></pre>
+    self.add_user(&#34;root&#34;, &#34;password&#34;, uid=0)
+    # Create the root group
+    self.add_group(&#39;root&#39;, 0)
+
+    # Add root to the root group
+    self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.delete_group"><code class="name flex">
@@ -1413,9 +1832,9 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     Returns:
         SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
     &#34;&#34;&#34;
-    group_exists = self.group_exists(name)
-    if group_exists.success:
-        del self.groups[group_exists.data]
+    if self.find_group(name=name).success:
+        self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
+        self.connection.commit()
         return SysCallStatus(success=True)
 
     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
@@ -1450,11 +1869,201 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     Returns:
         SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
     &#34;&#34;&#34;
-    if self.user_exists(username).success:
-        del self.users[username]
+    if self.find_user(username=username).success:
+        self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
+        self.connection.commit()
         return SysCallStatus(success=True)
 
     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.find_group"><code class="name flex">
+<span>def <span class="ident">find_group</span></span>(<span>self, gid: Optional[int] = None, name: Optional[str] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Find a group in the database by GID or name or both</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The GID of the group to find</dd>
+<dt><strong><code>name</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>The name of the group to find</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the group dict if found</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Find a group in the database by GID or name or both
+    Args:
+        gid (int, optional): The GID of the group to find
+        name (str, optional): The name of the group to find
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+    &#34;&#34;&#34;
+    if gid is None and name is None:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    # We&#39;re looking by name AND gid
+    elif gid is not None and name is not None:
+        result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? AND name=?) AND computer_id=?&#34;,
+                                       (gid, name, self.id)).fetchone()
+    else:
+        result = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE (gid=? OR name=?) AND computer_id=?&#34;,
+                                       (gid, name, self.id)).fetchone()
+
+    if not result:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    return SysCallStatus(success=True, data=Group(gid=result[1], name=result[2]))</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.find_user"><code class="name flex">
+<span>def <span class="ident">find_user</span></span>(<span>self, uid: Optional[int] = None, username: Optional[str] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Find a user in the database by UID or username</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The UID of the user to find</dd>
+<dt><strong><code>username</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>The username of the user to find</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the user dict if found</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Find a user in the database by UID or username
+    Args:
+        uid (int, optional): The UID of the user to find
+        username (str, optional): The username of the user to find
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+    &#34;&#34;&#34;
+    if uid is None and username is None:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    else:
+        result = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE (uid=? OR username=?) AND computer_id=?&#34;,
+                                       (uid, username, self.id)).fetchone()
+        if not result:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True,
+                             data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
+                                       room_number=result[5],
+                                       work_phone=result[6], home_phone=result[7], other=result[8]))</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.get_all_groups"><code class="name flex">
+<span>def <span class="ident">get_all_groups</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get all groups that exist in the given system in the given format:</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing the array of <code>Group</code>s</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_all_groups(self) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get all groups that exist in the given system in the given format:
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `Group`s
+    &#34;&#34;&#34;
+    all_groups = self.database.execute(&#34;SELECT * FROM blackhat_group WHERE computer_id=?&#34;,
+                                       (self.id,)).fetchall()
+
+    clean_groups = []
+
+    for group in all_groups:
+        clean_groups.append(Group(gid=group[1], name=group[2]))
+    return SysCallStatus(success=True, data=clean_groups)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.get_all_users"><code class="name flex">
+<span>def <span class="ident">get_all_users</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get all users that exist in the given system in the given format:</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing the array of <code>User</code>s</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_all_users(self) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get all users that exist in the given system in the given format:
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `User`s
+    &#34;&#34;&#34;
+    all_users = self.database.execute(&#34;SELECT * FROM blackhat_user WHERE computer_id=?&#34;,
+                                      (self.id,)).fetchall()
+
+    clean_users = []
+
+    for user in all_users:
+        clean_users.append(
+            User(uid=user[1], username=user[2], password=user[3], full_name=user[4], room_number=user[5],
+                 work_phone=user[6], home_phone=user[7], other=user[8]))
+    return SysCallStatus(success=True, data=clean_users)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.get_gid"><code class="name flex">
+<span>def <span class="ident">get_gid</span></span>(<span>self) ‑> int</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Returns the (primary) GID of the <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code>'s current user</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>int</code></dt>
+<dd>(primary) GID of the <code>Computers</code>'s current user (from most recent session)</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_gid(self) -&gt; int:
+    &#34;&#34;&#34;
+    Returns the (primary) GID of the `Computer`&#39;s current user
+    Returns:
+        int: (primary) GID of the `Computers`&#39;s current user (from most recent session)
+    &#34;&#34;&#34;
+    current_uid = self.get_uid()
+    result = self.database.execute(
+        &#34;SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?&#34;,
+        (self.id, current_uid, &#34;primary&#34;)).fetchone()
+
+    if result:
+        return result[0]
+    else:
+        # NOTE: possible exploit, but maybe we leave it here on purpose?
+        # TODO: Write proof of concept exploit to exploit this exploit
+        return 0</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.get_uid"><code class="name flex">
@@ -1478,42 +2087,6 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
         int: UID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
     return self.sessions[-1].effective_uid</code></pre>
-</details>
-</dd>
-<dt id="client.blackhat.computer.Computer.group_exists"><code class="name flex">
-<span>def <span class="ident">group_exists</span></span>(<span>self, name: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Check if a group exists in the <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> (by name)</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>name</code></strong> :&ensp;<code>str</code></dt>
-<dd>The name of the group to check</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> instance with the <code>success</code> flag set appropriately (successful if found)</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def group_exists(self, name: str) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    Check if a group exists in the `Computer` (by name)
-
-    Args:
-        name (str): The name of the group to check
-
-    Returns:
-        SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-    &#34;&#34;&#34;
-    for group in self.groups.values():
-        if group.name == name:
-            return SysCallStatus(success=True, data=group.gid)
-    else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.handle_tcp_connection"><code class="name flex">
@@ -1558,92 +2131,98 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.init"><code class="name flex">
-<span>def <span class="ident">init</span></span>(<span>self)</span>
+<span>def <span class="ident">init</span></span>(<span>self) ‑> NoneType</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Functions ran when a computer is booted</p>
+<div class="desc"><p>Functions ran when a computer is booted (pre file-system setup/pre root user creation)</p>
 <h2 id="returns">Returns</h2>
 <p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def init(self):
+<pre><code class="python">def init(self) -&gt; None:
     &#34;&#34;&#34;
-    Functions ran when a computer is booted
+    Functions ran when a computer is booted (pre file-system setup/pre root user creation)
 
     Returns:
         None
     &#34;&#34;&#34;
-    self.update_hostname()</code></pre>
+    # Try to setup the user, group, and group membership tables
+    init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
+    self.database.executescript(init_tables)
+
+    # Check if the computer we&#39;re initializing already exists in the database (we&#39;re loading an existing save)
+    result = self.database.execute(&#34;SELECT * FROM computer WHERE id=?&#34;, (self.id,)).fetchall()
+
+    if len(result) == 0:
+        # We&#39;re starting a new save, lets save a copy of this computers id in the database, along with create the root user
+        self.database.execute(&#34;INSERT INTO computer VALUES (?)&#34;, (self.id,))
+        self.create_root_user()
+        self.connection.commit()</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.computer.Computer.lookup_group"><code class="name flex">
-<span>def <span class="ident">lookup_group</span></span>(<span>self, gid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<dt id="client.blackhat.computer.Computer.post_fs_init"><code class="name flex">
+<span>def <span class="ident">post_fs_init</span></span>(<span>self) ‑> NoneType</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Find the group name of a given group by GID</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>gid</code></strong> :&ensp;<code>int</code></dt>
-<dd>The GIT to lookup</dd>
-</dl>
+<div class="desc"><p>Function ran after the file system and root user were initialized</p>
 <h2 id="returns">Returns</h2>
-<dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> instance with the <code>success</code> flag set appropriately. The <code>data</code> flag contains the groups name if found</dd>
-</dl></div>
+<p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def lookup_group(self, gid: int) -&gt; SysCallStatus:
+<pre><code class="python">def post_fs_init(self) -&gt; None:
     &#34;&#34;&#34;
-    Find the group name of a given group by GID
-
-    Args:
-        gid (int): The GIT to lookup
+    Function ran after the file system and root user were initialized
 
     Returns:
-        SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the groups name if found
+        None
     &#34;&#34;&#34;
-    if gid in self.users.keys():
-        return SysCallStatus(success=True, data=self.groups[gid].name)
-    else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+    self.update_hostname()
+    self.update_passwd()
+    self.update_groups()</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.computer.Computer.lookup_username"><code class="name flex">
-<span>def <span class="ident">lookup_username</span></span>(<span>self, uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<dt id="client.blackhat.computer.Computer.remove_user_from_group"><code class="name flex">
+<span>def <span class="ident">remove_user_from_group</span></span>(<span>self, uid: int, gid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Find the username of a given user by UID</p>
+<div class="desc"><p>Remove a user from a group (by uid and gid)</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
-<dd>The UID to lookup</dd>
+<dd>The UID of the user</dd>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the group to remove the user from</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> instance with the <code>success</code> flag set appropriately. The <code>data</code> flag contains the user's username if found</dd>
+<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def lookup_username(self, uid: int) -&gt; SysCallStatus:
+<pre><code class="python">def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
     &#34;&#34;&#34;
-    Find the username of a given user by UID
+    Remove a user from a group (by uid and gid)
 
     Args:
-        uid (int): The UID to lookup
+        uid (int): The UID of the user
+        gid (int): The GID of the group to remove the user from
 
     Returns:
-        SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the user&#39;s username if found
+        SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
     &#34;&#34;&#34;
-    if uid in self.users.keys():
-        return SysCallStatus(success=True, data=self.users[uid].username)
+    # Confirm that both user and group exists
+    if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+        self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+                              (self.id, uid, gid))
+        self.connection.commit()
+        return SysCallStatus(success=True)
     else:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
@@ -1729,7 +2308,7 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     Returns:
         None
     &#34;&#34;&#34;
-    current_username = self.lookup_username(self.get_uid()).data
+    current_username = self.find_user(self.get_uid()).data.username
 
     # Don&#39;t check /home/username, check /root for .shellrc
     if self.get_uid() == 0:
@@ -1740,7 +2319,7 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     shellrc_lookup = self.fs.find(shellrc_loc)
 
     if shellrc_lookup.success:
-        shellrc_lines = shellrc_lookup.data.read(self.users[self.get_uid()])
+        shellrc_lines = shellrc_lookup.data.read(self.get_uid())
 
         if shellrc_lines.success:
             for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -1777,12 +2356,16 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     Returns:
         bool: `True` if the dump/save was successful, otherwise `False`
     &#34;&#34;&#34;
-    try:
-        with open(output_file, &#34;wb&#34;) as f:
-            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
-        return True
-    except Exception as e:
-        return False</code></pre>
+    if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+        try:
+            with open(output_file, &#34;wb&#34;) as f:
+                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+            return True
+        except Exception as e:
+            # TODO: Fix save bug (can&#39;t pickle `self.connection` and `self.database`)
+            return False
+    else:
+        return True</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.send_tcp"><code class="name flex">
@@ -1850,8 +2433,8 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
 
     group_content = &#34;&#34;
 
-    for gid, group in self.groups.items():
-        group_content += f&#34;{group.name}:x:{gid}\n&#34;
+    for group in self.get_all_groups().data:
+        group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
 
     if not group_file:
         # Create the /etc/groups
@@ -1923,8 +2506,9 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
 
     passwd_content = &#34;&#34;
 
-    for uid, user in self.users.items():
-        passwd_content += f&#34;{user.username}:{user.password}:{uid}\n&#34;
+    for user in self.get_all_users().data:
+        # Find the &#34;primary&#34; group
+        passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
 
     if not passwd_file:
         # Create the /etc/passwd
@@ -1933,42 +2517,6 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
         passwd_file.content = passwd_content
 
     return SysCallStatus(success=True)</code></pre>
-</details>
-</dd>
-<dt id="client.blackhat.computer.Computer.user_exists"><code class="name flex">
-<span>def <span class="ident">user_exists</span></span>(<span>self, username: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Check if a user exists in the <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> (by username)</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>username</code></strong> :&ensp;<code>str</code></dt>
-<dd>The username of the user to check</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> instance with the <code>success</code> flag set appropriately (successful if found)</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def user_exists(self, username: str) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    Check if a user exists in the `Computer` (by username)
-
-    Args:
-        username (str): The username of the user to check
-
-    Returns:
-        SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately (successful if found)
-    &#34;&#34;&#34;
-    for user in self.users.values():
-        if user.username == username:
-            return SysCallStatus(success=True, data=user.uid)
-    else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
 </dd>
 </dl>
@@ -2368,17 +2916,23 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <ul class="hlist">
 <li><code><a title="client.blackhat.computer.Router.add_group" href="#client.blackhat.computer.Computer.add_group">add_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_client_by_port" href="#client.blackhat.computer.Router.find_client_by_port">find_client_by_port</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_local_client" href="#client.blackhat.computer.Router.find_local_client">find_local_client</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.group_exists" href="#client.blackhat.computer.Computer.group_exists">group_exists</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.handle_tcp_connection" href="#client.blackhat.computer.Router.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.lookup_group" href="#client.blackhat.computer.Computer.lookup_group">lookup_group</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.lookup_username" href="#client.blackhat.computer.Computer.lookup_username">lookup_username</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.remove_user_from_group" href="#client.blackhat.computer.Computer.remove_user_from_group">remove_user_from_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.run_command" href="#client.blackhat.computer.Computer.run_command">run_command</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
@@ -2386,7 +2940,6 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.user_exists" href="#client.blackhat.computer.Computer.user_exists">user_exists</a></code></li>
 </ul>
 </li>
 </ul>
@@ -2974,14 +3527,20 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <ul class="hlist">
 <li><code><a title="client.blackhat.computer.Computer.add_group" href="#client.blackhat.computer.Computer.add_group">add_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.group_exists" href="#client.blackhat.computer.Computer.group_exists">group_exists</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.lookup_group" href="#client.blackhat.computer.Computer.lookup_group">lookup_group</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.lookup_username" href="#client.blackhat.computer.Computer.lookup_username">lookup_username</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.remove_user_from_group" href="#client.blackhat.computer.Computer.remove_user_from_group">remove_user_from_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.run_command" href="#client.blackhat.computer.Computer.run_command">run_command</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
@@ -2989,7 +3548,6 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.user_exists" href="#client.blackhat.computer.Computer.user_exists">user_exists</a></code></li>
 </ul>
 </li>
 </ul>
@@ -3015,15 +3573,21 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <ul class="">
 <li><code><a title="client.blackhat.computer.Computer.add_group" href="#client.blackhat.computer.Computer.add_group">add_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.group_exists" href="#client.blackhat.computer.Computer.group_exists">group_exists</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.handle_tcp_connection" href="#client.blackhat.computer.Computer.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.lookup_group" href="#client.blackhat.computer.Computer.lookup_group">lookup_group</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.lookup_username" href="#client.blackhat.computer.Computer.lookup_username">lookup_username</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.remove_user_from_group" href="#client.blackhat.computer.Computer.remove_user_from_group">remove_user_from_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.run_command" href="#client.blackhat.computer.Computer.run_command">run_command</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
@@ -3031,7 +3595,6 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.user_exists" href="#client.blackhat.computer.Computer.user_exists">user_exists</a></code></li>
 </ul>
 </li>
 <li>

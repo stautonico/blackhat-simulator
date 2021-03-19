@@ -26,22 +26,20 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             args.remove("-u")
             args.remove(user_run_as)
 
-            user = None
-
             # Check if the given user exists
-            for key, value in computer.users.items():
-                if value.username == user_run_as:
-                    user = value
-                    break
-            else:
+            user_lookup = computer.find_user(username=user_run_as)
+
+            if not user_lookup.success:
                 return output(f"{__COMMAND__}: unknown user: {user_run_as}", pipe, success=False,
                               success_message=SysCallMessages.NOT_FOUND)
+            else:
+                user = user_lookup.data
         except IndexError:
             return output(f"{__COMMAND__}: option requires an argument -- 'u'", pipe, success=False,
                           success_message=SysCallMessages.MISSING_ARGUMENT)
 
     else:
-        user = computer.users[0]
+        user = computer.find_user(uid=0).data
 
     # We need to authenticate as that user before we can run any commands
     for x in range(3):

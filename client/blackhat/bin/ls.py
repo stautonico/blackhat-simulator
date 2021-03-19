@@ -1,4 +1,5 @@
 from colorama import Fore, Style
+
 from ..computer import Computer
 from ..helpers import SysCallMessages, SysCallStatus
 from ..lib.output import output
@@ -66,7 +67,13 @@ def calculate_output(directory, computer, all=False, long=False):
             return None
         else:
             if long:
-                output_text += f'{calculate_permission_string(directory)} {computer.lookup_username(directory.owner).data} [WIP] {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
+                # Find the owner's username by uid and group name by gid
+                username_lookup = computer.find_user(uid=directory.owner)
+                group_lookup = computer.find_group(gid=directory.group_owner)
+
+                username = username_lookup.data.username if username_lookup.success else "?"
+                group_name = group_lookup.data.name if group_lookup.success else "?"
+                output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
             else:
                 output_text += directory.name
     else:
@@ -75,19 +82,17 @@ def calculate_output(directory, computer, all=False, long=False):
                 pass
             else:
                 if long:
-                    # Find the owner's username by uid
-                    username_lookup = computer.lookup_username(file.owner)
-                    if username_lookup.success:
-                        username = username_lookup.data
-                    else:
-                        username = "?"
+                    # Find the owner's username by uid and group name by gid
+                    username_lookup = computer.find_user(uid=file.owner)
+                    group_lookup = computer.find_group(gid=file.group_owner)
 
-                    # TODO: Handle group owners
-                    group_owner = "[WIP]"
+                    username = username_lookup.data.username if username_lookup.success else "?"
+                    group_name = group_lookup.data.name if group_lookup.success else "?"
+
                     if file.is_file():
-                        output_text += f'{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {file.name}\n'
+                        output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n'
                     else:
-                        output_text += f'{calculate_permission_string(file)} {username} {group_owner} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n'
+                        output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n'
                 else:
                     if file.is_file():
                         output_text += f"{file.name} "

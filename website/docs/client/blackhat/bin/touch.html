@@ -68,10 +68,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(&#34;&#34;, pipe, success=False)
 
         # Make sure that we have write permissions of the dir
-        if dir_to_write_to.check_perm(&#34;write&#34;, computer.users[computer.get_uid()] ).success:
-            # TODO: Handle file group owner
-            newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(),
-                           0)
+        if dir_to_write_to.check_perm(&#34;write&#34;, computer.get_uid()).success:
+            newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
             dir_to_write_to.add_file(newfile)
         else:
             output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: Permission denied\n&#34;
@@ -132,10 +130,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(&#34;&#34;, pipe, success=False)
 
         # Make sure that we have write permissions of the dir
-        if dir_to_write_to.check_perm(&#34;write&#34;, computer.users[computer.get_uid()] ).success:
-            # TODO: Handle file group owner
-            newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(),
-                           0)
+        if dir_to_write_to.check_perm(&#34;write&#34;, computer.get_uid()).success:
+            newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
             dir_to_write_to.add_file(newfile)
         else:
             output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: Permission denied\n&#34;

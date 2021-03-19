@@ -6,7 +6,6 @@ from string import ascii_uppercase, digits
 from typing import Optional, Dict, List, Literal, Union
 
 from .helpers import SysCallStatus, SysCallMessages
-from .user import User
 
 
 class FSBaseObject:
@@ -73,6 +72,8 @@ class FSBaseObject:
         if "public" in self.permissions[perm]:
             return SysCallStatus(success=True)
 
+        # TODO: Check group permissions
+
         # if "group" in self.permissions[perm]:
         #     if self.group_owner in caller.groups:
         #         return SysCallStatus(success=True)
@@ -83,6 +84,9 @@ class FSBaseObject:
 
         # No permission
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    # TODO: Update these two into one function
+    # TODO: Make function to confirm UID or GID ownership with one function
 
     def change_owner(self, caller: int, new_owner: int) -> SysCallStatus:
         """
@@ -98,6 +102,24 @@ class FSBaseObject:
         # Only the current owner and root are allowed to change the files owner
         if caller == self.owner or caller == 0:
             self.owner = new_owner
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def change_group_owner(self, caller: int, new_owner: int) -> SysCallStatus:
+        """
+        Change the group owner of a given `File`/`Directory`, but check if the given GID should be allowed to first
+
+        Args:
+            caller (int): The UID of the user attempting to change the owner
+            new_owner (int): The GID of the new group owner of the `File`/`Directory`
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+        """
+        # Only the current owner and root are allowed to change the files owner
+        if caller == self.owner or caller == 0:
+            self.group_owner = new_owner
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)

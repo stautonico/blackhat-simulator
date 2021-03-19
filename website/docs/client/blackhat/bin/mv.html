@@ -70,7 +70,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{src}&#39;&#34;, pipe, success=False)
         else:
             # Make sure we have proper permissions before copying
-            if src_result.data.check_perm(&#34;read&#34;, computer.users[computer.get_uid()] ).success and src_result.data.check_perm(&#34;write&#34;,
+            if src_result.data.check_perm(&#34;read&#34;, computer.get_uid() ).success and src_result.data.check_perm(&#34;write&#34;,
                                                                                                              computer.get_uid()).success:
                 copy_result = copy(computer, src_result.data, dst, preserve_permissions, verbose)
 
@@ -149,7 +149,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{src}&#39;&#34;, pipe, success=False)
         else:
             # Make sure we have proper permissions before copying
-            if src_result.data.check_perm(&#34;read&#34;, computer.users[computer.get_uid()] ).success and src_result.data.check_perm(&#34;write&#34;,
+            if src_result.data.check_perm(&#34;read&#34;, computer.get_uid() ).success and src_result.data.check_perm(&#34;write&#34;,
                                                                                                              computer.get_uid()).success:
                 copy_result = copy(computer, src_result.data, dst, preserve_permissions, verbose)
 

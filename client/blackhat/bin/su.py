@@ -23,10 +23,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     user = None
 
     # Check if the given user exists
-    for key, value in computer.users.items():
-        if value.username == to_login_as:
-            user = value
-            break
+    user_lookup = computer.find_user(username=to_login_as)
+    if user_lookup.success:
+        user = user_lookup.data
     else:
         return output(f"{__COMMAND__}: user {args[0]} does not exist", pipe, success=False,
                       success_message=SysCallMessages.NOT_FOUND)
@@ -39,6 +38,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         # Create a new session
         new_session = Session(user.uid, current_session.current_dir, current_session.id + 1)
         computer.sessions.append(new_session)
+        computer.run_current_user_shellrc()
         return output("", pipe)
     else:
         return output(f"{__COMMAND__}: Authentication failure", pipe, success=False,

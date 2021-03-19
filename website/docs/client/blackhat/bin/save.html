@@ -26,7 +26,9 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
+<pre><code class="python">import os
+
+from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.output import output
 
@@ -46,7 +48,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if not output_file.endswith(&#34;.save&#34;):
         output_file += &#34;.save&#34;
 
+    # We&#39;re going to temporarily disable debug mode (for manual saving)
+    prev_debug_mode = os.environ.get(&#34;DEBUGMODE&#34;, &#34;false&#34;)
+    os.environ[&#34;DEBUGMODE&#34;] = &#34;false&#34;
     save_result = computer.save(output_file)
+    # Restore to what it was before after saving
+    os.environ[&#34;DEBUGMODE&#34;] = prev_debug_mode
 
     if not save_result:
         return output(f&#34;{__COMMAND__}: Failed to save!&#34;, pipe, success=False)
@@ -82,7 +89,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if not output_file.endswith(&#34;.save&#34;):
         output_file += &#34;.save&#34;
 
+    # We&#39;re going to temporarily disable debug mode (for manual saving)
+    prev_debug_mode = os.environ.get(&#34;DEBUGMODE&#34;, &#34;false&#34;)
+    os.environ[&#34;DEBUGMODE&#34;] = &#34;false&#34;
     save_result = computer.save(output_file)
+    # Restore to what it was before after saving
+    os.environ[&#34;DEBUGMODE&#34;] = prev_debug_mode
 
     if not save_result:
         return output(f&#34;{__COMMAND__}: Failed to save!&#34;, pipe, success=False)

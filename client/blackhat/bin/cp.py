@@ -40,26 +40,25 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             # If its a file, we're overwriting
             # Check the permissions (write to `copy_to_dir + file` and read from `self`)
             # Check read first (split for error messages)
-            if not src.check_perm("read", computer.get_uid() ).success:
+            if not src.check_perm("read", computer.get_uid()).success:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.get_uid() ).success:
+                if not to_write.check_perm("write", computer.get_uid()).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     to_write.write(computer.get_uid(), src.content)
                     to_write.owner = computer.get_uid()
-                    # TODO: Update the file's group owner
+                    to_write.group_owner = computer.get_gid()
         else:
             # If we have the parent dir, we need to create a new file
-            if not src.check_perm("read", computer.get_uid() ).success:
+            if not src.check_perm("read", computer.get_uid()).success:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.get_uid() ).success:
+                if not to_write.check_perm("write", computer.get_uid()).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_filename = new_file_name
-                    # TODO: Replace 0 with group owner
-                    new_file = File(new_filename, src.content, to_write, computer.get_uid(), 0)
+                    new_file = File(new_filename, src.content, to_write, computer.get_uid(), computer.get_gid())
                     to_write.add_file(new_file)
                     # We have to do this so the permissions work no matter if we're overwriting or not
                     to_write = new_file
@@ -70,7 +69,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
         return SysCallStatus(success=True)
     # Handle directory copying
     else:
-        # TODO: Refractor this to work in both cases instead of re-writing a ton of code
+        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
         # If the path is in the local dir
         if "/" not in dst_path:
             dst_path = "./" + dst_path
@@ -93,14 +92,13 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             new_file_name = src.name
 
         if new_file_name not in to_write.files:
-            if not src.check_perm("read", computer.get_uid() ):
+            if not src.check_perm("read", computer.get_uid()):
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
             else:
-                if not to_write.check_perm("write", computer.get_uid() ).success:
+                if not to_write.check_perm("write", computer.get_uid()).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
-                    # TODO: Handle group owners
-                    new_dir = Directory(new_file_name, to_write, computer.get_uid(), 0)
+                    new_dir = Directory(new_file_name, to_write, computer.get_uid(), computer.get_gid())
                     to_write.add_file(new_dir)
                     # Set a temporary write permission no matter what the new dir's permissions were so we can add its children
                     new_dir.permissions["write"] = ["owner"]

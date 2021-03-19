@@ -11,5 +11,5 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
     # Get the current user's username
-    username = computer.lookup_username(computer.get_uid()).data
+    username = computer.find_user(computer.get_uid()).data.username
     return output(f"uid={computer.get_uid()}({username})", pipe)

@@ -41,9 +41,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     output_text = &#34;&#34;
 
     for session in computer.sessions:
-        username_result = computer.lookup_username(session.real_uid)
+        username_result = computer.find_user(session.real_uid)
         if username_result.success:
-            username = username_result.data
+            username = username_result.data.username
         else:
             username = &#34;?&#34;
         output_text += f&#34;{username}\tpts/{session.id}\n&#34;
@@ -77,9 +77,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     output_text = &#34;&#34;
 
     for session in computer.sessions:
-        username_result = computer.lookup_username(session.real_uid)
+        username_result = computer.find_user(session.real_uid)
         if username_result.success:
-            username = username_result.data
+            username = username_result.data.username
         else:
             username = &#34;?&#34;
         output_text += f&#34;{username}\tpts/{session.id}\n&#34;

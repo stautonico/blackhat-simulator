@@ -25,9 +25,6 @@ class User:
             work_phone (str): The work phone entered by the user when the `User` is created
             home_phone (str): The home phone entered by the user when the `User` is created
             other (str): Any additional information entered by the user when the `User` is created
-
-        Returns:
-            object:
         """
         self.uid: Optional[int] = uid
         """int: User ID assigned by the the computer"""

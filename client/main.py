@@ -135,8 +135,6 @@ if not load_save_success:
 
         isp.add_dns_record("google.com", lan2.wan)
 
-        print(comp.find_user(uid=0))
-
 shell = Shell(comp)
 shell.main()
 

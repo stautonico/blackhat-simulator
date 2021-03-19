@@ -3,11 +3,12 @@ import ipaddress
 import os
 import pickle
 import sqlite3
+import traceback
 from hashlib import md5
 from random import choice, randint
 from secrets import token_hex
 from time import perf_counter
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS
 from .helpers import SysCallStatus, SysCallMessages
@@ -68,6 +69,8 @@ class Computer:
             None
         """
         self.update_hostname()
+        self.update_passwd()
+        self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
         """
@@ -156,11 +159,12 @@ class Computer:
         # Auto-generate the UID (depending on the situation)
         else:
             # We're creating our root user, there isn't going to be a previous UID
-            if len(self.database.execute("SELECT * FROM blackhat_user").fetchall()) == 0:
+            users = self.get_all_users().data
+            if len(users) == 0:
                 next_uid = 0
             else:
                 # Get the UID from the previously created user
-                last_uid = self.database.execute("SELECT uid FROM blackhat_user ORDER BY id DESC;").fetchone()[0]
+                last_uid = users[-1].uid
                 if last_uid == 0:
                     next_uid = 1000
                 else:
@@ -173,9 +177,6 @@ class Computer:
         self.database.execute("INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)",
                               (next_uid, username, hashed_password, self.id))
         self.connection.commit()
-
-        # new_user.uid = next_uid
-        # self.users[next_uid] = new_user
 
         return SysCallStatus(success=True, data=next_uid)
 
@@ -195,6 +196,31 @@ class Computer:
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def change_user_password(self, uid: int, new_password: str) -> SysCallStatus:
+        """
+        Change the password of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the password of
+            new_password (str): The MD5 hash of the password
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        """
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Hash the plain text password
+        password_hash = md5(new_password.encode()).hexdigest()
+
+        # Update the password in the database
+        result = self.database.execute("UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?",
+                                       (password_hash, uid, self.id))
+        self.connection.commit()
+        return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -> SysCallStatus:
         """
@@ -219,11 +245,12 @@ class Computer:
                 next_gid = gid
         else:
             # Auto-generate the GID (depending on the situation)
-            if len(self.database.execute("SELECT * FROM blackhat_group").fetchall()) == 0:
+            groups = self.get_all_groups().data
+            if len(groups) == 0:
                 next_gid = 0
             else:
                 # Get the GID from the previously created group
-                last_gid = self.database.execute("SELECT gid FROM blackhat_group ORDER BY id DESC;").fetchone()[0]
+                last_gid = groups[-1].gid
                 if last_gid == 0:
                     next_gid = 1000
                 else:
@@ -252,6 +279,49 @@ class Computer:
             return SysCallStatus(success=True)
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_user_to_group(self, uid: int, gid: int,
+                          membership_type: Literal["primary", "secondary"] = "secondary") -> SysCallStatus:
+        """
+        Add a user to a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to add the user to
+            membership_type (str): The type of group relationship (primary, secondary)
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        """
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute(
+                "INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)",
+                (self.id, uid, gid, membership_type))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
+        """
+        Remove a user from a group (by uid and gid)
+
+        Args:
+            uid (int): The UID of the user
+            gid (int): The GID of the group to remove the user from
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        """
+        # Confirm that both user and group exists
+        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+            self.database.execute("DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?",
+                                  (self.id, uid, gid))
+            self.connection.commit()
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> SysCallStatus:
         """
@@ -346,11 +416,11 @@ class Computer:
         # Add the root user with a random password
         # self.add_user("root", ''.join([choice(ascii_uppercase + digits) for _ in range(16)]))
         self.add_user("root", "password", uid=0)
-        # self.systemDB.insert({self.id: {"username": "root", "uid": 0, "groups": [0]}})
-        # self.add_user("root", "password", 0)
-        # root_group = Group("root", 0)
-        # self.groups = {0: root_group}
-        # self.users[0].groups = [root_group]
+        # Create the root group
+        self.add_group('root', 0)
+
+        # Add root to the root group
+        self.add_user_to_group(0, 0, membership_type="primary")
 
     def update_passwd(self) -> SysCallStatus:
         """
@@ -369,6 +439,7 @@ class Computer:
         passwd_content = ""
 
         for user in self.get_all_users().data:
+            # Find the "primary" group
             passwd_content += f"{user.username}:{user.password}:{user.uid}\n"
 
         if not passwd_file:
@@ -412,8 +483,25 @@ class Computer:
         Returns:
             int: UID of the `Computers`'s current user (from most recent session)
         """
-        return 0
-        # return self.sessions[-1].effective_uid
+        return self.sessions[-1].effective_uid
+
+    def get_gid(self) -> int:
+        """
+        Returns the (primary) GID of the `Computer`'s current user
+        Returns:
+            int: (primary) GID of the `Computers`'s current user (from most recent session)
+        """
+        current_uid = self.get_uid()
+        result = self.database.execute(
+            "SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?",
+            (self.id, current_uid, "primary")).fetchone()
+
+        if result:
+            return result[0]
+        else:
+            # NOTE: possible exploit, but maybe we leave it here on purpose?
+            # TODO: Write proof of concept exploit to exploit this exploit
+            return 0
 
     def run_current_user_shellrc(self):
         """
@@ -451,12 +539,16 @@ class Computer:
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         """
-        try:
-            with open(output_file, "wb") as f:
-                pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+        if os.getenv("DEBUGMODE") == "false":
+            try:
+                with open(output_file, "wb") as f:
+                    pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+                return True
+            except Exception as e:
+                # TODO: Fix save bug (can't pickle `self.connection` and `self.database`)
+                return False
+        else:
             return True
-        except Exception as e:
-            return False
 
     def handle_tcp_connection(self, host: str, port: int, args: dict) -> SysCallStatus:
         """

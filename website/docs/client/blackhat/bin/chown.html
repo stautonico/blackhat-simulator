@@ -33,7 +33,6 @@ from ..lib.output import output
 __COMMAND__ = &#34;chown&#34;
 __VERSION__ = &#34;1.0.0&#34;
 
-# TODO: Support group owner changing
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # args[0] = new owner
@@ -46,15 +45,30 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return output(f&#34;{__COMMAND__} (h3xNet coreutils) {__VERSION__}&#34;, pipe)
 
         owner = args[0]
+        group_owner = None
+
+        if &#34;:&#34; in owner:
+            params_split = owner.split(&#34;:&#34;)
+            owner = params_split[0]
+            group_owner = params_split[1]
+
         file_to_change = args[1]
 
-        check_user_exists = computer.user_exists(owner)
+        check_user_exists = computer.find_user(username=owner)
 
         if not check_user_exists.success:
             return output(f&#34;{__COMMAND__}: invalid user: {owner}&#34;, pipe, success=False)
         else:
             # Get the user object (because owner is the username (string))
-            owner = check_user_exists.data
+            owner = check_user_exists.data.uid
+
+        # Make sure the group exists (if we&#39;re using it)
+        if group_owner:
+            check_group_exists = computer.find_group(name=group_owner)
+            if not check_group_exists.success:
+                return output(f&#34;{__COMMAND__}: invalid group: {group_owner}&#34;, pipe, success=False)
+            else:
+                group_owner = check_group_exists.data.gid
 
         result = computer.fs.find(file_to_change)
 
@@ -64,9 +78,15 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer.get_uid(), owner)
-                if not update_response.success:
-                    if update_response.message == SysCallMessages.NOT_ALLOWED:
+                uid_update_response = result.data.change_owner(computer.get_uid(), owner)
+                if group_owner:
+                    gid_update_response = result.data.change_group_owner(computer.get_gid(), group_owner)
+                else:
+                    # We&#39;re doing this for convience sake (if we&#39;re not changing the group)
+                    gid_update_response = SysCallStatus(success=True)
+
+                if not uid_update_response.success or not gid_update_response.success:
+                    if uid_update_response.message == SysCallMessages.NOT_ALLOWED:
                         return output(
                             f&#34;{__COMMAND__}: changing ownership of &#39;{file_to_change}&#39;: Operation not permitted&#34;, pipe,
                             success=False)
@@ -104,15 +124,30 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return output(f&#34;{__COMMAND__} (h3xNet coreutils) {__VERSION__}&#34;, pipe)
 
         owner = args[0]
+        group_owner = None
+
+        if &#34;:&#34; in owner:
+            params_split = owner.split(&#34;:&#34;)
+            owner = params_split[0]
+            group_owner = params_split[1]
+
         file_to_change = args[1]
 
-        check_user_exists = computer.user_exists(owner)
+        check_user_exists = computer.find_user(username=owner)
 
         if not check_user_exists.success:
             return output(f&#34;{__COMMAND__}: invalid user: {owner}&#34;, pipe, success=False)
         else:
             # Get the user object (because owner is the username (string))
-            owner = check_user_exists.data
+            owner = check_user_exists.data.uid
+
+        # Make sure the group exists (if we&#39;re using it)
+        if group_owner:
+            check_group_exists = computer.find_group(name=group_owner)
+            if not check_group_exists.success:
+                return output(f&#34;{__COMMAND__}: invalid group: {group_owner}&#34;, pipe, success=False)
+            else:
+                group_owner = check_group_exists.data.gid
 
         result = computer.fs.find(file_to_change)
 
@@ -122,9 +157,15 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer.get_uid(), owner)
-                if not update_response.success:
-                    if update_response.message == SysCallMessages.NOT_ALLOWED:
+                uid_update_response = result.data.change_owner(computer.get_uid(), owner)
+                if group_owner:
+                    gid_update_response = result.data.change_group_owner(computer.get_gid(), group_owner)
+                else:
+                    # We&#39;re doing this for convience sake (if we&#39;re not changing the group)
+                    gid_update_response = SysCallStatus(success=True)
+
+                if not uid_update_response.success or not gid_update_response.success:
+                    if uid_update_response.message == SysCallMessages.NOT_ALLOWED:
                         return output(
                             f&#34;{__COMMAND__}: changing ownership of &#39;{file_to_change}&#39;: Operation not permitted&#34;, pipe,
                             success=False)

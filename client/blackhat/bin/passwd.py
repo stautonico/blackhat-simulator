@@ -32,13 +32,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
     if len(args) == 0:
         # User just typed `passwd` (change current user password)
-        user_to_change = computer.get_uid()
+        user_to_change = computer.find_user(uid=computer.get_uid()).data
     else:
         user_to_change = computer.find_user(username=args[0])
         if not user_to_change.success:
             return output(f"{__COMMAND__}: user '{args[0]}' does not exist", pipe, success=False)
 
-        user_to_change = computer.users[user_to_change.data]
+        user_to_change = user_to_change.data
 
     if user_to_change.password:
         # If the given user has a password, we need to know their password before changing
@@ -64,7 +64,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                         elif hashed_password == user_to_change.password:
                             print("Password unchanged")
                         else:
-                            user_to_change.password = hashed_password
+                            computer.change_user_password(user_to_change.uid, new_password)
                             print(f"{__COMMAND__}: password updated successfully")
                             break
                 else:
@@ -72,11 +72,14 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     if hashed_password == user_to_change.password:
                         print("Password unchanged")
                     else:
-                        user_to_change.set_password(password)
-                        print(f"{__COMMAND__}: password updated successfully")
+                        result = computer.change_user_password(user_to_change.uid, password)
+                        if result.success:
+                            print(f"{__COMMAND__}: password updated successfully")
+                        else:
+                            return output(f"{__COMMAND__}: Failed to update password!", pipe, success=False)
                         break
     else:
-        user_to_change.set_password(password)
+        computer.change_user_password(user_to_change.uid, password)
 
     computer.update_passwd()
 

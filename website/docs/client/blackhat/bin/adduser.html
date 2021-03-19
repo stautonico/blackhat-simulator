@@ -68,10 +68,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         except IndexError:
             return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
 
-    if computer.user_exists(args[0]).success:
+    if computer.find_user(username=args[0]).success:
         return output(f&#34;{__COMMAND__}: The user &#39;{args[0]}&#39; already exists.&#34;, pipe, success=False)
 
-    prev_uid = list(computer.users.keys())[-1]
+    prev_uid = computer.get_all_users().data[-1].uid
 
     if prev_uid == 0:
         next_uid = 1000
@@ -106,7 +106,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     user_result = computer.add_user(args[0], password)
     group_result = computer.add_group(args[0])
     # Find the user object and its its group to the new group
-    computer.users[user_result.data].groups = [computer.groups[group_result.data]]
+    computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
 
     update_passwd_result = computer.update_passwd()
     update_group_result = computer.update_groups()
@@ -131,8 +131,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     home_folder: Directory = home_folder_find.data
     skel_dir: Directory = skel_dir_find.data
 
-    # TODO: Add /home/user group owner
-    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, 0)
+    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, group_result.data)
     home_folder.add_file(new_user_folder)
 
     # Copy the contents of /etc/skel to the new users folder
@@ -148,14 +147,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
             computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
 
-            # Change the file&#39;s user
-            computer.run_command(&#34;chown&#34;, [args[0], f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
+            # Change the file&#39;s owner (user and group)
+            computer.run_command(&#34;chown&#34;, [f&#34;{args[0]}:{args[0]}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
 
     # Write `export HOME=/home/args[0]` and `export PATH=/bin:` to the new ~/.shellrc
     new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.users[computer.get_uid()], f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;)
+        new_shellrc_result.data.write(computer.get_uid(), f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;)
 
     # Check if we should ask the user for Full name, etc
     if interactive:
@@ -168,11 +167,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             other = input(&#34;\tOther []: &#34;)
             correct = input(&#34;Is the information correct? [Y/n] &#34;)
             if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
-                computer.users[user_result.data].full_name = full_name
-                computer.users[user_result.data].room_number = room_num
-                computer.users[user_result.data].work_phone = work_phone
-                computer.users[user_result.data].home_phone = home_phone
-                computer.users[user_result.data].other = other
+                pass
+                # computer.users[user_result.data].full_name = full_name
+                # computer.users[user_result.data].room_number = room_num
+                # computer.users[user_result.data].work_phone = work_phone
+                # computer.users[user_result.data].home_phone = home_phone
+                # computer.users[user_result.data].other = other
                 break
 
     if not update_passwd_result.success:
@@ -231,10 +231,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         except IndexError:
             return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
 
-    if computer.user_exists(args[0]).success:
+    if computer.find_user(username=args[0]).success:
         return output(f&#34;{__COMMAND__}: The user &#39;{args[0]}&#39; already exists.&#34;, pipe, success=False)
 
-    prev_uid = list(computer.users.keys())[-1]
+    prev_uid = computer.get_all_users().data[-1].uid
 
     if prev_uid == 0:
         next_uid = 1000
@@ -269,7 +269,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     user_result = computer.add_user(args[0], password)
     group_result = computer.add_group(args[0])
     # Find the user object and its its group to the new group
-    computer.users[user_result.data].groups = [computer.groups[group_result.data]]
+    computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
 
     update_passwd_result = computer.update_passwd()
     update_group_result = computer.update_groups()
@@ -294,8 +294,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     home_folder: Directory = home_folder_find.data
     skel_dir: Directory = skel_dir_find.data
 
-    # TODO: Add /home/user group owner
-    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, 0)
+    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, group_result.data)
     home_folder.add_file(new_user_folder)
 
     # Copy the contents of /etc/skel to the new users folder
@@ -311,14 +310,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
             computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
 
-            # Change the file&#39;s user
-            computer.run_command(&#34;chown&#34;, [args[0], f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
+            # Change the file&#39;s owner (user and group)
+            computer.run_command(&#34;chown&#34;, [f&#34;{args[0]}:{args[0]}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
 
     # Write `export HOME=/home/args[0]` and `export PATH=/bin:` to the new ~/.shellrc
     new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.users[computer.get_uid()], f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;)
+        new_shellrc_result.data.write(computer.get_uid(), f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;)
 
     # Check if we should ask the user for Full name, etc
     if interactive:
@@ -331,11 +330,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             other = input(&#34;\tOther []: &#34;)
             correct = input(&#34;Is the information correct? [Y/n] &#34;)
             if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
-                computer.users[user_result.data].full_name = full_name
-                computer.users[user_result.data].room_number = room_num
-                computer.users[user_result.data].work_phone = work_phone
-                computer.users[user_result.data].home_phone = home_phone
-                computer.users[user_result.data].other = other
+                pass
+                # computer.users[user_result.data].full_name = full_name
+                # computer.users[user_result.data].room_number = room_num
+                # computer.users[user_result.data].work_phone = work_phone
+                # computer.users[user_result.data].home_phone = home_phone
+                # computer.users[user_result.data].other = other
                 break
 
     if not update_passwd_result.success:

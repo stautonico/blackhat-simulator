@@ -61,6 +61,7 @@ def parse_characters(chars, current_perms):
 
     # FIXME: Holy fuck This needs SERIOUS work
     # DATE: 3/15/2021
+    # DATE: 3/19/2021
     # Now lets apply the new permissions
     if mode == "remove":
         for mode in ["read", "write", "execute"]:

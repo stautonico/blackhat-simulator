@@ -51,10 +51,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     user = None
 
     # Check if the given user exists
-    for key, value in computer.users.items():
-        if value.username == to_login_as:
-            user = value
-            break
+    user_lookup = computer.find_user(username=to_login_as)
+    if user_lookup.success:
+        user = user_lookup.data
     else:
         return output(f&#34;{__COMMAND__}: user {args[0]} does not exist&#34;, pipe, success=False,
                       success_message=SysCallMessages.NOT_FOUND)
@@ -67,6 +66,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Create a new session
         new_session = Session(user.uid, current_session.current_dir, current_session.id + 1)
         computer.sessions.append(new_session)
+        computer.run_current_user_shellrc()
         return output(&#34;&#34;, pipe)
     else:
         return output(f&#34;{__COMMAND__}: Authentication failure&#34;, pipe, success=False,
@@ -102,10 +102,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     user = None
 
     # Check if the given user exists
-    for key, value in computer.users.items():
-        if value.username == to_login_as:
-            user = value
-            break
+    user_lookup = computer.find_user(username=to_login_as)
+    if user_lookup.success:
+        user = user_lookup.data
     else:
         return output(f&#34;{__COMMAND__}: user {args[0]} does not exist&#34;, pipe, success=False,
                       success_message=SysCallMessages.NOT_FOUND)
@@ -118,6 +117,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Create a new session
         new_session = Session(user.uid, current_session.current_dir, current_session.id + 1)
         computer.sessions.append(new_session)
+        computer.run_current_user_shellrc()
         return output(&#34;&#34;, pipe)
     else:
         return output(f&#34;{__COMMAND__}: Authentication failure&#34;, pipe, success=False,

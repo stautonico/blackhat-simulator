@@ -17,7 +17,6 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     output_text = ""
 
     for file in args:
-        print(f"Handling {file}")
         to_read_result = computer.fs.find(file)
 
         if not to_read_result.success:

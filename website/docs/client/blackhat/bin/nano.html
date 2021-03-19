@@ -61,7 +61,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if not create_file_response.success:
                 return output(f&#34;{__COMMAND__}: Unable to create file: {args[0]}&#34;, pipe, success=False)
             else:
-                file_to_write = computer.fs.find(args[0])[&#34;file&#34;]
+                file_to_write = computer.fs.find(args[0]).data
     else:
         # If this exists, the file already existed, we can read its contents
         # and write it into the physical file
@@ -87,7 +87,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         remove(f&#34;/tmp/{temp_file}&#34;)
 
-        write_result = file_to_write.write(computer.users[computer.get_uid()], file_content)
+        write_result = file_to_write.write(computer.get_uid(), file_content)
 
         if not write_result:
             return output(f&#34;{__COMMAND__}: {args[0]}: Permission denied&#34;, pipe, success=False)
@@ -135,7 +135,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if not create_file_response.success:
                 return output(f&#34;{__COMMAND__}: Unable to create file: {args[0]}&#34;, pipe, success=False)
             else:
-                file_to_write = computer.fs.find(args[0])[&#34;file&#34;]
+                file_to_write = computer.fs.find(args[0]).data
     else:
         # If this exists, the file already existed, we can read its contents
         # and write it into the physical file
@@ -161,7 +161,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         remove(f&#34;/tmp/{temp_file}&#34;)
 
-        write_result = file_to_write.write(computer.users[computer.get_uid()], file_content)
+        write_result = file_to_write.write(computer.get_uid(), file_content)
 
         if not write_result:
             return output(f&#34;{__COMMAND__}: {args[0]}: Permission denied&#34;, pipe, success=False)

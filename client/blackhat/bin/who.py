@@ -13,9 +13,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     output_text = ""
 
     for session in computer.sessions:
-        username_result = computer.lookup_username(session.real_uid)
+        username_result = computer.find_user(session.real_uid)
         if username_result.success:
-            username = username_result.data
+            username = username_result.data.username
         else:
             username = "?"
         output_text += f"{username}\tpts/{session.id}\n"

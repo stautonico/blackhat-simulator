@@ -34,7 +34,6 @@ from string import ascii_uppercase, digits
 from typing import Optional, Dict, List, Literal, Union
 
 from .helpers import SysCallStatus, SysCallMessages
-from .user import User
 
 
 class FSBaseObject:
@@ -83,34 +82,37 @@ class FSBaseObject:
         &#34;&#34;&#34;
         return type(self) == File
 
-    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: User) -&gt; SysCallStatus:
+    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Checks if the given `uid` has the given `perm`
 
         Args:
             perm (str): The permission to check (&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;)
-            caller (User): The `User` to check permissions for
+            caller (int): The UID of the `User` to check permissions for
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if caller.uid == 0:
+        if caller == 0:
             return SysCallStatus(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
             return SysCallStatus(success=True)
 
-        if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in caller.groups:
-                return SysCallStatus(success=True)
+        # if &#34;group&#34; in self.permissions[perm]:
+        #     if self.group_owner in caller.groups:
+        #         return SysCallStatus(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == caller.uid:
+            if self.owner == caller:
                 return SysCallStatus(success=True)
 
         # No permission
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    # TODO: Update these two into one function
+    # TODO: Make function to confirm UID or GID ownership with one function
 
     def change_owner(self, caller: int, new_owner: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -126,6 +128,24 @@ class FSBaseObject:
         # Only the current owner and root are allowed to change the files owner
         if caller == self.owner or caller == 0:
             self.owner = new_owner
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def change_group_owner(self, caller: int, new_owner: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the group owner of a given `File`/`Directory`, but check if the given GID should be allowed to first
+
+        Args:
+            caller (int): The UID of the user attempting to change the owner
+            new_owner (int): The GID of the new group owner of the `File`/`Directory`
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Only the current owner and root are allowed to change the files owner
+        if caller == self.owner or caller == 0:
+            self.group_owner = new_owner
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -155,12 +175,12 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self, caller: User) -&gt; SysCallStatus:
+    def delete(self, caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
         Args:
-            caller (User): The `User` attempting to delete the given `File`/`Directory`
+            caller (int): The UID of the `User` attempting to delete the given `File`/`Directory`
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
@@ -190,12 +210,12 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, caller: User) -&gt; SysCallStatus:
+    def read(self, caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
-            caller (User): The `User` attempting to read the given file
+            caller (int): The `User` attempting to read the given file
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
@@ -205,12 +225,12 @@ class File(FSBaseObject):
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def write(self, caller: User, data: str) -&gt; SysCallStatus:
+    def write(self, caller: int, data: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has permission to write to the file. Update the file&#39;s contents if allowed
 
         Args:
-            caller (User): The `User` attempting to write to the given file
+            caller (int): The UID of the `User` attempting to write to the given file
             data (str): The new content to write to the `File`
 
         Returns:
@@ -426,7 +446,8 @@ class StandardFS:
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
         # The passwd file should have roots creds (bc root is created before the file)
-        passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+        # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+        passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
         etc_dir.add_file(passwd_file)
 
         # Create the /etc/groups file
@@ -853,6 +874,7 @@ Also updates its size and triggers its parent to update their size</p>
 <li><code><b><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></b></code>:
 <ul class="hlist">
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.change_group_owner" href="#client.blackhat.fs.FSBaseObject.change_group_owner">change_group_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>
@@ -933,34 +955,37 @@ Also updates its size and triggers its parent to update their size</p>
         &#34;&#34;&#34;
         return type(self) == File
 
-    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: User) -&gt; SysCallStatus:
+    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Checks if the given `uid` has the given `perm`
 
         Args:
             perm (str): The permission to check (&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;)
-            caller (User): The `User` to check permissions for
+            caller (int): The UID of the `User` to check permissions for
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if caller.uid == 0:
+        if caller == 0:
             return SysCallStatus(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
             return SysCallStatus(success=True)
 
-        if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in caller.groups:
-                return SysCallStatus(success=True)
+        # if &#34;group&#34; in self.permissions[perm]:
+        #     if self.group_owner in caller.groups:
+        #         return SysCallStatus(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == caller.uid:
+            if self.owner == caller:
                 return SysCallStatus(success=True)
 
         # No permission
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    # TODO: Update these two into one function
+    # TODO: Make function to confirm UID or GID ownership with one function
 
     def change_owner(self, caller: int, new_owner: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -976,6 +1001,24 @@ Also updates its size and triggers its parent to update their size</p>
         # Only the current owner and root are allowed to change the files owner
         if caller == self.owner or caller == 0:
             self.owner = new_owner
+            return SysCallStatus(success=True)
+        else:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def change_group_owner(self, caller: int, new_owner: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the group owner of a given `File`/`Directory`, but check if the given GID should be allowed to first
+
+        Args:
+            caller (int): The UID of the user attempting to change the owner
+            new_owner (int): The GID of the new group owner of the `File`/`Directory`
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+        &#34;&#34;&#34;
+        # Only the current owner and root are allowed to change the files owner
+        if caller == self.owner or caller == 0:
+            self.group_owner = new_owner
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -1005,12 +1048,12 @@ Also updates its size and triggers its parent to update their size</p>
 
         return working_dir
 
-    def delete(self, caller: User) -&gt; SysCallStatus:
+    def delete(self, caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
         Args:
-            caller (User): The `User` attempting to delete the given `File`/`Directory`
+            caller (int): The UID of the `User` attempting to delete the given `File`/`Directory`
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
@@ -1049,6 +1092,46 @@ Also updates its size and triggers its parent to update their size</p>
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="client.blackhat.fs.FSBaseObject.change_group_owner"><code class="name flex">
+<span>def <span class="ident">change_group_owner</span></span>(<span>self, caller: int, new_owner: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Change the group owner of a given <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code>, but check if the given GID should be allowed to first</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>caller</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user attempting to change the owner</dd>
+<dt><strong><code>new_owner</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the new group owner of the <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def change_group_owner(self, caller: int, new_owner: int) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Change the group owner of a given `File`/`Directory`, but check if the given GID should be allowed to first
+
+    Args:
+        caller (int): The UID of the user attempting to change the owner
+        new_owner (int): The GID of the new group owner of the `File`/`Directory`
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+    &#34;&#34;&#34;
+    # Only the current owner and root are allowed to change the files owner
+    if caller == self.owner or caller == 0:
+        self.group_owner = new_owner
+        return SysCallStatus(success=True)
+    else:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.fs.FSBaseObject.change_owner"><code class="name flex">
 <span>def <span class="ident">change_owner</span></span>(<span>self, caller: int, new_owner: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -1090,7 +1173,7 @@ Also updates its size and triggers its parent to update their size</p>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.check_perm"><code class="name flex">
-<span>def <span class="ident">check_perm</span></span>(<span>self, perm: Literal['read', 'write', 'execute'], caller: <a title="client.blackhat.user.User" href="user.html#client.blackhat.user.User">User</a>) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">check_perm</span></span>(<span>self, perm: Literal['read', 'write', 'execute'], caller: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if the given <code>uid</code> has the given <code>perm</code></p>
@@ -1098,8 +1181,8 @@ Also updates its size and triggers its parent to update their size</p>
 <dl>
 <dt><strong><code>perm</code></strong> :&ensp;<code>str</code></dt>
 <dd>The permission to check ("read", "write", "execute")</dd>
-<dt><strong><code>caller</code></strong> :&ensp;<code>User</code></dt>
-<dd>The <code>User</code> to check permissions for</dd>
+<dt><strong><code>caller</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the <code>User</code> to check permissions for</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -1110,30 +1193,30 @@ Also updates its size and triggers its parent to update their size</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: User) -&gt; SysCallStatus:
+<pre><code class="python">def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], caller: int) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Checks if the given `uid` has the given `perm`
 
     Args:
         perm (str): The permission to check (&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;)
-        caller (User): The `User` to check permissions for
+        caller (int): The UID of the `User` to check permissions for
 
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
     &#34;&#34;&#34;
     # If we&#34;re root (UID 0), return True because root has all permissions
-    if caller.uid == 0:
+    if caller == 0:
         return SysCallStatus(success=True)
     # If &#34;public&#34;, don&#34;t bother checking anything else
     if &#34;public&#34; in self.permissions[perm]:
         return SysCallStatus(success=True)
 
-    if &#34;group&#34; in self.permissions[perm]:
-        if self.group_owner in caller.groups:
-            return SysCallStatus(success=True)
+    # if &#34;group&#34; in self.permissions[perm]:
+    #     if self.group_owner in caller.groups:
+    #         return SysCallStatus(success=True)
 
     if &#34;owner&#34; in self.permissions[perm]:
-        if self.owner == caller.uid:
+        if self.owner == caller:
             return SysCallStatus(success=True)
 
     # No permission
@@ -1141,14 +1224,14 @@ Also updates its size and triggers its parent to update their size</p>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.delete"><code class="name flex">
-<span>def <span class="ident">delete</span></span>(<span>self, caller: <a title="client.blackhat.user.User" href="user.html#client.blackhat.user.User">User</a>) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">delete</span></span>(<span>self, caller: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the <code>caller</code> has the proper permissions to delete a given file, then remove it</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>caller</code></strong> :&ensp;<code>User</code></dt>
-<dd>The <code>User</code> attempting to delete the given <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code></dd>
+<dt><strong><code>caller</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the <code>User</code> attempting to delete the given <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code></dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -1159,12 +1242,12 @@ Also updates its size and triggers its parent to update their size</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def delete(self, caller: User) -&gt; SysCallStatus:
+<pre><code class="python">def delete(self, caller: int) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Check if the `caller` has the proper permissions to delete a given file, then remove it
 
     Args:
-        caller (User): The `User` attempting to delete the given `File`/`Directory`
+        caller (int): The UID of the `User` attempting to delete the given `File`/`Directory`
 
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
@@ -1307,12 +1390,12 @@ Also updates its size and triggers its parent to update their size</p>
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, caller: User) -&gt; SysCallStatus:
+    def read(self, caller: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
-            caller (User): The `User` attempting to read the given file
+            caller (int): The `User` attempting to read the given file
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
@@ -1322,12 +1405,12 @@ Also updates its size and triggers its parent to update their size</p>
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def write(self, caller: User, data: str) -&gt; SysCallStatus:
+    def write(self, caller: int, data: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Check if the `caller` has permission to write to the file. Update the file&#39;s contents if allowed
 
         Args:
-            caller (User): The `User` attempting to write to the given file
+            caller (int): The UID of the `User` attempting to write to the given file
             data (str): The new content to write to the `File`
 
         Returns:
@@ -1423,13 +1506,13 @@ Also updates its size and triggers its parent to update their size</p>
 </details>
 </dd>
 <dt id="client.blackhat.fs.File.read"><code class="name flex">
-<span>def <span class="ident">read</span></span>(<span>self, caller: <a title="client.blackhat.user.User" href="user.html#client.blackhat.user.User">User</a>) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">read</span></span>(<span>self, caller: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the <code>caller</code> has permission to read the content of the file. Afterwards, return the content if allowed</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>caller</code></strong> :&ensp;<code>User</code></dt>
+<dt><strong><code>caller</code></strong> :&ensp;<code>int</code></dt>
 <dd>The <code>User</code> attempting to read the given file</dd>
 </dl>
 <h2 id="returns">Returns</h2>
@@ -1441,12 +1524,12 @@ Also updates its size and triggers its parent to update their size</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def read(self, caller: User) -&gt; SysCallStatus:
+<pre><code class="python">def read(self, caller: int) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Check if the `caller` has permission to read the content of the file. Afterwards, return the content if allowed
 
     Args:
-        caller (User): The `User` attempting to read the given file
+        caller (int): The `User` attempting to read the given file
 
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
@@ -1487,14 +1570,14 @@ Also, recursively tells it's parent to update its size.</p>
 </details>
 </dd>
 <dt id="client.blackhat.fs.File.write"><code class="name flex">
-<span>def <span class="ident">write</span></span>(<span>self, caller: <a title="client.blackhat.user.User" href="user.html#client.blackhat.user.User">User</a>, data: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">write</span></span>(<span>self, caller: int, data: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the <code>caller</code> has permission to write to the file. Update the file's contents if allowed</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>caller</code></strong> :&ensp;<code>User</code></dt>
-<dd>The <code>User</code> attempting to write to the given file</dd>
+<dt><strong><code>caller</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the <code>User</code> attempting to write to the given file</dd>
 <dt><strong><code>data</code></strong> :&ensp;<code>str</code></dt>
 <dd>The new content to write to the <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code></dd>
 </dl>
@@ -1507,12 +1590,12 @@ Also, recursively tells it's parent to update its size.</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def write(self, caller: User, data: str) -&gt; SysCallStatus:
+<pre><code class="python">def write(self, caller: int, data: str) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Check if the `caller` has permission to write to the file. Update the file&#39;s contents if allowed
 
     Args:
-        caller (User): The `User` attempting to write to the given file
+        caller (int): The UID of the `User` attempting to write to the given file
         data (str): The new content to write to the `File`
 
     Returns:
@@ -1532,6 +1615,7 @@ Also, recursively tells it's parent to update its size.</p>
 <li><code><b><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></b></code>:
 <ul class="hlist">
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.change_group_owner" href="#client.blackhat.fs.FSBaseObject.change_group_owner">change_group_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>
@@ -1644,7 +1728,8 @@ Also, recursively tells it's parent to update its size.</p>
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
         # The passwd file should have roots creds (bc root is created before the file)
-        passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+        # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+        passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
         etc_dir.add_file(passwd_file)
 
         # Create the /etc/groups file
@@ -2030,7 +2115,8 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
     etc_dir: Directory = self.files.find(&#34;etc&#34;)
     # Create the /etc/passwd file
     # The passwd file should have roots creds (bc root is created before the file)
-    passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+    # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
+    passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
     etc_dir.add_file(passwd_file)
 
     # Create the /etc/groups file
@@ -2199,6 +2285,7 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 <h4><code><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></code></h4>
 <ul class="two-column">
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.change_group_owner" href="#client.blackhat.fs.FSBaseObject.change_group_owner">change_group_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>

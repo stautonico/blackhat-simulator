@@ -33,7 +33,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             if not create_file_response.success:
                 return output(f"{__COMMAND__}: Unable to create file: {args[0]}", pipe, success=False)
             else:
-                file_to_write = computer.fs.find(args[0])["file"]
+                file_to_write = computer.fs.find(args[0]).data
     else:
         # If this exists, the file already existed, we can read its contents
         # and write it into the physical file
