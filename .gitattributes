@@ -27,8 +27,7 @@
 # ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
 # (among others).
 
-*.html linguist-vendored=false
-*.css linguist-vendored=false
-*.js linguist-vendored=false
-*.xml linguist-vendored=false
+*.py linguist-language=Python
+*.sql linguist-detectable=true
 
+website/* linguist-documentation
