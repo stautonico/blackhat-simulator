@@ -231,7 +231,7 @@ class Shell:
                                 else:
                                     file_to_write = self.computer.fs.find(filename_to_write_to).data
                         else:
-                            file_to_write = find_response
+                            file_to_write = find_response.data
 
                         message_to_write = command_result
                         if message_to_write.startswith('"') and message_to_write.endswith('"'):
@@ -241,10 +241,10 @@ class Shell:
                         # We don't need to re-write it
                         if special_character == ">":
                             file_to_write.write(self.computer.get_uid(),
-                                                message_to_write)
+                                                message_to_write, self.computer)
                         elif special_character == ">>":
                             file_to_write.append(self.computer.get_uid(),
-                                                 message_to_write)
+                                                 message_to_write, self.computer)
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command

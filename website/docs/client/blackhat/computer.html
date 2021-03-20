@@ -31,7 +31,6 @@ import ipaddress
 import os
 import pickle
 import sqlite3
-import traceback
 from hashlib import md5
 from random import choice, randint
 from secrets import token_hex
@@ -331,6 +330,25 @@ class Computer:
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+    def get_user_groups(self, uid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+        Args:
+            uid (int): The UID of the user to lookup
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+        &#34;&#34;&#34;
+        # Double check if the user exists
+        if not self.find_user(uid=uid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            # Ask the database for the GIDs
+            result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;&#34;,
+                                           (self.id, uid)).fetchall()
+            return SysCallStatus(success=True, data=[x[0] for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Remove a user from a group (by uid and gid)
@@ -550,7 +568,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -1256,6 +1274,25 @@ class ISPRouter(Router):
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+    def get_user_groups(self, uid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+        Args:
+            uid (int): The UID of the user to lookup
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+        &#34;&#34;&#34;
+        # Double check if the user exists
+        if not self.find_user(uid=uid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            # Ask the database for the GIDs
+            result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;&#34;,
+                                           (self.id, uid)).fetchall()
+            return SysCallStatus(success=True, data=[x[0] for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Remove a user from a group (by uid and gid)
@@ -1475,7 +1512,7 @@ class ISPRouter(Router):
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -2089,6 +2126,45 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     return self.sessions[-1].effective_uid</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.computer.Computer.get_user_groups"><code class="name flex">
+<span>def <span class="ident">get_user_groups</span></span>(<span>self, uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the list of <code>Group</code> GID's that the <code>User</code> belongs to (by UID)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user to lookup</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing a list of GIDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_user_groups(self, uid: int) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    # Double check if the user exists
+    if not self.find_user(uid=uid).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    else:
+        # Ask the database for the GIDs
+        result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;&#34;,
+                                       (self.id, uid)).fetchall()
+        return SysCallStatus(success=True, data=[x[0] for x in result])</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.computer.Computer.handle_tcp_connection"><code class="name flex">
 <span>def <span class="ident">handle_tcp_connection</span></span>(<span>self, host: str, port: int, args: dict) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -2319,7 +2395,7 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     shellrc_lookup = self.fs.find(shellrc_loc)
 
     if shellrc_lookup.success:
-        shellrc_lines = shellrc_lookup.data.read(self.get_uid())
+        shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
 
         if shellrc_lines.success:
             for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -2929,6 +3005,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.handle_tcp_connection" href="#client.blackhat.computer.Router.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
@@ -3538,6 +3615,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.remove_user_from_group" href="#client.blackhat.computer.Computer.remove_user_from_group">remove_user_from_group</a></code></li>
@@ -3584,6 +3662,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.handle_tcp_connection" href="#client.blackhat.computer.Computer.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>

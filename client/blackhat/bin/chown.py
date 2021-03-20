@@ -50,17 +50,16 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 return output(f"{__COMMAND__}: Can't change owner of /", pipe, success=False)
             else:
                 # Syscall
-                uid_update_response = result.data.change_owner(computer.get_uid(), owner)
-                if group_owner:
-                    gid_update_response = result.data.change_group_owner(computer.get_gid(), group_owner)
-                else:
-                    # We're doing this for convience sake (if we're not changing the group)
-                    gid_update_response = SysCallStatus(success=True)
-
-                if not uid_update_response.success or not gid_update_response.success:
-                    if uid_update_response.message == SysCallMessages.NOT_ALLOWED:
+                update_response = result.data.change_owner(computer.get_uid(), computer, new_user_owner=owner,
+                                                           new_group_owner=group_owner)
+                if not update_response.success:
+                    if update_response.message == SysCallMessages.NOT_ALLOWED:
                         return output(
                             f"{__COMMAND__}: changing ownership of '{file_to_change}': Operation not permitted", pipe,
+                            success=False)
+                    else:
+                        return output(
+                            f"{__COMMAND__}: changing ownership of '{file_to_change}': Failed to change", pipe,
                             success=False)
         else:
             return output(f"{__COMMAND__}: cannot access '{file_to_change}': No such file or directory", pipe,

@@ -47,7 +47,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     find_man_result = computer.fs.find(f&#34;/usr/share/man/{command}&#34;)
 
     if find_man_result.success:
-        read_result = find_man_result.data.read(computer.get_uid())
+        read_result = find_man_result.data.read(computer.get_uid(), computer)
 
         if read_result.success:
             return output(read_result.data, pipe)
@@ -85,7 +85,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     find_man_result = computer.fs.find(f&#34;/usr/share/man/{command}&#34;)
 
     if find_man_result.success:
-        read_result = find_man_result.data.read(computer.get_uid())
+        read_result = find_man_result.data.read(computer.get_uid(), computer)
 
         if read_result.success:
             return output(read_result.data, pipe)

@@ -3,7 +3,6 @@ import ipaddress
 import os
 import pickle
 import sqlite3
-import traceback
 from hashlib import md5
 from random import choice, randint
 from secrets import token_hex
@@ -303,6 +302,25 @@ class Computer:
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+    def get_user_groups(self, uid: int) -> SysCallStatus:
+        """
+        Get the list of `Group` GID's that the `User` belongs to (by UID)
+
+        Args:
+            uid (int): The UID of the user to lookup
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+        """
+        # Double check if the user exists
+        if not self.find_user(uid=uid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            # Ask the database for the GIDs
+            result = self.database.execute("SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;",
+                                           (self.id, uid)).fetchall()
+            return SysCallStatus(success=True, data=[x[0] for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
         """
         Remove a user from a group (by uid and gid)
@@ -522,7 +540,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid())
+            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split("\n"):

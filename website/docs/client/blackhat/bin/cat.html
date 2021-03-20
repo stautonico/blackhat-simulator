@@ -60,7 +60,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.get_uid())
+                read_response = to_read.read(computer.get_uid(), computer)
 
                 if read_response.success:
                     if read_response.data:
@@ -71,6 +71,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 else:
                     if read_response.message == SysCallMessages.NOT_ALLOWED:
                         output_text += f&#34;{__COMMAND__}: {to_read.name}: Permission denied\n&#34;
+
+    # Remove extra new lines
+    if output_text.endswith(&#34;\n&#34;):
+        output_text = output_text[:-1]
 
     return output(output_text, pipe)</code></pre>
 </details>
@@ -117,7 +121,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.get_uid())
+                read_response = to_read.read(computer.get_uid(), computer)
 
                 if read_response.success:
                     if read_response.data:
@@ -128,6 +132,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 else:
                     if read_response.message == SysCallMessages.NOT_ALLOWED:
                         output_text += f&#34;{__COMMAND__}: {to_read.name}: Permission denied\n&#34;
+
+    # Remove extra new lines
+    if output_text.endswith(&#34;\n&#34;):
+        output_text = output_text[:-1]
 
     return output(output_text, pipe)</code></pre>
 </details>

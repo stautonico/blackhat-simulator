@@ -22,10 +22,6 @@
 # Jupyter notebook
 *.ipynb  text
 
-# Note: .db, .p, and .pkl files are associated
-# with the python modules ``pickle``, ``dbm.*``,
-# ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
-# (among others).
 
 *.py linguist-language=Python
 *.sql linguist-detectable=true

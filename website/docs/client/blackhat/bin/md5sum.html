@@ -56,7 +56,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     output_text += f&#34;{__COMMAND__}: {arg}: Is a directory\n&#34;
                 else:
                     # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer.get_uid() ).success:
+                    if not file.check_perm(&#34;read&#34;, computer.get_uid(), computer).success:
                         output_text += f&#34;{__COMMAND__}: {arg}: Permission denied\n&#34;
                     else:
                         hash = md5(file.content.encode()).hexdigest()
@@ -100,7 +100,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     output_text += f&#34;{__COMMAND__}: {arg}: Is a directory\n&#34;
                 else:
                     # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer.get_uid() ).success:
+                    if not file.check_perm(&#34;read&#34;, computer.get_uid(), computer).success:
                         output_text += f&#34;{__COMMAND__}: {arg}: Permission denied\n&#34;
                     else:
                         hash = md5(file.content.encode()).hexdigest()
