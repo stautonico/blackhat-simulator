@@ -31,6 +31,7 @@ class Computer:
         self.sessions: List[Session] = []
         self.lan = None
         self.id = token_hex(8)
+        self.shell = None
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
         self.init()
 
