@@ -4,9 +4,10 @@ import sys
 from getpass import getpass
 
 from blackhat.computer import Computer, Router, ISPRouter
+from blackhat.services.sshserver import SSHServer
+from blackhat.services.webserver import WebServer
 from blackhat.session import Session
 from blackhat.shell import Shell
-from blackhat.services.webserver import WebServer
 
 load_save_success = False
 
@@ -121,6 +122,9 @@ if not load_save_success:
         print(f"LAN2 CLIENT2 LAN ADDRESS: {lan2_client2.lan}")
 
         other_comp.services[80] = WebServer()
+        lan2.services[2222] = SSHServer()
+
+        lan2.port_forwarding = {2222: lan2}
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user

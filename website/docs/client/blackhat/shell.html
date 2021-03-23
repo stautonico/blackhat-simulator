@@ -43,8 +43,8 @@ class Shell:
         Args:
             computer (Computer): The `Computer` that the given `Shell` interacts with
         &#34;&#34;&#34;
-        self.computer: Computer = computer
-        self.ssh_computer = None
+        self.computers: list[Computer] = [computer]
+        self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
 
         # Setup tab to auto complete
@@ -52,7 +52,7 @@ class Shell:
         readline.set_completer(self.autocomplete)
 
     def autocomplete(self, text, state):
-        bin_dir_result = self.computer.fs.find(&#34;/bin&#34;)
+        bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
 
         if bin_dir_result.success:
             commands = list(bin_dir_result.data.files.keys())
@@ -68,7 +68,7 @@ class Shell:
         Returns:
             str: The generated/formatted prompt
         &#34;&#34;&#34;
-        shell_format = self.computer.sessions[-1].env.get(
+        shell_format = self.computers[-1].sessions[-1].env.get(
             &#34;PS1&#34;) or &#34;\\e[0;31m\\u\\e[0m@\\e[0;32m\\h\\e[0m:\\e[0;34m\\w\\\\e[0m\\$ &#34;
         # Default shell prompt is &lt;USERNAME&gt;@&lt;HOSTNAME&gt;:&lt;WORKING DIR&gt;&lt;$/#&gt;
 
@@ -86,14 +86,15 @@ class Shell:
 
         prompt = shell_format
         prompt = prompt.replace(&#34;\\d&#34;, datetime.now().strftime(&#34;%a %B %d&#34;))
-        prompt = prompt.replace(&#34;\\h&#34;, self.computer.hostname)
+        prompt = prompt.replace(&#34;\\h&#34;, self.computers[-1].hostname)
         prompt = prompt.replace(&#34;\\t&#34;, datetime.now().strftime(&#34;%H:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
-        prompt = prompt.replace(&#34;\\u&#34;, self.computer.find_user(uid=self.computer.get_uid()).data.username)
-        prompt = prompt.replace(&#34;\\w&#34;, self.computer.sessions[-1].current_dir.pwd())
-        prompt = prompt.replace(&#34;\\W&#34;, self.computer.sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computer.get_uid() == 0 else &#34;$&#34;)
+        prompt = prompt.replace(&#34;\\u&#34;,
+                                self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+        prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
+        prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
+        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
         prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
         prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)
@@ -136,7 +137,7 @@ class Shell:
             pass
             # response = self.computer.run_binary(command, args, pipe)
         else:
-            response = self.computer.run_command(command, args, pipe)
+            response = self.computers[-1].run_command(command, args, pipe)
         self.prompt = self.generate_prompt()
         return response
 
@@ -243,10 +244,11 @@ class Shell:
                         filename_to_write_to = filename_to_write_to.replace(&#34; &#34;, &#34;&#34;)
 
                         # Find the file that we should write the output to
-                        find_response = self.computer.fs.find(filename_to_write_to)
+                        find_response = self.computers[-1].fs.find(filename_to_write_to)
                         if not find_response.success:
                             # This runs if the file doesn&#39;t exist (we need to create it)
-                            find_response = self.computer.fs.find(&#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
+                            find_response = self.computers[-1].fs.find(
+                                &#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
                             if not find_response.success:
                                 print(f&#34;shell: no such file or directory: {filename_to_write_to}&#34;)
                             else:
@@ -257,7 +259,7 @@ class Shell:
                                     print(f&#34;shell: unable to create file: {filename_to_write_to}&#34;)
                                     continue
                                 else:
-                                    file_to_write = self.computer.fs.find(filename_to_write_to).data
+                                    file_to_write = self.computers[-1].fs.find(filename_to_write_to).data
                         else:
                             file_to_write = find_response.data
 
@@ -268,11 +270,11 @@ class Shell:
                         # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                         # We don&#39;t need to re-write it
                         if special_character == &#34;&gt;&#34;:
-                            file_to_write.write(self.computer.get_uid(),
-                                                message_to_write, self.computer)
+                            file_to_write.write(self.computers[-1].get_uid(),
+                                                message_to_write, self.computers[-1])
                         elif special_character == &#34;&gt;&gt;&#34;:
-                            file_to_write.append(self.computer.get_uid(),
-                                                 message_to_write, self.computer)
+                            file_to_write.append(self.computers[-1].get_uid(),
+                                                 message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -297,8 +299,8 @@ class Shell:
             if command:
                 for cmd in command.split(&#34;&amp;&amp;&#34;):
                     self.handle_command(cmd)
-
-                self.prompt = self.generate_prompt()</code></pre>
+                    
+            self.prompt = self.generate_prompt()</code></pre>
 </details>
 </section>
 <section>
@@ -335,8 +337,8 @@ This will be removed once the GUI is working</p>
         Args:
             computer (Computer): The `Computer` that the given `Shell` interacts with
         &#34;&#34;&#34;
-        self.computer: Computer = computer
-        self.ssh_computer = None
+        self.computers: list[Computer] = [computer]
+        self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
 
         # Setup tab to auto complete
@@ -344,7 +346,7 @@ This will be removed once the GUI is working</p>
         readline.set_completer(self.autocomplete)
 
     def autocomplete(self, text, state):
-        bin_dir_result = self.computer.fs.find(&#34;/bin&#34;)
+        bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
 
         if bin_dir_result.success:
             commands = list(bin_dir_result.data.files.keys())
@@ -360,7 +362,7 @@ This will be removed once the GUI is working</p>
         Returns:
             str: The generated/formatted prompt
         &#34;&#34;&#34;
-        shell_format = self.computer.sessions[-1].env.get(
+        shell_format = self.computers[-1].sessions[-1].env.get(
             &#34;PS1&#34;) or &#34;\\e[0;31m\\u\\e[0m@\\e[0;32m\\h\\e[0m:\\e[0;34m\\w\\\\e[0m\\$ &#34;
         # Default shell prompt is &lt;USERNAME&gt;@&lt;HOSTNAME&gt;:&lt;WORKING DIR&gt;&lt;$/#&gt;
 
@@ -378,14 +380,15 @@ This will be removed once the GUI is working</p>
 
         prompt = shell_format
         prompt = prompt.replace(&#34;\\d&#34;, datetime.now().strftime(&#34;%a %B %d&#34;))
-        prompt = prompt.replace(&#34;\\h&#34;, self.computer.hostname)
+        prompt = prompt.replace(&#34;\\h&#34;, self.computers[-1].hostname)
         prompt = prompt.replace(&#34;\\t&#34;, datetime.now().strftime(&#34;%H:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
-        prompt = prompt.replace(&#34;\\u&#34;, self.computer.find_user(uid=self.computer.get_uid()).data.username)
-        prompt = prompt.replace(&#34;\\w&#34;, self.computer.sessions[-1].current_dir.pwd())
-        prompt = prompt.replace(&#34;\\W&#34;, self.computer.sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computer.get_uid() == 0 else &#34;$&#34;)
+        prompt = prompt.replace(&#34;\\u&#34;,
+                                self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+        prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
+        prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
+        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
         prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
         prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)
@@ -428,7 +431,7 @@ This will be removed once the GUI is working</p>
             pass
             # response = self.computer.run_binary(command, args, pipe)
         else:
-            response = self.computer.run_command(command, args, pipe)
+            response = self.computers[-1].run_command(command, args, pipe)
         self.prompt = self.generate_prompt()
         return response
 
@@ -535,10 +538,11 @@ This will be removed once the GUI is working</p>
                         filename_to_write_to = filename_to_write_to.replace(&#34; &#34;, &#34;&#34;)
 
                         # Find the file that we should write the output to
-                        find_response = self.computer.fs.find(filename_to_write_to)
+                        find_response = self.computers[-1].fs.find(filename_to_write_to)
                         if not find_response.success:
                             # This runs if the file doesn&#39;t exist (we need to create it)
-                            find_response = self.computer.fs.find(&#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
+                            find_response = self.computers[-1].fs.find(
+                                &#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
                             if not find_response.success:
                                 print(f&#34;shell: no such file or directory: {filename_to_write_to}&#34;)
                             else:
@@ -549,7 +553,7 @@ This will be removed once the GUI is working</p>
                                     print(f&#34;shell: unable to create file: {filename_to_write_to}&#34;)
                                     continue
                                 else:
-                                    file_to_write = self.computer.fs.find(filename_to_write_to).data
+                                    file_to_write = self.computers[-1].fs.find(filename_to_write_to).data
                         else:
                             file_to_write = find_response.data
 
@@ -560,11 +564,11 @@ This will be removed once the GUI is working</p>
                         # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                         # We don&#39;t need to re-write it
                         if special_character == &#34;&gt;&#34;:
-                            file_to_write.write(self.computer.get_uid(),
-                                                message_to_write, self.computer)
+                            file_to_write.write(self.computers[-1].get_uid(),
+                                                message_to_write, self.computers[-1])
                         elif special_character == &#34;&gt;&gt;&#34;:
-                            file_to_write.append(self.computer.get_uid(),
-                                                 message_to_write, self.computer)
+                            file_to_write.append(self.computers[-1].get_uid(),
+                                                 message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -589,8 +593,8 @@ This will be removed once the GUI is working</p>
             if command:
                 for cmd in command.split(&#34;&amp;&amp;&#34;):
                     self.handle_command(cmd)
-
-                self.prompt = self.generate_prompt()</code></pre>
+                    
+            self.prompt = self.generate_prompt()</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -604,7 +608,7 @@ This will be removed once the GUI is working</p>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def autocomplete(self, text, state):
-    bin_dir_result = self.computer.fs.find(&#34;/bin&#34;)
+    bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
 
     if bin_dir_result.success:
         commands = list(bin_dir_result.data.files.keys())
@@ -635,7 +639,7 @@ This will be removed once the GUI is working</p>
     Returns:
         str: The generated/formatted prompt
     &#34;&#34;&#34;
-    shell_format = self.computer.sessions[-1].env.get(
+    shell_format = self.computers[-1].sessions[-1].env.get(
         &#34;PS1&#34;) or &#34;\\e[0;31m\\u\\e[0m@\\e[0;32m\\h\\e[0m:\\e[0;34m\\w\\\\e[0m\\$ &#34;
     # Default shell prompt is &lt;USERNAME&gt;@&lt;HOSTNAME&gt;:&lt;WORKING DIR&gt;&lt;$/#&gt;
 
@@ -653,14 +657,15 @@ This will be removed once the GUI is working</p>
 
     prompt = shell_format
     prompt = prompt.replace(&#34;\\d&#34;, datetime.now().strftime(&#34;%a %B %d&#34;))
-    prompt = prompt.replace(&#34;\\h&#34;, self.computer.hostname)
+    prompt = prompt.replace(&#34;\\h&#34;, self.computers[-1].hostname)
     prompt = prompt.replace(&#34;\\t&#34;, datetime.now().strftime(&#34;%H:%M:%S&#34;))
     prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
     prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
-    prompt = prompt.replace(&#34;\\u&#34;, self.computer.find_user(uid=self.computer.get_uid()).data.username)
-    prompt = prompt.replace(&#34;\\w&#34;, self.computer.sessions[-1].current_dir.pwd())
-    prompt = prompt.replace(&#34;\\W&#34;, self.computer.sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-    prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computer.get_uid() == 0 else &#34;$&#34;)
+    prompt = prompt.replace(&#34;\\u&#34;,
+                            self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+    prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
+    prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
+    prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
     prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
     prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)
@@ -771,10 +776,11 @@ Determine how to route input and output between commands</p>
                     filename_to_write_to = filename_to_write_to.replace(&#34; &#34;, &#34;&#34;)
 
                     # Find the file that we should write the output to
-                    find_response = self.computer.fs.find(filename_to_write_to)
+                    find_response = self.computers[-1].fs.find(filename_to_write_to)
                     if not find_response.success:
                         # This runs if the file doesn&#39;t exist (we need to create it)
-                        find_response = self.computer.fs.find(&#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
+                        find_response = self.computers[-1].fs.find(
+                            &#34;/&#34;.join(filename_to_write_to.split(&#34;/&#34;)[:-1]))
                         if not find_response.success:
                             print(f&#34;shell: no such file or directory: {filename_to_write_to}&#34;)
                         else:
@@ -785,7 +791,7 @@ Determine how to route input and output between commands</p>
                                 print(f&#34;shell: unable to create file: {filename_to_write_to}&#34;)
                                 continue
                             else:
-                                file_to_write = self.computer.fs.find(filename_to_write_to).data
+                                file_to_write = self.computers[-1].fs.find(filename_to_write_to).data
                     else:
                         file_to_write = find_response.data
 
@@ -796,11 +802,11 @@ Determine how to route input and output between commands</p>
                     # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                     # We don&#39;t need to re-write it
                     if special_character == &#34;&gt;&#34;:
-                        file_to_write.write(self.computer.get_uid(),
-                                            message_to_write, self.computer)
+                        file_to_write.write(self.computers[-1].get_uid(),
+                                            message_to_write, self.computers[-1])
                     elif special_character == &#34;&gt;&gt;&#34;:
-                        file_to_write.append(self.computer.get_uid(),
-                                             message_to_write, self.computer)
+                        file_to_write.append(self.computers[-1].get_uid(),
+                                             message_to_write, self.computers[-1])
 
                     prev_command_result = None
                 # Pass the input of the previous command to the current command
@@ -837,8 +843,8 @@ Determine how to route input and output between commands</p>
         if command:
             for cmd in command.split(&#34;&amp;&amp;&#34;):
                 self.handle_command(cmd)
-
-            self.prompt = self.generate_prompt()</code></pre>
+                
+        self.prompt = self.generate_prompt()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.shell.Shell.run_command"><code class="name flex">
@@ -879,7 +885,7 @@ Determine how to route input and output between commands</p>
         pass
         # response = self.computer.run_binary(command, args, pipe)
     else:
-        response = self.computer.run_command(command, args, pipe)
+        response = self.computers[-1].run_command(command, args, pipe)
     self.prompt = self.generate_prompt()
     return response</code></pre>
 </details>

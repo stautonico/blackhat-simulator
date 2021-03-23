@@ -12,13 +12,20 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
     # -f is force (immediately exit)
     if "-f" in args:
-        computer.save()
-        exit(0)
+        if len(computer.shell.computers) == 1:
+            computer.save()
+            exit(0)
+        else:
+            computer.sessions = []
+            computer.shell.computers.pop()
 
-    # We don't have any previous sessions to exit to
-    if len(computer.sessions) == 1:
-        computer.save()
-        exit(0)
+    if len(computer.shell.computers) == 1:
+        if len(computer.sessions) == 1:
+            computer.save()
+            exit(0)
+        else:
+            computer.sessions.pop()
     else:
-        computer.sessions.pop()
-        return output("", pipe)
+        computer.shell.computers.pop()
+
+    return output("", pipe)

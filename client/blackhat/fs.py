@@ -74,7 +74,7 @@ class FSBaseObject:
             return SysCallStatus(success=True)
 
         if "group" in self.permissions[perm]:
-            if self.group_owner in computer.get_user_groups(caller).data:
+            if self.group_owner in computer.find_user_groups(caller).data:
                 return SysCallStatus(success=True)
 
         if "owner" in self.permissions[perm]:
@@ -96,7 +96,7 @@ class FSBaseObject:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         """
         # Get the list of user's groups
-        groups = computer.get_user_groups(uid).data
+        groups = computer.find_user_groups(uid).data
 
         if self.owner == uid or self.group_owner in groups:
             return SysCallStatus(success=True)
@@ -117,7 +117,7 @@ class FSBaseObject:
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
         """
-        caller_groups = computer.get_user_groups(caller).data
+        caller_groups = computer.find_user_groups(caller).data
         # Check if the owner or group owner is correct or if we're root
         if caller == self.owner or self.group_owner in caller_groups or caller == 0:
             # We need at least one of the two params (uid/gid)

@@ -303,7 +303,7 @@ class Computer:
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def get_user_groups(self, uid: int) -> SysCallStatus:
+    def find_user_groups(self, uid: int) -> SysCallStatus:
         """
         Get the list of `Group` GID's that the `User` belongs to (by UID)
 
@@ -680,37 +680,48 @@ class Router(Computer):
         ip_split = self.lan.split(".")
         network_prefix = f"{ip_split[0]}.{ip_split[1]}"
 
-        # We're looking for ourselves
-        if ip == self.lan:
-            return SysCallStatus(success=True, data=self)
-
+        # First check if we're looking for one of our own hosts
         if ip.startswith(network_prefix):
-            return self.find_local_client(ip)
-
-        # If the given ip is our wan address, another router is asking for a client by port
-        if ip == self.wan:
-            # If there's no port, we want the router
-            if not port:
-                return self.find_client(ip)
+            # We're looking for ourselves
+            if ip == self.lan:
+                return SysCallStatus(success=True, data=self)
             else:
-                # We specified a port, we're not looking for the router, we want a client being the router
+                client_ip_split = ip.split(".")
+                vlan = client_ip_split[2]
+                vlan_result = self.clients.get(vlan)
+                if vlan_result:
+                    client_result = vlan_result.get(ip)
 
-                return self.find_client_by_port(port)
-        # We're trying to find a client on another router, we do this by asking our router (the isp)
-        else:
-            wan_client = self.parent.find_client(ip, port)
-            if wan_client.success:
-                # We found the ip of the other router
-                # If theres no port, we're done
-                if not port:
-                    return SysCallStatus(success=True, data=wan_client)
-                else:
-                    # If there is a port, we want the client behind that port
-                    # Now let's directly ask that router whats on the given port
-                    return wan_client.data.find_client(ip, port)
-            else:
-                # Even the ISP couldn't find the IP, it must not exist
+                    if client_result:
+                        return SysCallStatus(success=True, data=client_result)
+
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+
+            # If the given ip is our wan address, another router is asking for a client
+            if ip == self.wan:
+                # If there is no port, we want the router (ourselves)
+                if not port:
+                    return SysCallStatus(success=True, data=self)
+                else:
+                    # We want a host at a specific open port
+                    return self.find_client_by_port(port)
+            # We're trying to find a client on another router, we do this by asking our router (the isp)
+            else:
+                # Ask the ISP for the router
+                wan_client = self.parent.find_client(ip, port)
+                if wan_client.success:
+                    # We found the other router
+                    # If there's no port, we're done (we wanted the router not a host behind the router)
+                    if not port:
+                        return SysCallStatus(success=True, data=wan_client)
+                    else:
+                        # If there is a port, we want to ask the external router for the client behind that port
+                        # We can ask that router directly
+                        return wan_client.data.find_client_by_port(port)
+                else:
+                    # Even the ISP couldn't find that router, it must not exist
+                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     def find_client_by_port(self, port: int) -> SysCallStatus:
         """
@@ -723,15 +734,12 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
+
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-        vlan = ip_to_find.split(".")[2]
-        for client in self.clients[int(vlan)].values():
-            if client.lan == ip_to_find:
-                return SysCallStatus(success=True, data=client)
-
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            return SysCallStatus(success=True, data=ip_to_find)
 
     def add_new_client(self, client: Computer, vlan: int = 1) -> SysCallStatus:
         """

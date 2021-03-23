@@ -243,10 +243,10 @@ class Shell:
                         # We don't need to re-write it
                         if special_character == ">":
                             file_to_write.write(self.computers[-1].get_uid(),
-                                                message_to_write, self.effective_computer)
+                                                message_to_write, self.computers[-1])
                         elif special_character == ">>":
                             file_to_write.append(self.computers[-1].get_uid(),
-                                                 message_to_write, self.effective_computer)
+                                                 message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command

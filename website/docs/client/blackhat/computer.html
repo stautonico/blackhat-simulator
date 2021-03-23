@@ -59,6 +59,7 @@ class Computer:
         self.sessions: List[Session] = []
         self.lan = None
         self.id = token_hex(8)
+        self.shell = None
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
         self.init()
 
@@ -330,7 +331,7 @@ class Computer:
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def get_user_groups(self, uid: int) -&gt; SysCallStatus:
+    def find_user_groups(self, uid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
 
@@ -707,37 +708,48 @@ class Router(Computer):
         ip_split = self.lan.split(&#34;.&#34;)
         network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}&#34;
 
-        # We&#39;re looking for ourselves
-        if ip == self.lan:
-            return SysCallStatus(success=True, data=self)
-
+        # First check if we&#39;re looking for one of our own hosts
         if ip.startswith(network_prefix):
-            return self.find_local_client(ip)
-
-        # If the given ip is our wan address, another router is asking for a client by port
-        if ip == self.wan:
-            # If there&#39;s no port, we want the router
-            if not port:
-                return self.find_client(ip)
+            # We&#39;re looking for ourselves
+            if ip == self.lan:
+                return SysCallStatus(success=True, data=self)
             else:
-                # We specified a port, we&#39;re not looking for the router, we want a client being the router
+                client_ip_split = ip.split(&#34;.&#34;)
+                vlan = client_ip_split[2]
+                vlan_result = self.clients.get(vlan)
+                if vlan_result:
+                    client_result = vlan_result.get(ip)
 
-                return self.find_client_by_port(port)
-        # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
-        else:
-            wan_client = self.parent.find_client(ip, port)
-            if wan_client.success:
-                # We found the ip of the other router
-                # If theres no port, we&#39;re done
-                if not port:
-                    return SysCallStatus(success=True, data=wan_client)
-                else:
-                    # If there is a port, we want the client behind that port
-                    # Now let&#39;s directly ask that router whats on the given port
-                    return wan_client.data.find_client(ip, port)
-            else:
-                # Even the ISP couldn&#39;t find the IP, it must not exist
+                    if client_result:
+                        return SysCallStatus(success=True, data=client_result)
+
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+
+            # If the given ip is our wan address, another router is asking for a client
+            if ip == self.wan:
+                # If there is no port, we want the router (ourselves)
+                if not port:
+                    return SysCallStatus(success=True, data=self)
+                else:
+                    # We want a host at a specific open port
+                    return self.find_client_by_port(port)
+            # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
+            else:
+                # Ask the ISP for the router
+                wan_client = self.parent.find_client(ip, port)
+                if wan_client.success:
+                    # We found the other router
+                    # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
+                    if not port:
+                        return SysCallStatus(success=True, data=wan_client)
+                    else:
+                        # If there is a port, we want to ask the external router for the client behind that port
+                        # We can ask that router directly
+                        return wan_client.data.find_client_by_port(port)
+                else:
+                    # Even the ISP couldn&#39;t find that router, it must not exist
+                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     def find_client_by_port(self, port: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -750,15 +762,12 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
+
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-        vlan = ip_to_find.split(&#34;.&#34;)[2]
-        for client in self.clients[int(vlan)].values():
-            if client.lan == ip_to_find:
-                return SysCallStatus(success=True, data=client)
-
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            return SysCallStatus(success=True, data=ip_to_find)
 
     def add_new_client(self, client: Computer, vlan: int = 1) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1003,6 +1012,7 @@ class ISPRouter(Router):
         self.sessions: List[Session] = []
         self.lan = None
         self.id = token_hex(8)
+        self.shell = None
         # Root user needs to be created before the FS is initialized (FS needs root to have a password to create /etc/passwd)
         self.init()
 
@@ -1274,7 +1284,7 @@ class ISPRouter(Router):
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def get_user_groups(self, uid: int) -&gt; SysCallStatus:
+    def find_user_groups(self, uid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
 
@@ -2006,6 +2016,45 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
                                        work_phone=result[6], home_phone=result[7], other=result[8]))</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.computer.Computer.find_user_groups"><code class="name flex">
+<span>def <span class="ident">find_user_groups</span></span>(<span>self, uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the list of <code>Group</code> GID's that the <code>User</code> belongs to (by UID)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user to lookup</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing a list of GIDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def find_user_groups(self, uid: int) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    # Double check if the user exists
+    if not self.find_user(uid=uid).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    else:
+        # Ask the database for the GIDs
+        result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;&#34;,
+                                       (self.id, uid)).fetchall()
+        return SysCallStatus(success=True, data=[x[0] for x in result])</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.computer.Computer.get_all_groups"><code class="name flex">
 <span>def <span class="ident">get_all_groups</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -2124,45 +2173,6 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
         int: UID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
     return self.sessions[-1].effective_uid</code></pre>
-</details>
-</dd>
-<dt id="client.blackhat.computer.Computer.get_user_groups"><code class="name flex">
-<span>def <span class="ident">get_user_groups</span></span>(<span>self, uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Get the list of <code>Group</code> GID's that the <code>User</code> belongs to (by UID)</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
-<dd>The UID of the user to lookup</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing a list of GIDs</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def get_user_groups(self, uid: int) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
-
-    Args:
-        uid (int): The UID of the user to lookup
-
-    Returns:
-        SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
-    &#34;&#34;&#34;
-    # Double check if the user exists
-    if not self.find_user(uid=uid).success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-    else:
-        # Ask the database for the GIDs
-        result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;&#34;,
-                                       (self.id, uid)).fetchall()
-        return SysCallStatus(success=True, data=[x[0] for x in result])</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.handle_tcp_connection"><code class="name flex">
@@ -3001,11 +3011,11 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_local_client" href="#client.blackhat.computer.Router.find_local_client">find_local_client</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.handle_tcp_connection" href="#client.blackhat.computer.Router.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
@@ -3110,37 +3120,48 @@ This class represents what a real router would be in real life</p></div>
         ip_split = self.lan.split(&#34;.&#34;)
         network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}&#34;
 
-        # We&#39;re looking for ourselves
-        if ip == self.lan:
-            return SysCallStatus(success=True, data=self)
-
+        # First check if we&#39;re looking for one of our own hosts
         if ip.startswith(network_prefix):
-            return self.find_local_client(ip)
-
-        # If the given ip is our wan address, another router is asking for a client by port
-        if ip == self.wan:
-            # If there&#39;s no port, we want the router
-            if not port:
-                return self.find_client(ip)
+            # We&#39;re looking for ourselves
+            if ip == self.lan:
+                return SysCallStatus(success=True, data=self)
             else:
-                # We specified a port, we&#39;re not looking for the router, we want a client being the router
+                client_ip_split = ip.split(&#34;.&#34;)
+                vlan = client_ip_split[2]
+                vlan_result = self.clients.get(vlan)
+                if vlan_result:
+                    client_result = vlan_result.get(ip)
 
-                return self.find_client_by_port(port)
-        # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
-        else:
-            wan_client = self.parent.find_client(ip, port)
-            if wan_client.success:
-                # We found the ip of the other router
-                # If theres no port, we&#39;re done
-                if not port:
-                    return SysCallStatus(success=True, data=wan_client)
-                else:
-                    # If there is a port, we want the client behind that port
-                    # Now let&#39;s directly ask that router whats on the given port
-                    return wan_client.data.find_client(ip, port)
-            else:
-                # Even the ISP couldn&#39;t find the IP, it must not exist
+                    if client_result:
+                        return SysCallStatus(success=True, data=client_result)
+
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+
+            # If the given ip is our wan address, another router is asking for a client
+            if ip == self.wan:
+                # If there is no port, we want the router (ourselves)
+                if not port:
+                    return SysCallStatus(success=True, data=self)
+                else:
+                    # We want a host at a specific open port
+                    return self.find_client_by_port(port)
+            # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
+            else:
+                # Ask the ISP for the router
+                wan_client = self.parent.find_client(ip, port)
+                if wan_client.success:
+                    # We found the other router
+                    # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
+                    if not port:
+                        return SysCallStatus(success=True, data=wan_client)
+                    else:
+                        # If there is a port, we want to ask the external router for the client behind that port
+                        # We can ask that router directly
+                        return wan_client.data.find_client_by_port(port)
+                else:
+                    # Even the ISP couldn&#39;t find that router, it must not exist
+                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     def find_client_by_port(self, port: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -3153,15 +3174,12 @@ This class represents what a real router would be in real life</p></div>
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
+
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-        vlan = ip_to_find.split(&#34;.&#34;)[2]
-        for client in self.clients[int(vlan)].values():
-            if client.lan == ip_to_find:
-                return SysCallStatus(success=True, data=client)
-
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            return SysCallStatus(success=True, data=ip_to_find)
 
     def add_new_client(self, client: Computer, vlan: int = 1) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -3404,37 +3422,48 @@ ask the <code><a title="client.blackhat.computer.ISPRouter" href="#client.blackh
     ip_split = self.lan.split(&#34;.&#34;)
     network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}&#34;
 
-    # We&#39;re looking for ourselves
-    if ip == self.lan:
-        return SysCallStatus(success=True, data=self)
-
+    # First check if we&#39;re looking for one of our own hosts
     if ip.startswith(network_prefix):
-        return self.find_local_client(ip)
-
-    # If the given ip is our wan address, another router is asking for a client by port
-    if ip == self.wan:
-        # If there&#39;s no port, we want the router
-        if not port:
-            return self.find_client(ip)
+        # We&#39;re looking for ourselves
+        if ip == self.lan:
+            return SysCallStatus(success=True, data=self)
         else:
-            # We specified a port, we&#39;re not looking for the router, we want a client being the router
+            client_ip_split = ip.split(&#34;.&#34;)
+            vlan = client_ip_split[2]
+            vlan_result = self.clients.get(vlan)
+            if vlan_result:
+                client_result = vlan_result.get(ip)
 
-            return self.find_client_by_port(port)
-    # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
+                if client_result:
+                    return SysCallStatus(success=True, data=client_result)
+
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
     else:
-        wan_client = self.parent.find_client(ip, port)
-        if wan_client.success:
-            # We found the ip of the other router
-            # If theres no port, we&#39;re done
+
+        # If the given ip is our wan address, another router is asking for a client
+        if ip == self.wan:
+            # If there is no port, we want the router (ourselves)
             if not port:
-                return SysCallStatus(success=True, data=wan_client)
+                return SysCallStatus(success=True, data=self)
             else:
-                # If there is a port, we want the client behind that port
-                # Now let&#39;s directly ask that router whats on the given port
-                return wan_client.data.find_client(ip, port)
+                # We want a host at a specific open port
+                return self.find_client_by_port(port)
+        # We&#39;re trying to find a client on another router, we do this by asking our router (the isp)
         else:
-            # Even the ISP couldn&#39;t find the IP, it must not exist
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+            # Ask the ISP for the router
+            wan_client = self.parent.find_client(ip, port)
+            if wan_client.success:
+                # We found the other router
+                # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
+                if not port:
+                    return SysCallStatus(success=True, data=wan_client)
+                else:
+                    # If there is a port, we want to ask the external router for the client behind that port
+                    # We can ask that router directly
+                    return wan_client.data.find_client_by_port(port)
+            else:
+                # Even the ISP couldn&#39;t find that router, it must not exist
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Router.find_client_by_port"><code class="name flex">
@@ -3468,15 +3497,12 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
     &#34;&#34;&#34;
+
     ip_to_find = self.port_forwarding.get(port, None)
     if not ip_to_find:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-    vlan = ip_to_find.split(&#34;.&#34;)[2]
-    for client in self.clients[int(vlan)].values():
-        if client.lan == ip_to_find:
-            return SysCallStatus(success=True, data=client)
-
-    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+    else:
+        return SysCallStatus(success=True, data=ip_to_find)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Router.find_local_client"><code class="name flex">
@@ -3611,11 +3637,11 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.remove_user_from_group" href="#client.blackhat.computer.Computer.remove_user_from_group">remove_user_from_group</a></code></li>
@@ -3658,11 +3684,11 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_group" href="#client.blackhat.computer.Computer.find_group">find_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.get_user_groups" href="#client.blackhat.computer.Computer.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.handle_tcp_connection" href="#client.blackhat.computer.Computer.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
