@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
 from ..lib.output import output
 
 __COMMAND__ = "echo"
@@ -18,14 +18,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     # If the output starts with $, read from env vars
     for arg in args:
         if arg.startswith("$"):
-            env_var = computer.sessions[-1].env.get(arg.replace("$", ""), None)
+            env_var = computer.get_env(arg.replace("$", ""))
             if env_var:
                 clean_args.append(env_var)
         else:
             clean_args.append(arg)
-
-    # if args[0].startswith("$"):
-    #     env_var = computer.sessions[-1].env.get(args[0].replace("$", ""))
-    #     return output(env_var or "", pipe)
 
     return output(" ".join(clean_args), pipe)

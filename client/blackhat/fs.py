@@ -421,7 +421,7 @@ class StandardFS:
 
         for file in os.listdir("./blackhat/bin"):
             # Ignore the __init__.py and __pycache__ because those aren't bins (auto generated)
-            if file not in ["__init__.py", "__pycache__"]:
+            if file not in ["__init__.py", "__pycache__", "installable"]:
                 current_file = File(file.replace(".py", ""), "[BINARY DATA]", bin_dir, 0, 0)
                 with open(f"./blackhat/bin/{file}", "r") as f:
                     current_file.size = sys.getsizeof(f.read()) / 32
@@ -523,6 +523,7 @@ class StandardFS:
             <li>/var/log - Contains various log files</li>
             <li>/var/log/syslog - Logs various information about the given `Computer`</li>
             <li>/var/log/auth.log - Logs information about authentication attempts</li>
+            <li>/var/lib/dpkg/status - The list of installed packages by apt</li>
         </ul>
 
         Returns:
@@ -539,6 +540,16 @@ class StandardFS:
         # Create the `syslog` in /var/log
         log_dir.add_file(File("syslog", "", log_dir, 0, 0))
 
+        # Create /var/lib/dpkg/status
+        lib_dir: Directory = Directory("lib", var_dir, 0, 0)
+        var_dir.add_file(lib_dir)
+
+        dpkg_dir: Directory = Directory("dpkg", lib_dir, 0, 0)
+        lib_dir.add_file(dpkg_dir)
+
+        status_file: File = File("status", "", dpkg_dir, 0, 0)
+        dpkg_dir.add_file(status_file)
+
     def find(self, pathname: str) -> SysCallStatus:
         """
         Try to find a given file anywhere in the file system based on a given `pathname`
@@ -549,35 +560,37 @@ class StandardFS:
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
         """
+
         # Special cases
         # Replace '~' with $HOME (if exists)
-        if self.computer.sessions[-1].env.get("HOME", ""):
-            pathname = pathname.replace("~", self.computer.sessions[-1].env.get("HOME", ""))
+        get_home_env_var = self.computer.get_env("HOME")
+        if get_home_env_var:
+            pathname = pathname.replace("~", get_home_env_var)
 
         if pathname == "/":
             return SysCallStatus(success=True, data=self.files)
 
         if pathname == ".":
-            return SysCallStatus(success=True, data=self.computer.sessions[-1].current_dir)
+            return SysCallStatus(success=True, data=self.computer.get_pwd())
 
         if pathname == "..":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
-            if not self.computer.sessions[-1].current_dir.parent:
+            if not self.computer.get_pwd().parent:
                 return SysCallStatus(success=True, data=self.files)
             else:
-                return SysCallStatus(success=True, data=self.computer.sessions[-1].current_dir.parent)
+                return SysCallStatus(success=True, data=self.computer.get_pwd().parent)
 
         if pathname == "...":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
-            # And then do it again (go back twice)
-            if not self.computer.sessions[-1].current_dir.parent:
+            # And then do it again (go back twice)0
+            if not self.computer.get_pwd().parent:
                 return SysCallStatus(success=True, data=self.computer.fs.files)
             else:
-                current_dir = self.computer.sessions[-1].current_dir.parent
+                current_dir = self.computer.get_pwd().parent
                 if current_dir.parent:
                     return SysCallStatus(success=True, data=current_dir.parent)
                 else:
@@ -592,7 +605,7 @@ class StandardFS:
             current_dir = self.files
         else:
             # Relative (based on current dir)
-            current_dir = self.computer.sessions[-1].current_dir
+            current_dir = self.computer.get_pwd()
 
         # Filter out garbage
         while "" in pathname:

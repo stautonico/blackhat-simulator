@@ -33,9 +33,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 new_filename = filename.split("/")[-1]
                 dir_to_write_to = result.data
         else:
-            if filename not in computer.sessions[-1].current_dir.files:
+            if filename not in computer.get_pwd().files:
                 new_filename = filename
-                dir_to_write_to = computer.sessions[-1].current_dir
+                dir_to_write_to = computer.get_pwd()
             else:
                 return output("", pipe)
 

@@ -11,6 +11,6 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
     if len(args) == 0:
-        return output(computer.sessions[-1].current_dir.pwd(), pipe)
+        return output(computer.get_pwd().pwd(), pipe)
     else:
         return output(f"{__COMMAND__}: too many arguments", pipe, success=False, success_message=SysCallMessages.TOO_MANY_ARGUMENTS)

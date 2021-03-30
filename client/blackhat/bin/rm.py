@@ -31,7 +31,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     to_delete = []
 
     if src == "*":
-        for file in computer.sessions[-1].current_dir.files:
+        for file in computer.get_pwd().files:
             to_delete.append(file)
     elif "*" in src:
         if src[-1] != "*":

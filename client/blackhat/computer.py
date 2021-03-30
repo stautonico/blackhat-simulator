@@ -9,7 +9,7 @@ from secrets import token_hex
 from time import perf_counter
 from typing import Optional, Dict, Union, List, Literal
 
-from .fs import Directory, File, StandardFS
+from .fs import Directory, File, StandardFS, FSBaseObject
 from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
@@ -108,6 +108,33 @@ class Computer:
         except ImportError as e:
             print(f"There was an error when running command: {command}")
             return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+    def set_hostname(self, hostname: str) -> SysCallStatus:
+        """
+        An easy function to update the hostname (also updates /etc/hostname)
+        Args:
+            hostname (str): The `Computer`'s new hostname
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+        """
+        # Try to find the hostname file
+        find_etc_hostname = self.fs.find("/etc/hostname")
+
+        if not find_etc_hostname.success:
+            # Make sure we at least have the /etc/ dir
+            find_etc = self.fs.find("/etc")
+            if not find_etc.success:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            else:
+                # Create the /etc/hostname
+                hostname_file = File("hostname", hostname, find_etc.data, 0, 0)
+                find_etc.data.add_file(hostname_file)
+        else:
+            find_etc_hostname.data.content = hostname
+
+        self.hostname = hostname
+        return SysCallStatus(success=True)
 
     def update_hostname(self) -> None:
         """
@@ -522,6 +549,33 @@ class Computer:
             # TODO: Write proof of concept exploit to exploit this exploit
             return 0
 
+    def get_pwd(self) -> FSBaseObject:
+        """
+        Get current directory in the file system
+
+        Returns:
+            FSBaseObjectSB: The  user's current directory
+        """
+        if len(self.sessions) == 0:
+            return self.fs.files
+        else:
+            return self.sessions[-1].current_dir
+
+    def get_env(self, key) -> Optional[str]:
+        """
+        Get an environment variable from the current session
+
+        Args:
+            key (str): The env var to retrieve
+
+        Returns:
+            str, optional: The matching value of the given key if found, otherwise, None
+        """
+        if len(self.sessions) == 0:
+            return None
+        else:
+            return self.sessions[-1].env.get(key)
+
     def run_current_user_shellrc(self):
         """
         Run the .shellrc file in the current user's home folder (/home/<USERNAME>/.shellrc)
@@ -608,43 +662,43 @@ class Router(Computer):
         This class represents what a real router would be in real life
         """
         super().__init__()
-        self.clients = {}  # Format of clients: sorted by VLAN then ID [1][2] (VLAN 1 - ID 2)
+        self.clients = {}  # Format of clients: sorted by subnet then ID [1][2] (subnet 1 - ID 2)
         self.ip_pool: dict[int, list[str]] = {}
         self.wan = None
         self.lan = "192.168.1.1"
         self.port_forwarding = {}
 
-    def dhcp(self, vlan: int) -> SysCallStatus:
+    def dhcp(self, subnet: int) -> SysCallStatus:
         """
         Distributes IP addresses to clients on the network
 
         Args:
-            vlan (int): VLAN id to assign the client to
+            subnet (int): subnet id to assign the client to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         """
         # Split the router's IP to get the first 16 bits
         ip_split = self.lan.split(".")
-        network_prefix = f"{ip_split[0]}.{ip_split[1]}.{vlan}"
+        network_prefix = f"{ip_split[0]}.{ip_split[1]}.{subnet}"
 
-        # Check if the IP pool for that VLAN was generated already
+        # Check if the IP pool for that subnet was generated already
         try:
-            len(self.ip_pool[vlan])
-        # If `self.ip_pool[<VLAN>]` returns a key error, it was never created before
+            len(self.ip_pool[subnet])
+        # If `self.ip_pool[<subnet>]` returns a key error, it was never created before
         except KeyError:
-            # Generate a list of ips that are <NETWORK_PREFIX>.<VLAN>.1-256
-            self.ip_pool[vlan] = [f"{network_prefix}.{x}" for x in range(1, 257)]
+            # Generate a list of ips that are <NETWORK_PREFIX>.<subnet>.1-256
+            self.ip_pool[subnet] = [f"{network_prefix}.{x}" for x in range(1, 257)]
 
         # Check if we have IP's left
-        if len(self.ip_pool[vlan]) == 0:
+        if len(self.ip_pool[subnet]) == 0:
             return SysCallStatus(success=False, message=SysCallMessages.EMPTY)
 
         # Choose a random ip from the pool
-        ip = choice(self.ip_pool[vlan])
+        ip = choice(self.ip_pool[subnet])
 
         # Remove the IP from the pool since it's in use
-        self.ip_pool[vlan].remove(ip)
+        self.ip_pool[subnet].remove(ip)
         return SysCallStatus(success=True, data=ip)
 
     def find_local_client(self, ip: str) -> SysCallStatus:
@@ -657,8 +711,8 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
-        vlan = ip.split(".")[2]
-        for client in self.clients[int(vlan)].values():
+        subnet = ip.split(".")[2]
+        for client in self.clients[int(subnet)].values():
             if client.lan == ip:
                 return SysCallStatus(success=True, data=client)
 
@@ -687,10 +741,10 @@ class Router(Computer):
                 return SysCallStatus(success=True, data=self)
             else:
                 client_ip_split = ip.split(".")
-                vlan = client_ip_split[2]
-                vlan_result = self.clients.get(vlan)
-                if vlan_result:
-                    client_result = vlan_result.get(ip)
+                subnet = client_ip_split[2]
+                subnet_result = self.clients.get(int(subnet))
+                if subnet_result:
+                    client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
 
                     if client_result:
                         return SysCallStatus(success=True, data=client_result)
@@ -741,20 +795,20 @@ class Router(Computer):
         else:
             return SysCallStatus(success=True, data=ip_to_find)
 
-    def add_new_client(self, client: Computer, vlan: int = 1) -> SysCallStatus:
+    def add_new_client(self, client: Computer, subnet: int = 1) -> SysCallStatus:
         """
         Connect a given `Computer` to the given `Router`'s LAN.
         Also, assign an IP address using the `dhcp()` function.
 
         Args:
             client (Computer): The `Computer` instance to connect to the `Router`'s LAN
-            vlan (int, optional): The VLAN id to assign the given `Computer` to
+            subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
         """
         # Generate an IP for the client
-        generate_ip_status = self.dhcp(vlan)
+        generate_ip_status = self.dhcp(subnet)
         # We we're unable to generate an IP for the given client
         if not generate_ip_status:
             return generate_ip_status
@@ -764,18 +818,18 @@ class Router(Computer):
 
         # Append to client to our client list
         try:
-            last_id = list(self.clients[vlan].keys())[-1]
+            last_id = list(self.clients[subnet].keys())[-1]
         except KeyError:
             last_id = 0
 
-        # Check if the client vlan exists
+        # Check if the client subnet exists
         try:
-            len(self.clients[vlan])
+            len(self.clients[subnet])
         except KeyError:
-            # Init the vlan (empty)
-            self.clients[vlan] = {}
+            # Init the subnet (empty)
+            self.clients[subnet] = {}
 
-        self.clients[vlan][last_id + 1] = client
+        self.clients[subnet][last_id + 1] = client
 
         client.parent = self
 

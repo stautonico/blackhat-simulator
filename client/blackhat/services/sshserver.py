@@ -4,7 +4,7 @@ from ..helpers import SysCallStatus
 
 class SSHServer(Service):
     """
-    An example service that's supposed to replicate the functionality of an SSH Server (main method doesn't work like other services"
+    An example service that's supposed to replicate the functionality of an SSH Server (main method doesn't work like other services)
     """
 
     def __init__(self):

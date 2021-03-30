@@ -13,7 +13,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     if "--version" in args:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-    result = computer.send_tcp(args[0], 80, {"name": "steve"})
+    result = computer.send_tcp(args[0], 22, {"name": "steve"})
 
     if not result.success:
         if result.message == SysCallMessages.NOT_FOUND:

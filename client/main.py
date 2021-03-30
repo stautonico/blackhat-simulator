@@ -122,6 +122,8 @@ if not load_save_success:
         print(f"LAN2 CLIENT2 LAN ADDRESS: {lan2_client2.lan}")
 
         other_comp.services[80] = WebServer()
+
+        lan2.set_hostname("google.com")
         lan2.services[2222] = SSHServer()
 
         lan2.port_forwarding = {2222: lan2}

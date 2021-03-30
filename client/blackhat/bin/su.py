@@ -31,14 +31,21 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                       success_message=SysCallMessages.NOT_FOUND)
 
     # Authenticate
-    password = getpass()
+    if computer.get_uid() != 0:
+        password = getpass()
+        input_password = md5(password.encode()).hexdigest()
+    else:
+        # Manually reset the effective UID (since we're changing sessions, sudo never resets it)
+        computer.sessions[-1].effective_uid = computer.sessions[-1].real_uid
+        input_password = computer.find_user(uid=0).data.password
 
-    if md5(password.encode()).hexdigest() == user.password:
+    if input_password == user.password:
         current_session: Session = computer.sessions[-1]
         # Create a new session
         new_session = Session(user.uid, current_session.current_dir, current_session.id + 1)
         computer.sessions.append(new_session)
         computer.run_current_user_shellrc()
+
         return output("", pipe)
     else:
         return output(f"{__COMMAND__}: Authentication failure", pipe, success=False,
