@@ -84,17 +84,36 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
         """
-        # TODO: Instead of checking the bin_dir, check the `PATH` environment var (split by :) (do the same in `run_binary`)
         # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
         # The one that matches first in the path gets run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
-        bin_dir = self.fs.files.find("bin")
-        if not bin_dir:
+        try:
+            bin_dirs_text = self.sessions[-1].env.get("PATH").split(":")
+            bin_dirs = []
+
+            for dir in bin_dirs_text:
+                find_dir = self.fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.fs.find("bin")
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+        if len(bin_dirs) == 0:
             print(f"{command}: command not found")
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        if command not in list(bin_dir.files.keys()):
+        exists = False
+
+        for dir in bin_dirs:
+            if command in list(dir.files.keys()):
+                to_run = True
+                break
+        else:
             print(f"{command}: command not found")
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
@@ -106,8 +125,16 @@ class Computer:
 
             return response
         except ImportError as e:
-            print(f"There was an error when running command: {command}")
-            return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+            try:
+                module = importlib.import_module(f"blackhat.bin.installable.{command}")
+                response = module.main(self, args, pipe)
+                if os.getenv("DEBUGMODE") == "false":
+                    self.save()
+
+                return response
+            except ImportError as e:
+                print(f"There was an error when running command: {command}")
+                return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
     def set_hostname(self, hostname: str) -> SysCallStatus:
         """
@@ -595,7 +622,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
+            shellrc_lines = shellrc_lookup.data.read(self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split("\n"):

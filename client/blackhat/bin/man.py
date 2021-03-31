@@ -19,7 +19,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     find_man_result = computer.fs.find(f"/usr/share/man/{command}")
 
     if find_man_result.success:
-        read_result = find_man_result.data.read(computer.get_uid(), computer)
+        read_result = find_man_result.data.read(computer)
 
         if read_result.success:
             return output(read_result.data, pipe)

@@ -58,7 +58,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             if result.data.is_directory() and not recursive:
                 return output(f"{__COMMAND__}: cannot remove '{file}': Is a directory", pipe, success=False)
             else:
-                response = result.data.delete(computer.get_uid())
+                response = result.data.delete(computer)
 
                 if not response.success:
                     if response.message == SysCallMessages.NOT_ALLOWED:

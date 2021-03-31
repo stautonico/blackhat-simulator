@@ -54,62 +54,59 @@ class FSBaseObject:
         """
         return type(self) == File
 
-    def check_perm(self, perm: Literal["read", "write", "execute"], caller: int, computer) -> SysCallStatus:
+    def check_perm(self, perm: Literal["read", "write", "execute"], computer) -> SysCallStatus:
         """
-        Checks if the given `uid` has the given `perm`
+        Checks if the current user has the given `perm`
 
         Args:
             perm (str): The permission to check ("read", "write", "execute")
-            caller (int): The UID of the `User` to check permissions for
             computer: The current `Computer` instance
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         """
         # If we"re root (UID 0), return True because root has all permissions
-        if caller == 0:
+        if computer.get_uid() == 0:
             return SysCallStatus(success=True)
         # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
             return SysCallStatus(success=True)
 
         if "group" in self.permissions[perm]:
-            if self.group_owner in computer.find_user_groups(caller).data:
+            if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
                 return SysCallStatus(success=True)
 
         if "owner" in self.permissions[perm]:
-            if self.owner == caller:
+            if self.owner == computer.get_uid():
                 return SysCallStatus(success=True)
 
         # No permission
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def check_owner(self, uid: int, computer) -> SysCallStatus:
+    def check_owner(self, computer) -> SysCallStatus:
         """
         Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)
 
         Args:
-            uid (int): UID of the user to check
             computer: The current `Computer` instance
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
         """
         # Get the list of user's groups
-        groups = computer.find_user_groups(uid).data
+        groups = computer.find_user_groups(computer.get_uid()).data
 
-        if self.owner == uid or self.group_owner in groups:
+        if self.owner == computer.get_uid() or self.group_owner in groups:
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def change_owner(self, caller: int, computer, new_user_owner: Optional[int] = None,
+    def change_owner(self, computer, new_user_owner: Optional[int] = None,
                      new_group_owner: Optional[int] = None) -> SysCallStatus:
         """
         Change the owner (user and/or group) of a given `File`/`Directory`, but check if the given UID should be allowed to first
 
         Args:
-            caller (int): The UID of the user attempting to change the owner
             computer: The current `Computer` instance
             new_user_owner (int): The UID of the new owner (user) of the `File`/`Directory`
             new_group_owner (int): The GID of the new owner (group) of the `File`/`Directory`
@@ -117,9 +114,9 @@ class FSBaseObject:
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
         """
-        caller_groups = computer.find_user_groups(caller).data
+        caller_groups = computer.find_user_groups(computer.get_uid()).data
         # Check if the owner or group owner is correct or if we're root
-        if caller == self.owner or self.group_owner in caller_groups or caller == 0:
+        if computer.get_uid() == self.owner or self.group_owner in caller_groups or computer.get_uid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won't work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
@@ -171,12 +168,11 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self, caller: int, computer) -> SysCallStatus:
+    def delete(self,  computer) -> SysCallStatus:
         """
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
         Args:
-            caller (int): The UID of the `User` attempting to delete the given `File`/`Directory`
             computer: The current computer object
 
         Returns:
@@ -184,7 +180,7 @@ class FSBaseObject:
         """
         if self.parent:
             # In unix, we need read+write permissions to delete
-            if self.check_perm("read", caller, computer).success and self.check_perm("write", caller, computer).success:
+            if self.check_perm("read", computer).success and self.check_perm("write", computer).success:
                 del self.parent.files[self.name]
                 return SysCallStatus(success=True)
             else:
@@ -207,47 +203,44 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, caller: int, computer) -> SysCallStatus:
+    def read(self, computer) -> SysCallStatus:
         """
-        Check if the `caller` has permission to read the content of the file. Afterwards, return the content if allowed
+        Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
-            caller (int): The `User` attempting to read the given file
             computer: The current `Computer` instance
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file's content if permitted
         """
-        if self.check_perm("read", caller, computer).success:
+        if self.check_perm("read", computer).success:
             return SysCallStatus(success=True, data=self.content)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def write(self, caller: int, data: str, computer) -> SysCallStatus:
+    def write(self, data: str, computer) -> SysCallStatus:
         """
-        Check if the `caller` has permission to write to the file. Update the file's contents if allowed
+        Check if the current UID has permission to write to the file. Update the file's contents if allowed
 
         Args:
-            caller (int): The UID of the `User` attempting to write to the given file
             data (str): The new content to write to the `File`
             computer: The current `Computer` instance
 
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         """
-        if self.check_perm("write", caller, computer).success:
+        if self.check_perm("write", computer).success:
             self.content = data
             self.update_size()
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-    def append(self, caller: int, data: str, computer) -> SysCallStatus:
+    def append(self, data: str, computer) -> SysCallStatus:
         """
-        Check if the `caller` has permission to write to the file. Append to the file's contents if allowed
+        Check if the current UID has permission to write to the file. Append to the file's contents if allowed
 
         Args:
-            caller (int): The UID of the user attempting to append to the given file
             data (str): The content to append to the `File`s current content
             computer: The current `Computer` instance
 
@@ -255,7 +248,7 @@ class File(FSBaseObject):
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         """
         # NOTE: This may be unnecessary, we"ll find out later
-        if self.check_perm("write", caller, computer).success:
+        if self.check_perm("write", computer).success:
             self.content += data
             self.update_size()
             return SysCallStatus(success=True)
@@ -492,6 +485,7 @@ class StandardFS:
         Sets up:
         <ul>
             <li>/usr/share/man - Contains all the "man pages", or instruction manuals, for all the system binaries</li>
+            <li>/usr/bin - "Aftermarket" installed packages (apt) </li>
         </ul>
 
         Returns:
@@ -515,6 +509,9 @@ class StandardFS:
                 man_dir.add_file(current_manpage)
             except AttributeError as e:
                 pass
+
+        bin_dir: Directory = Directory("bin", usr_dir, 0, 0)
+        usr_dir.add_file(bin_dir)
 
     def setup_var(self) -> None:
         """

@@ -126,7 +126,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     new_shellrc_result = computer.fs.find(f"/home/{args[0]}/.shellrc")
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.get_uid(), f"export PATH=/bin:\nexport HOME=/home/{args[0]}", computer)
+        new_shellrc_result.data.write(f"export PATH=/bin:\nexport HOME=/home/{args[0]}", computer)
 
     # Check if we should ask the user for Full name, etc
     if interactive:

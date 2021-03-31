@@ -102,7 +102,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
 
     # I can't figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-    if file_to_update.check_owner(computer.get_uid(), computer):
+    if file_to_update.check_owner(computer):
         new_perms = parse_characters(args[0], file_to_update.permissions)
 
         if not new_perms:
