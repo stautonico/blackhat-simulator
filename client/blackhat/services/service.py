@@ -2,7 +2,7 @@ from typing import Optional
 
 
 class Service:
-    def __init__(self, name: str, port: int) -> None:
+    def __init__(self, name: str, port: int, computer: "Computer") -> None:
         """
         Generic base template for all network services
 
@@ -20,3 +20,5 @@ class Service:
         """str: A brief description of the given service (used for network scanners)"""
         self.port: int = port
         """int: The port that the give service runs on"""
+        self.computer = computer
+        """Computer: The computer the service is running on"""

@@ -97,11 +97,12 @@ class Computer:
                 if find_dir.success:
                     bin_dirs.append(find_dir.data)
         except AttributeError:
-            find_bin = self.fs.find("bin")
+            find_bin = self.fs.find("/bin")
             if find_bin.success:
                 bin_dirs = [find_bin.data]
             else:
                 bin_dirs = []
+
 
         if len(bin_dirs) == 0:
             print(f"{command}: command not found")

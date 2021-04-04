@@ -168,7 +168,7 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self,  computer) -> SysCallStatus:
+    def delete(self, computer) -> SysCallStatus:
         """
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
@@ -392,6 +392,8 @@ class StandardFS:
 
             self.files.add_file(directory)
 
+        # TODO: Replace all these with `mkdir -p` commands
+        # TODO: Create temporary root session to execute these commands
         # Individually setup each directory in the root
         self.setup_bin()
         self.setup_etc()
@@ -431,11 +433,13 @@ class StandardFS:
             <li>/etc/groups - Contains the list of groups in the systems (name, GID)</li>
             <li>/etc/hostname - The hostname of the given `Computer`</li>
             <li>/etc/skel -  A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)</li>
+            <li>/etc/sudoers - The file that contains all of the sudo permissions</li>
         </ul>
 
         Returns:
             None
         """
+        # TODO: Separate /etc/passwd and /etc/shadow
         etc_dir: Directory = self.files.find("etc")
         # Create the /etc/passwd file
         # The passwd file should have roots creds (bc root is created before the file)
@@ -462,9 +466,15 @@ class StandardFS:
         etc_dir.add_file(skel_dir)
 
         # /etc/hostname (holds system hostname)
-        # Stupid windows style default hostnames
+        # Stupid windows style default hostnames (for fun, might change later)
         new_hostname = f"DESKTOP-{''.join([choice(ascii_uppercase + digits) for _ in range(7)])}"
         etc_dir.add_file(File("hostname", new_hostname, etc_dir, 0, 0))
+
+        # /etc/sudoers (holds sudo permissions)
+        # Sudoers has permissions r--r-----
+        sudoers_file: File = File("sudoers", "root ALL=(ALL) ALL\n", etc_dir, 0, 0)
+        sudoers_file.permissions = {"read": ["owner", "group"], "write": [], "execute": []}
+        etc_dir.add_file(sudoers_file)
 
     def setup_root(self) -> None:
         """
@@ -521,6 +531,7 @@ class StandardFS:
             <li>/var/log/syslog - Logs various information about the given `Computer`</li>
             <li>/var/log/auth.log - Logs information about authentication attempts</li>
             <li>/var/lib/dpkg/status - The list of installed packages by apt</li>
+            <li>/var/www/html - Default location for web content served by web servers</li>
         </ul>
 
         Returns:
@@ -546,6 +557,13 @@ class StandardFS:
 
         status_file: File = File("status", "", dpkg_dir, 0, 0)
         dpkg_dir.add_file(status_file)
+
+        # Create /var/www/html
+        www_dir: Directory = Directory("www", var_dir, 0, 0)
+        var_dir.add_file(www_dir)
+
+        html_dir: Directory = Directory("html", www_dir, 0, 0)
+        www_dir.add_file(html_dir)
 
     def find(self, pathname: str) -> SysCallStatus:
         """
