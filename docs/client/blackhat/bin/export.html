@@ -49,6 +49,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
         env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
 
+        if env_value.startswith(&#34;$&#34;):
+            env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
+            if not env_value:
+                env_value = &#34;&#34;
+        else:
+            if &#34;:&#34; in env_value:
+                new_env_value = []
+                for val in env_value.split(&#34;:&#34;):
+                    if val.startswith(&#34;$&#34;):
+                        val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
+                        if not val:
+                            val = &#34;&#34;
+                    new_env_value.append(val)
+
+                env_value = &#34;:&#34;.join(new_env_value)
+
         computer.sessions[-1].env[split_args[0]] = env_value
 
     return output(&#34;&#34;, pipe)</code></pre>
@@ -84,6 +100,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
         env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
+
+        if env_value.startswith(&#34;$&#34;):
+            env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
+            if not env_value:
+                env_value = &#34;&#34;
+        else:
+            if &#34;:&#34; in env_value:
+                new_env_value = []
+                for val in env_value.split(&#34;:&#34;):
+                    if val.startswith(&#34;$&#34;):
+                        val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
+                        if not val:
+                            val = &#34;&#34;
+                    new_env_value.append(val)
+
+                env_value = &#34;:&#34;.join(new_env_value)
 
         computer.sessions[-1].env[split_args[0]] = env_value
 

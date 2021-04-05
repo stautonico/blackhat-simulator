@@ -154,7 +154,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.get_uid(), f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
+        new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
 
     # Check if we should ask the user for Full name, etc
     if interactive:
@@ -317,7 +317,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
 
     if new_shellrc_result.success:
-        new_shellrc_result.data.write(computer.get_uid(), f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
+        new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
 
     # Check if we should ask the user for Full name, etc
     if interactive:

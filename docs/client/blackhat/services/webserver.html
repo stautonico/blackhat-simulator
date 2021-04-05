@@ -36,11 +36,18 @@ class WebServer(Service):
     As of now (just for example purposes) it just echos args that is sent to it.
     &#34;&#34;&#34;
 
-    def __init__(self):
-        super().__init__(&#34;WebServer&#34;, 80)
+    def __init__(self, computer):
+        super().__init__(&#34;WebServer&#34;, 80, computer)
 
     def main(self, args: dict) -&gt; SysCallStatus:
-        return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+        find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
+
+        if not find_var_www_html.success:
+            return SysCallStatus(success=True, data={})
+        else:
+
+            return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+        # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </section>
 <section>
@@ -54,6 +61,7 @@ class WebServer(Service):
 <dl>
 <dt id="client.blackhat.services.webserver.WebServer"><code class="flex name class">
 <span>class <span class="ident">WebServer</span></span>
+<span>(</span><span>computer)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>An example service that's supposed to replicate the functionality of a webserver
@@ -76,11 +84,18 @@ As of now (just for example purposes) it just echos args that is sent to it.</p>
     As of now (just for example purposes) it just echos args that is sent to it.
     &#34;&#34;&#34;
 
-    def __init__(self):
-        super().__init__(&#34;WebServer&#34;, 80)
+    def __init__(self, computer):
+        super().__init__(&#34;WebServer&#34;, 80, computer)
 
     def main(self, args: dict) -&gt; SysCallStatus:
-        return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+        find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
+
+        if not find_var_www_html.success:
+            return SysCallStatus(success=True, data={})
+        else:
+
+            return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+        # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -98,7 +113,14 @@ As of now (just for example purposes) it just echos args that is sent to it.</p>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(self, args: dict) -&gt; SysCallStatus:
-    return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+    find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
+
+    if not find_var_www_html.success:
+        return SysCallStatus(success=True, data={})
+    else:
+
+        return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+    # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </dd>
 </dl>
@@ -107,6 +129,7 @@ As of now (just for example purposes) it just echos args that is sent to it.</p>
 <li><code><b><a title="client.blackhat.services.service.Service" href="service.html#client.blackhat.services.service.Service">Service</a></b></code>:
 <ul class="hlist">
 <li><code><a title="client.blackhat.services.service.Service.brand" href="service.html#client.blackhat.services.service.Service.brand">brand</a></code></li>
+<li><code><a title="client.blackhat.services.service.Service.computer" href="service.html#client.blackhat.services.service.Service.computer">computer</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.description" href="service.html#client.blackhat.services.service.Service.description">description</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.name" href="service.html#client.blackhat.services.service.Service.name">name</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.port" href="service.html#client.blackhat.services.service.Service.port">port</a></code></li>

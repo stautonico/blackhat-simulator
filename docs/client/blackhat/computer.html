@@ -37,7 +37,7 @@ from secrets import token_hex
 from time import perf_counter
 from typing import Optional, Dict, Union, List, Literal
 
-from .fs import Directory, File, StandardFS
+from .fs import Directory, File, StandardFS, FSBaseObject
 from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
@@ -112,17 +112,37 @@ class Computer:
         Returns:
             SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
         &#34;&#34;&#34;
-        # TODO: Instead of checking the bin_dir, check the `PATH` environment var (split by :) (do the same in `run_binary`)
         # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
         # The one that matches first in the path gets run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
-        bin_dir = self.fs.files.find(&#34;bin&#34;)
-        if not bin_dir:
+        try:
+            bin_dirs_text = self.sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
+
+            for dir in bin_dirs_text:
+                find_dir = self.fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+
+        if len(bin_dirs) == 0:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        if command not in list(bin_dir.files.keys()):
+        exists = False
+
+        for dir in bin_dirs:
+            if command in list(dir.files.keys()):
+                to_run = True
+                break
+        else:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
@@ -134,8 +154,44 @@ class Computer:
 
             return response
         except ImportError as e:
-            print(f&#34;There was an error when running command: {command}&#34;)
-            return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+            try:
+                module = importlib.import_module(f&#34;blackhat.bin.installable.{command}&#34;)
+                response = module.main(self, args, pipe)
+                if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+                    self.save()
+
+                return response
+            except ImportError as e:
+                print(f&#34;There was an error when running command: {command}&#34;)
+                return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+
+    def set_hostname(self, hostname: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        An easy function to update the hostname (also updates /etc/hostname)
+        Args:
+            hostname (str): The `Computer`&#39;s new hostname
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+        &#34;&#34;&#34;
+        # Try to find the hostname file
+        find_etc_hostname = self.fs.find(&#34;/etc/hostname&#34;)
+
+        if not find_etc_hostname.success:
+            # Make sure we at least have the /etc/ dir
+            find_etc = self.fs.find(&#34;/etc&#34;)
+            if not find_etc.success:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            else:
+                # Create the /etc/hostname
+                hostname_file = File(&#34;hostname&#34;, hostname, find_etc.data, 0, 0)
+                find_etc.data.add_file(hostname_file)
+        else:
+            find_etc_hostname.data.content = hostname
+
+        self.hostname = hostname
+        return SysCallStatus(success=True)
 
     def update_hostname(self) -&gt; None:
         &#34;&#34;&#34;
@@ -550,6 +606,33 @@ class Computer:
             # TODO: Write proof of concept exploit to exploit this exploit
             return 0
 
+    def get_pwd(self) -&gt; FSBaseObject:
+        &#34;&#34;&#34;
+        Get current directory in the file system
+
+        Returns:
+            FSBaseObjectSB: The  user&#39;s current directory
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return self.fs.files
+        else:
+            return self.sessions[-1].current_dir
+
+    def get_env(self, key) -&gt; Optional[str]:
+        &#34;&#34;&#34;
+        Get an environment variable from the current session
+
+        Args:
+            key (str): The env var to retrieve
+
+        Returns:
+            str, optional: The matching value of the given key if found, otherwise, None
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return None
+        else:
+            return self.sessions[-1].env.get(key)
+
     def run_current_user_shellrc(self):
         &#34;&#34;&#34;
         Run the .shellrc file in the current user&#39;s home folder (/home/&lt;USERNAME&gt;/.shellrc)
@@ -569,7 +652,7 @@ class Computer:
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
+            shellrc_lines = shellrc_lookup.data.read(self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -636,43 +719,43 @@ class Router(Computer):
         This class represents what a real router would be in real life
         &#34;&#34;&#34;
         super().__init__()
-        self.clients = {}  # Format of clients: sorted by VLAN then ID [1][2] (VLAN 1 - ID 2)
+        self.clients = {}  # Format of clients: sorted by subnet then ID [1][2] (subnet 1 - ID 2)
         self.ip_pool: dict[int, list[str]] = {}
         self.wan = None
         self.lan = &#34;192.168.1.1&#34;
         self.port_forwarding = {}
 
-    def dhcp(self, vlan: int) -&gt; SysCallStatus:
+    def dhcp(self, subnet: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Distributes IP addresses to clients on the network
 
         Args:
-            vlan (int): VLAN id to assign the client to
+            subnet (int): subnet id to assign the client to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         &#34;&#34;&#34;
         # Split the router&#39;s IP to get the first 16 bits
         ip_split = self.lan.split(&#34;.&#34;)
-        network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{vlan}&#34;
+        network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{subnet}&#34;
 
-        # Check if the IP pool for that VLAN was generated already
+        # Check if the IP pool for that subnet was generated already
         try:
-            len(self.ip_pool[vlan])
-        # If `self.ip_pool[&lt;VLAN&gt;]` returns a key error, it was never created before
+            len(self.ip_pool[subnet])
+        # If `self.ip_pool[&lt;subnet&gt;]` returns a key error, it was never created before
         except KeyError:
-            # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;VLAN&gt;.1-256
-            self.ip_pool[vlan] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
+            # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;subnet&gt;.1-256
+            self.ip_pool[subnet] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
 
         # Check if we have IP&#39;s left
-        if len(self.ip_pool[vlan]) == 0:
+        if len(self.ip_pool[subnet]) == 0:
             return SysCallStatus(success=False, message=SysCallMessages.EMPTY)
 
         # Choose a random ip from the pool
-        ip = choice(self.ip_pool[vlan])
+        ip = choice(self.ip_pool[subnet])
 
         # Remove the IP from the pool since it&#39;s in use
-        self.ip_pool[vlan].remove(ip)
+        self.ip_pool[subnet].remove(ip)
         return SysCallStatus(success=True, data=ip)
 
     def find_local_client(self, ip: str) -&gt; SysCallStatus:
@@ -685,8 +768,8 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
-        vlan = ip.split(&#34;.&#34;)[2]
-        for client in self.clients[int(vlan)].values():
+        subnet = ip.split(&#34;.&#34;)[2]
+        for client in self.clients[int(subnet)].values():
             if client.lan == ip:
                 return SysCallStatus(success=True, data=client)
 
@@ -715,10 +798,10 @@ class Router(Computer):
                 return SysCallStatus(success=True, data=self)
             else:
                 client_ip_split = ip.split(&#34;.&#34;)
-                vlan = client_ip_split[2]
-                vlan_result = self.clients.get(vlan)
-                if vlan_result:
-                    client_result = vlan_result.get(ip)
+                subnet = client_ip_split[2]
+                subnet_result = self.clients.get(int(subnet))
+                if subnet_result:
+                    client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
 
                     if client_result:
                         return SysCallStatus(success=True, data=client_result)
@@ -762,27 +845,26 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
-
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
         else:
             return SysCallStatus(success=True, data=ip_to_find)
 
-    def add_new_client(self, client: Computer, vlan: int = 1) -&gt; SysCallStatus:
+    def add_new_client(self, client: Computer, subnet: int = 1) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Connect a given `Computer` to the given `Router`&#39;s LAN.
         Also, assign an IP address using the `dhcp()` function.
 
         Args:
             client (Computer): The `Computer` instance to connect to the `Router`&#39;s LAN
-            vlan (int, optional): The VLAN id to assign the given `Computer` to
+            subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`&#39;s newly assigned IP address if successful.
         &#34;&#34;&#34;
         # Generate an IP for the client
-        generate_ip_status = self.dhcp(vlan)
+        generate_ip_status = self.dhcp(subnet)
         # We we&#39;re unable to generate an IP for the given client
         if not generate_ip_status:
             return generate_ip_status
@@ -792,18 +874,18 @@ class Router(Computer):
 
         # Append to client to our client list
         try:
-            last_id = list(self.clients[vlan].keys())[-1]
+            last_id = list(self.clients[subnet].keys())[-1]
         except KeyError:
             last_id = 0
 
-        # Check if the client vlan exists
+        # Check if the client subnet exists
         try:
-            len(self.clients[vlan])
+            len(self.clients[subnet])
         except KeyError:
-            # Init the vlan (empty)
-            self.clients[vlan] = {}
+            # Init the subnet (empty)
+            self.clients[subnet] = {}
 
-        self.clients[vlan][last_id + 1] = client
+        self.clients[subnet][last_id + 1] = client
 
         client.parent = self
 
@@ -1065,17 +1147,37 @@ class ISPRouter(Router):
         Returns:
             SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
         &#34;&#34;&#34;
-        # TODO: Instead of checking the bin_dir, check the `PATH` environment var (split by :) (do the same in `run_binary`)
         # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
         # The one that matches first in the path gets run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
-        bin_dir = self.fs.files.find(&#34;bin&#34;)
-        if not bin_dir:
+        try:
+            bin_dirs_text = self.sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
+
+            for dir in bin_dirs_text:
+                find_dir = self.fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+
+        if len(bin_dirs) == 0:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        if command not in list(bin_dir.files.keys()):
+        exists = False
+
+        for dir in bin_dirs:
+            if command in list(dir.files.keys()):
+                to_run = True
+                break
+        else:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
@@ -1087,8 +1189,44 @@ class ISPRouter(Router):
 
             return response
         except ImportError as e:
-            print(f&#34;There was an error when running command: {command}&#34;)
-            return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+            try:
+                module = importlib.import_module(f&#34;blackhat.bin.installable.{command}&#34;)
+                response = module.main(self, args, pipe)
+                if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+                    self.save()
+
+                return response
+            except ImportError as e:
+                print(f&#34;There was an error when running command: {command}&#34;)
+                return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+
+    def set_hostname(self, hostname: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        An easy function to update the hostname (also updates /etc/hostname)
+        Args:
+            hostname (str): The `Computer`&#39;s new hostname
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+        &#34;&#34;&#34;
+        # Try to find the hostname file
+        find_etc_hostname = self.fs.find(&#34;/etc/hostname&#34;)
+
+        if not find_etc_hostname.success:
+            # Make sure we at least have the /etc/ dir
+            find_etc = self.fs.find(&#34;/etc&#34;)
+            if not find_etc.success:
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            else:
+                # Create the /etc/hostname
+                hostname_file = File(&#34;hostname&#34;, hostname, find_etc.data, 0, 0)
+                find_etc.data.add_file(hostname_file)
+        else:
+            find_etc_hostname.data.content = hostname
+
+        self.hostname = hostname
+        return SysCallStatus(success=True)
 
     def update_hostname(self) -&gt; None:
         &#34;&#34;&#34;
@@ -1503,6 +1641,33 @@ class ISPRouter(Router):
             # TODO: Write proof of concept exploit to exploit this exploit
             return 0
 
+    def get_pwd(self) -&gt; FSBaseObject:
+        &#34;&#34;&#34;
+        Get current directory in the file system
+
+        Returns:
+            FSBaseObjectSB: The  user&#39;s current directory
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return self.fs.files
+        else:
+            return self.sessions[-1].current_dir
+
+    def get_env(self, key) -&gt; Optional[str]:
+        &#34;&#34;&#34;
+        Get an environment variable from the current session
+
+        Args:
+            key (str): The env var to retrieve
+
+        Returns:
+            str, optional: The matching value of the given key if found, otherwise, None
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return None
+        else:
+            return self.sessions[-1].env.get(key)
+
     def run_current_user_shellrc(self):
         &#34;&#34;&#34;
         Run the .shellrc file in the current user&#39;s home folder (/home/&lt;USERNAME&gt;/.shellrc)
@@ -1522,7 +1687,7 @@ class ISPRouter(Router):
         shellrc_lookup = self.fs.find(shellrc_loc)
 
         if shellrc_lookup.success:
-            shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
+            shellrc_lines = shellrc_lookup.data.read(self)
 
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -2119,6 +2284,41 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     return SysCallStatus(success=True, data=clean_users)</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.computer.Computer.get_env"><code class="name flex">
+<span>def <span class="ident">get_env</span></span>(<span>self, key) ‑> Optional[str]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get an environment variable from the current session</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>key</code></strong> :&ensp;<code>str</code></dt>
+<dd>The env var to retrieve</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code>, optional</dt>
+<dd>The matching value of the given key if found, otherwise, None</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_env(self, key) -&gt; Optional[str]:
+    &#34;&#34;&#34;
+    Get an environment variable from the current session
+
+    Args:
+        key (str): The env var to retrieve
+
+    Returns:
+        str, optional: The matching value of the given key if found, otherwise, None
+    &#34;&#34;&#34;
+    if len(self.sessions) == 0:
+        return None
+    else:
+        return self.sessions[-1].env.get(key)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.computer.Computer.get_gid"><code class="name flex">
 <span>def <span class="ident">get_gid</span></span>(<span>self) ‑> int</span>
 </code></dt>
@@ -2150,6 +2350,34 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
         # NOTE: possible exploit, but maybe we leave it here on purpose?
         # TODO: Write proof of concept exploit to exploit this exploit
         return 0</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.get_pwd"><code class="name flex">
+<span>def <span class="ident">get_pwd</span></span>(<span>self) ‑> <a title="client.blackhat.fs.FSBaseObject" href="fs.html#client.blackhat.fs.FSBaseObject">FSBaseObject</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get current directory in the file system</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>FSBaseObjectSB</code></dt>
+<dd>The
+user's current directory</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_pwd(self) -&gt; FSBaseObject:
+    &#34;&#34;&#34;
+    Get current directory in the file system
+
+    Returns:
+        FSBaseObjectSB: The  user&#39;s current directory
+    &#34;&#34;&#34;
+    if len(self.sessions) == 0:
+        return self.fs.files
+    else:
+        return self.sessions[-1].current_dir</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.get_uid"><code class="name flex">
@@ -2348,17 +2576,37 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
     Returns:
         SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
     &#34;&#34;&#34;
-    # TODO: Instead of checking the bin_dir, check the `PATH` environment var (split by :) (do the same in `run_binary`)
     # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
     # The one that matches first in the path gets run
     # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
     # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
-    bin_dir = self.fs.files.find(&#34;bin&#34;)
-    if not bin_dir:
+    try:
+        bin_dirs_text = self.sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+        bin_dirs = []
+
+        for dir in bin_dirs_text:
+            find_dir = self.fs.find(dir)
+            if find_dir.success:
+                bin_dirs.append(find_dir.data)
+    except AttributeError:
+        find_bin = self.fs.find(&#34;/bin&#34;)
+        if find_bin.success:
+            bin_dirs = [find_bin.data]
+        else:
+            bin_dirs = []
+
+
+    if len(bin_dirs) == 0:
         print(f&#34;{command}: command not found&#34;)
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    if command not in list(bin_dir.files.keys()):
+    exists = False
+
+    for dir in bin_dirs:
+        if command in list(dir.files.keys()):
+            to_run = True
+            break
+    else:
         print(f&#34;{command}: command not found&#34;)
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
@@ -2370,8 +2618,16 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
 
         return response
     except ImportError as e:
-        print(f&#34;There was an error when running command: {command}&#34;)
-        return SysCallStatus(success=False, message=SysCallMessages.GENERIC)</code></pre>
+        try:
+            module = importlib.import_module(f&#34;blackhat.bin.installable.{command}&#34;)
+            response = module.main(self, args, pipe)
+            if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+                self.save()
+
+            return response
+        except ImportError as e:
+            print(f&#34;There was an error when running command: {command}&#34;)
+            return SysCallStatus(success=False, message=SysCallMessages.GENERIC)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.run_current_user_shellrc"><code class="name flex">
@@ -2405,7 +2661,7 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     shellrc_lookup = self.fs.find(shellrc_loc)
 
     if shellrc_lookup.success:
-        shellrc_lines = shellrc_lookup.data.read(self.get_uid(), self)
+        shellrc_lines = shellrc_lookup.data.read(self)
 
         if shellrc_lines.success:
             for line in shellrc_lines.data.split(&#34;\n&#34;):
@@ -2490,6 +2746,53 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
         SysCallMessage: A response generate by the `Service` or an error if no such `Service` exists.
     &#34;&#34;&#34;
     return self.parent.handle_tcp_connection(host, port, args)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.set_hostname"><code class="name flex">
+<span>def <span class="ident">set_hostname</span></span>(<span>self, hostname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>An easy function to update the hostname (also updates /etc/hostname)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>hostname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code>'s new hostname</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> instance with the <code>success</code> flag set appropriately.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_hostname(self, hostname: str) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    An easy function to update the hostname (also updates /etc/hostname)
+    Args:
+        hostname (str): The `Computer`&#39;s new hostname
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+    &#34;&#34;&#34;
+    # Try to find the hostname file
+    find_etc_hostname = self.fs.find(&#34;/etc/hostname&#34;)
+
+    if not find_etc_hostname.success:
+        # Make sure we at least have the /etc/ dir
+        find_etc = self.fs.find(&#34;/etc&#34;)
+        if not find_etc.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            # Create the /etc/hostname
+            hostname_file = File(&#34;hostname&#34;, hostname, find_etc.data, 0, 0)
+            find_etc.data.add_file(hostname_file)
+    else:
+        find_etc_hostname.data.content = hostname
+
+    self.hostname = hostname
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.update_groups"><code class="name flex">
@@ -3014,7 +3317,9 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.get_pwd" href="#client.blackhat.computer.Computer.get_pwd">get_pwd</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.handle_tcp_connection" href="#client.blackhat.computer.Router.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
@@ -3024,6 +3329,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
@@ -3048,43 +3354,43 @@ This class represents what a real router would be in real life</p></div>
         This class represents what a real router would be in real life
         &#34;&#34;&#34;
         super().__init__()
-        self.clients = {}  # Format of clients: sorted by VLAN then ID [1][2] (VLAN 1 - ID 2)
+        self.clients = {}  # Format of clients: sorted by subnet then ID [1][2] (subnet 1 - ID 2)
         self.ip_pool: dict[int, list[str]] = {}
         self.wan = None
         self.lan = &#34;192.168.1.1&#34;
         self.port_forwarding = {}
 
-    def dhcp(self, vlan: int) -&gt; SysCallStatus:
+    def dhcp(self, subnet: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Distributes IP addresses to clients on the network
 
         Args:
-            vlan (int): VLAN id to assign the client to
+            subnet (int): subnet id to assign the client to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         &#34;&#34;&#34;
         # Split the router&#39;s IP to get the first 16 bits
         ip_split = self.lan.split(&#34;.&#34;)
-        network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{vlan}&#34;
+        network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{subnet}&#34;
 
-        # Check if the IP pool for that VLAN was generated already
+        # Check if the IP pool for that subnet was generated already
         try:
-            len(self.ip_pool[vlan])
-        # If `self.ip_pool[&lt;VLAN&gt;]` returns a key error, it was never created before
+            len(self.ip_pool[subnet])
+        # If `self.ip_pool[&lt;subnet&gt;]` returns a key error, it was never created before
         except KeyError:
-            # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;VLAN&gt;.1-256
-            self.ip_pool[vlan] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
+            # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;subnet&gt;.1-256
+            self.ip_pool[subnet] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
 
         # Check if we have IP&#39;s left
-        if len(self.ip_pool[vlan]) == 0:
+        if len(self.ip_pool[subnet]) == 0:
             return SysCallStatus(success=False, message=SysCallMessages.EMPTY)
 
         # Choose a random ip from the pool
-        ip = choice(self.ip_pool[vlan])
+        ip = choice(self.ip_pool[subnet])
 
         # Remove the IP from the pool since it&#39;s in use
-        self.ip_pool[vlan].remove(ip)
+        self.ip_pool[subnet].remove(ip)
         return SysCallStatus(success=True, data=ip)
 
     def find_local_client(self, ip: str) -&gt; SysCallStatus:
@@ -3097,8 +3403,8 @@ This class represents what a real router would be in real life</p></div>
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
-        vlan = ip.split(&#34;.&#34;)[2]
-        for client in self.clients[int(vlan)].values():
+        subnet = ip.split(&#34;.&#34;)[2]
+        for client in self.clients[int(subnet)].values():
             if client.lan == ip:
                 return SysCallStatus(success=True, data=client)
 
@@ -3127,10 +3433,10 @@ This class represents what a real router would be in real life</p></div>
                 return SysCallStatus(success=True, data=self)
             else:
                 client_ip_split = ip.split(&#34;.&#34;)
-                vlan = client_ip_split[2]
-                vlan_result = self.clients.get(vlan)
-                if vlan_result:
-                    client_result = vlan_result.get(ip)
+                subnet = client_ip_split[2]
+                subnet_result = self.clients.get(int(subnet))
+                if subnet_result:
+                    client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
 
                     if client_result:
                         return SysCallStatus(success=True, data=client_result)
@@ -3174,27 +3480,26 @@ This class represents what a real router would be in real life</p></div>
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         &#34;&#34;&#34;
-
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
         else:
             return SysCallStatus(success=True, data=ip_to_find)
 
-    def add_new_client(self, client: Computer, vlan: int = 1) -&gt; SysCallStatus:
+    def add_new_client(self, client: Computer, subnet: int = 1) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Connect a given `Computer` to the given `Router`&#39;s LAN.
         Also, assign an IP address using the `dhcp()` function.
 
         Args:
             client (Computer): The `Computer` instance to connect to the `Router`&#39;s LAN
-            vlan (int, optional): The VLAN id to assign the given `Computer` to
+            subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`&#39;s newly assigned IP address if successful.
         &#34;&#34;&#34;
         # Generate an IP for the client
-        generate_ip_status = self.dhcp(vlan)
+        generate_ip_status = self.dhcp(subnet)
         # We we&#39;re unable to generate an IP for the given client
         if not generate_ip_status:
             return generate_ip_status
@@ -3204,18 +3509,18 @@ This class represents what a real router would be in real life</p></div>
 
         # Append to client to our client list
         try:
-            last_id = list(self.clients[vlan].keys())[-1]
+            last_id = list(self.clients[subnet].keys())[-1]
         except KeyError:
             last_id = 0
 
-        # Check if the client vlan exists
+        # Check if the client subnet exists
         try:
-            len(self.clients[vlan])
+            len(self.clients[subnet])
         except KeyError:
-            # Init the vlan (empty)
-            self.clients[vlan] = {}
+            # Init the subnet (empty)
+            self.clients[subnet] = {}
 
-        self.clients[vlan][last_id + 1] = client
+        self.clients[subnet][last_id + 1] = client
 
         client.parent = self
 
@@ -3269,7 +3574,7 @@ This class represents what a real router would be in real life</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.computer.Router.add_new_client"><code class="name flex">
-<span>def <span class="ident">add_new_client</span></span>(<span>self, client: <a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a>, vlan: int = 1) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">add_new_client</span></span>(<span>self, client: <a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a>, subnet: int = 1) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Connect a given <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> to the given <code><a title="client.blackhat.computer.Router" href="#client.blackhat.computer.Router">Router</a></code>'s LAN.
@@ -3278,8 +3583,8 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <dl>
 <dt><strong><code>client</code></strong> :&ensp;<code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code></dt>
 <dd>The <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> instance to connect to the <code><a title="client.blackhat.computer.Router" href="#client.blackhat.computer.Router">Router</a></code>'s LAN</dd>
-<dt><strong><code>vlan</code></strong> :&ensp;<code>int</code>, optional</dt>
-<dd>The VLAN id to assign the given <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> to</dd>
+<dt><strong><code>subnet</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The subnet id to assign the given <code><a title="client.blackhat.computer.Computer" href="#client.blackhat.computer.Computer">Computer</a></code> to</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -3290,20 +3595,20 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def add_new_client(self, client: Computer, vlan: int = 1) -&gt; SysCallStatus:
+<pre><code class="python">def add_new_client(self, client: Computer, subnet: int = 1) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Connect a given `Computer` to the given `Router`&#39;s LAN.
     Also, assign an IP address using the `dhcp()` function.
 
     Args:
         client (Computer): The `Computer` instance to connect to the `Router`&#39;s LAN
-        vlan (int, optional): The VLAN id to assign the given `Computer` to
+        subnet (int, optional): The subnet id to assign the given `Computer` to
 
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`&#39;s newly assigned IP address if successful.
     &#34;&#34;&#34;
     # Generate an IP for the client
-    generate_ip_status = self.dhcp(vlan)
+    generate_ip_status = self.dhcp(subnet)
     # We we&#39;re unable to generate an IP for the given client
     if not generate_ip_status:
         return generate_ip_status
@@ -3313,18 +3618,18 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 
     # Append to client to our client list
     try:
-        last_id = list(self.clients[vlan].keys())[-1]
+        last_id = list(self.clients[subnet].keys())[-1]
     except KeyError:
         last_id = 0
 
-    # Check if the client vlan exists
+    # Check if the client subnet exists
     try:
-        len(self.clients[vlan])
+        len(self.clients[subnet])
     except KeyError:
-        # Init the vlan (empty)
-        self.clients[vlan] = {}
+        # Init the subnet (empty)
+        self.clients[subnet] = {}
 
-    self.clients[vlan][last_id + 1] = client
+    self.clients[subnet][last_id + 1] = client
 
     client.parent = self
 
@@ -3332,14 +3637,14 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Router.dhcp"><code class="name flex">
-<span>def <span class="ident">dhcp</span></span>(<span>self, vlan: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">dhcp</span></span>(<span>self, subnet: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Distributes IP addresses to clients on the network</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>vlan</code></strong> :&ensp;<code>int</code></dt>
-<dd>VLAN id to assign the client to</dd>
+<dt><strong><code>subnet</code></strong> :&ensp;<code>int</code></dt>
+<dd>subnet id to assign the client to</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -3350,37 +3655,37 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def dhcp(self, vlan: int) -&gt; SysCallStatus:
+<pre><code class="python">def dhcp(self, subnet: int) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Distributes IP addresses to clients on the network
 
     Args:
-        vlan (int): VLAN id to assign the client to
+        subnet (int): subnet id to assign the client to
 
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
     &#34;&#34;&#34;
     # Split the router&#39;s IP to get the first 16 bits
     ip_split = self.lan.split(&#34;.&#34;)
-    network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{vlan}&#34;
+    network_prefix = f&#34;{ip_split[0]}.{ip_split[1]}.{subnet}&#34;
 
-    # Check if the IP pool for that VLAN was generated already
+    # Check if the IP pool for that subnet was generated already
     try:
-        len(self.ip_pool[vlan])
-    # If `self.ip_pool[&lt;VLAN&gt;]` returns a key error, it was never created before
+        len(self.ip_pool[subnet])
+    # If `self.ip_pool[&lt;subnet&gt;]` returns a key error, it was never created before
     except KeyError:
-        # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;VLAN&gt;.1-256
-        self.ip_pool[vlan] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
+        # Generate a list of ips that are &lt;NETWORK_PREFIX&gt;.&lt;subnet&gt;.1-256
+        self.ip_pool[subnet] = [f&#34;{network_prefix}.{x}&#34; for x in range(1, 257)]
 
     # Check if we have IP&#39;s left
-    if len(self.ip_pool[vlan]) == 0:
+    if len(self.ip_pool[subnet]) == 0:
         return SysCallStatus(success=False, message=SysCallMessages.EMPTY)
 
     # Choose a random ip from the pool
-    ip = choice(self.ip_pool[vlan])
+    ip = choice(self.ip_pool[subnet])
 
     # Remove the IP from the pool since it&#39;s in use
-    self.ip_pool[vlan].remove(ip)
+    self.ip_pool[subnet].remove(ip)
     return SysCallStatus(success=True, data=ip)</code></pre>
 </details>
 </dd>
@@ -3429,10 +3734,10 @@ ask the <code><a title="client.blackhat.computer.ISPRouter" href="#client.blackh
             return SysCallStatus(success=True, data=self)
         else:
             client_ip_split = ip.split(&#34;.&#34;)
-            vlan = client_ip_split[2]
-            vlan_result = self.clients.get(vlan)
-            if vlan_result:
-                client_result = vlan_result.get(ip)
+            subnet = client_ip_split[2]
+            subnet_result = self.clients.get(int(subnet))
+            if subnet_result:
+                client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
 
                 if client_result:
                     return SysCallStatus(success=True, data=client_result)
@@ -3497,7 +3802,6 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
     &#34;&#34;&#34;
-
     ip_to_find = self.port_forwarding.get(port, None)
     if not ip_to_find:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
@@ -3534,8 +3838,8 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
     &#34;&#34;&#34;
-    vlan = ip.split(&#34;.&#34;)[2]
-    for client in self.clients[int(vlan)].values():
+    subnet = ip.split(&#34;.&#34;)[2]
+    for client in self.clients[int(subnet)].values():
         if client.lan == ip:
             return SysCallStatus(success=True, data=client)
 
@@ -3640,7 +3944,9 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_pwd" href="#client.blackhat.computer.Computer.get_pwd">get_pwd</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.post_fs_init" href="#client.blackhat.computer.Computer.post_fs_init">post_fs_init</a></code></li>
@@ -3649,6 +3955,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
@@ -3687,7 +3994,9 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_gid" href="#client.blackhat.computer.Computer.get_gid">get_gid</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.get_pwd" href="#client.blackhat.computer.Computer.get_pwd">get_pwd</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_uid" href="#client.blackhat.computer.Computer.get_uid">get_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.handle_tcp_connection" href="#client.blackhat.computer.Computer.handle_tcp_connection">handle_tcp_connection</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.init" href="#client.blackhat.computer.Computer.init">init</a></code></li>
@@ -3697,6 +4006,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.run_current_user_shellrc" href="#client.blackhat.computer.Computer.run_current_user_shellrc">run_current_user_shellrc</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>

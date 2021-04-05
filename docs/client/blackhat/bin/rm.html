@@ -59,7 +59,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     to_delete = []
 
     if src == &#34;*&#34;:
-        for file in computer.sessions[-1].current_dir.files:
+        for file in computer.get_pwd().files:
             to_delete.append(file)
     elif &#34;*&#34; in src:
         if src[-1] != &#34;*&#34;:
@@ -86,7 +86,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if result.data.is_directory() and not recursive:
                 return output(f&#34;{__COMMAND__}: cannot remove &#39;{file}&#39;: Is a directory&#34;, pipe, success=False)
             else:
-                response = result.data.delete(computer.get_uid())
+                response = result.data.delete(computer)
 
                 if not response.success:
                     if response.message == SysCallMessages.NOT_ALLOWED:
@@ -140,7 +140,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     to_delete = []
 
     if src == &#34;*&#34;:
-        for file in computer.sessions[-1].current_dir.files:
+        for file in computer.get_pwd().files:
             to_delete.append(file)
     elif &#34;*&#34; in src:
         if src[-1] != &#34;*&#34;:
@@ -167,7 +167,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if result.data.is_directory() and not recursive:
                 return output(f&#34;{__COMMAND__}: cannot remove &#39;{file}&#39;: Is a directory&#34;, pipe, success=False)
             else:
-                response = result.data.delete(computer.get_uid())
+                response = result.data.delete(computer)
 
                 if not response.success:
                     if response.message == SysCallMessages.NOT_ALLOWED:

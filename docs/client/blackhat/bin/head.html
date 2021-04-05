@@ -60,7 +60,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.get_uid(), computer)
+                read_response = to_read.read(computer)
 
                 if read_response.success:
                     if read_response.data:
@@ -120,7 +120,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += f&#34;{__COMMAND__}: {file}: Is a directory\n&#34;
             else:
                 # Permission checking
-                read_response = to_read.read(computer.get_uid(), computer)
+                read_response = to_read.read(computer)
 
                 if read_response.success:
                     if read_response.data:

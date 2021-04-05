@@ -61,14 +61,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 new_filename = filename.split(&#34;/&#34;)[-1]
                 dir_to_write_to = result.data
         else:
-            if filename not in computer.sessions[-1].current_dir.files:
+            if filename not in computer.get_pwd().files:
                 new_filename = filename
-                dir_to_write_to = computer.sessions[-1].current_dir
+                dir_to_write_to = computer.get_pwd()
             else:
                 return output(&#34;&#34;, pipe, success=False)
 
         # Make sure that we have write permissions of the dir
-        if dir_to_write_to.check_perm(&#34;write&#34;, computer.get_uid(), computer).success:
+        if dir_to_write_to.check_perm(&#34;write&#34;, computer).success:
             newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
             dir_to_write_to.add_file(newfile)
         else:
@@ -123,14 +123,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 new_filename = filename.split(&#34;/&#34;)[-1]
                 dir_to_write_to = result.data
         else:
-            if filename not in computer.sessions[-1].current_dir.files:
+            if filename not in computer.get_pwd().files:
                 new_filename = filename
-                dir_to_write_to = computer.sessions[-1].current_dir
+                dir_to_write_to = computer.get_pwd()
             else:
                 return output(&#34;&#34;, pipe, success=False)
 
         # Make sure that we have write permissions of the dir
-        if dir_to_write_to.check_perm(&#34;write&#34;, computer.get_uid(), computer).success:
+        if dir_to_write_to.check_perm(&#34;write&#34;, computer).success:
             newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
             dir_to_write_to.add_file(newfile)
         else:

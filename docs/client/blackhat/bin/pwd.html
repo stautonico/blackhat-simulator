@@ -39,7 +39,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     if len(args) == 0:
-        return output(computer.sessions[-1].current_dir.pwd(), pipe)
+        return output(computer.get_pwd().pwd(), pipe)
     else:
         return output(f&#34;{__COMMAND__}: too many arguments&#34;, pipe, success=False, success_message=SysCallMessages.TOO_MANY_ARGUMENTS)</code></pre>
 </details>
@@ -65,7 +65,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     if len(args) == 0:
-        return output(computer.sessions[-1].current_dir.pwd(), pipe)
+        return output(computer.get_pwd().pwd(), pipe)
     else:
         return output(f&#34;{__COMMAND__}: too many arguments&#34;, pipe, success=False, success_message=SysCallMessages.TOO_MANY_ARGUMENTS)</code></pre>
 </details>

@@ -41,7 +41,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if &#34;--version&#34; in args:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    result = computer.send_tcp(args[0], 80, {&#34;name&#34;: &#34;steve&#34;})
+    result = computer.send_tcp(args[0], 80, {})
 
     if not result.success:
         if result.message == SysCallMessages.NOT_FOUND:
@@ -76,7 +76,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if &#34;--version&#34; in args:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    result = computer.send_tcp(args[0], 80, {&#34;name&#34;: &#34;steve&#34;})
+    result = computer.send_tcp(args[0], 80, {})
 
     if not result.success:
         if result.message == SysCallMessages.NOT_FOUND:

@@ -62,7 +62,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: failed to remove &#39;{src}&#39;: Directory not empty&#34;, pipe,
                               success=False)
             else:
-                response = result.data.delete(computer.get_uid())
+                response = result.data.delete(computer)
 
                 if not response.success:
                     if response.message == SysCallMessages.NOT_ALLOWED:
@@ -116,7 +116,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: failed to remove &#39;{src}&#39;: Directory not empty&#34;, pipe,
                               success=False)
             else:
-                response = result.data.delete(computer.get_uid())
+                response = result.data.delete(computer)
 
                 if not response.success:
                     if response.message == SysCallMessages.NOT_ALLOWED:

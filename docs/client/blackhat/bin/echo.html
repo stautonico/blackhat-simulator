@@ -27,7 +27,7 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
 from ..lib.output import output
 
 __COMMAND__ = &#34;echo&#34;
@@ -46,15 +46,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # If the output starts with $, read from env vars
     for arg in args:
         if arg.startswith(&#34;$&#34;):
-            env_var = computer.sessions[-1].env.get(arg.replace(&#34;$&#34;, &#34;&#34;), None)
+            env_var = computer.get_env(arg.replace(&#34;$&#34;, &#34;&#34;))
             if env_var:
                 clean_args.append(env_var)
         else:
             clean_args.append(arg)
-
-    # if args[0].startswith(&#34;$&#34;):
-    #     env_var = computer.sessions[-1].env.get(args[0].replace(&#34;$&#34;, &#34;&#34;))
-    #     return output(env_var or &#34;&#34;, pipe)
 
     return output(&#34; &#34;.join(clean_args), pipe)</code></pre>
 </details>
@@ -87,15 +83,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # If the output starts with $, read from env vars
     for arg in args:
         if arg.startswith(&#34;$&#34;):
-            env_var = computer.sessions[-1].env.get(arg.replace(&#34;$&#34;, &#34;&#34;), None)
+            env_var = computer.get_env(arg.replace(&#34;$&#34;, &#34;&#34;))
             if env_var:
                 clean_args.append(env_var)
         else:
             clean_args.append(arg)
-
-    # if args[0].startswith(&#34;$&#34;):
-    #     env_var = computer.sessions[-1].env.get(args[0].replace(&#34;$&#34;, &#34;&#34;))
-    #     return output(env_var or &#34;&#34;, pipe)
 
     return output(&#34; &#34;.join(clean_args), pipe)</code></pre>
 </details>

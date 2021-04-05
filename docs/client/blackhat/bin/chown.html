@@ -78,7 +78,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer.get_uid(), computer, new_user_owner=owner,
+                update_response = result.data.change_owner(computer, new_user_owner=owner,
                                                            new_group_owner=group_owner)
                 if not update_response.success:
                     if update_response.message == SysCallMessages.NOT_ALLOWED:
@@ -156,7 +156,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer.get_uid(), computer, new_user_owner=owner,
+                update_response = result.data.change_owner(computer, new_user_owner=owner,
                                                            new_group_owner=group_owner)
                 if not update_response.success:
                     if update_response.message == SysCallMessages.NOT_ALLOWED:

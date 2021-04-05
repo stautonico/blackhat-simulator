@@ -37,7 +37,6 @@ __VERSION__ = &#34;1.0.0&#34;
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if &#34;--version&#34; in args:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # -f is force (immediately exit)
     if &#34;-f&#34; in args:
         if len(computer.shell.computers) == 1:
@@ -78,7 +77,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     if &#34;--version&#34; in args:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # -f is force (immediately exit)
     if &#34;-f&#34; in args:
         if len(computer.shell.computers) == 1:
