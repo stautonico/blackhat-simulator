@@ -24,6 +24,45 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     if args[0] == "install":
         if len(args) < 2:
             return output(f"{__COMMAND__}: operation 'install' requires an argument", pipe, success=False)
+        # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
+        find_usr_bin = computer.fs.find("/usr/bin")
+        find_usr_lib_dpkg_status = computer.fs.find("/var/lib/dpkg/status")
+        find_apt_sources = computer.fs.find("/etc/apt/sources.list")
+        if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
+            # In reality, a snap error will occur but we don't have snap so just throw general error
+            return output(f"{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/",
+                          pipe,
+                          success=False)
+
+        usr_bin: Directory = find_usr_bin.data
+        status_file: File = find_usr_lib_dpkg_status.data
+        sources_file: File = find_apt_sources.data
+
+        # Now we need to contact each server in our sources.list and ask each server if they have the package we're looking for
+        servers = sources_file.content.split("\n")
+
+        while "" in servers:
+            servers.remove("")
+
+        outstanding_packages = args[1:]
+
+        for server in servers:
+            split_server = server.split(":")
+            if len(split_server) == 1:
+                port = 80
+            else:
+                port = split_server[1]
+
+            host = split_server[0]
+
+            ask_server_result = computer.send_tcp(host, port, {"packages": [x for x in outstanding_packages]})
+            if ask_server_result.success:
+                if ask_server_result.data.get("have"):
+                    for package in ask_server_result.data.get("have"):
+                        if package in outstanding_packages:
+                            outstanding_packages.remove(package)
+
+
         # Check if the package we're trying to install exists
         exists_dirty = os.listdir("./blackhat/bin/installable")
         exists_clean = []
@@ -31,28 +70,18 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             if file not in ["__pycache__", "__init__.py"]:
                 exists_clean.append(file.replace(".py", ""))
 
+        # We want to install only the packages that we found (not outstanding)
         for to_install in args[1:]:
-            if to_install not in exists_clean:
-                return output(f"{__COMMAND__}: Unable to locate package {to_install}", pipe, success=False)
+            if to_install not in exists_clean or to_install in outstanding_packages:
+                print(f"Unable to locate package {to_install}")
+            else:
+                # Add the file to /usr/bin
+                current_file = File(to_install, "[BINARY DATA]", usr_bin, 0, 0)
+                usr_bin.add_file(current_file)
+                status_file.append(to_install, computer)
+                print(f"Successfully installed package {to_install}")
 
-        # Make sure /usr/bin and /var/lib/dpkg exists
-        find_usr_bin = computer.fs.find("/usr/bin")
-        find_usr_lib_dpkg_status = computer.fs.find("/var/lib/dpkg/status")
-        if not find_usr_bin.success or not find_usr_lib_dpkg_status.success:
-            # In reality, a snap error will occur but we don't have snap so just throw general error
-            return output(f"{__COMMAND__}: Failed to install packages, check /usr/bin and /var/lib/dpkg", pipe,
-                          success=False)
-
-        usr_bin: Directory = find_usr_bin.data
-        status_file: File = find_usr_lib_dpkg_status.data
-
-        for to_install in args[1:]:
-            # Add the file to /usr/bin
-            current_file = File(to_install, "[BINARY DATA]", usr_bin, 0, 0)
-            usr_bin.add_file(current_file)
-            status_file.append(to_install, computer)
-
-        return output(f"{__COMMAND__}: Successfully installed packages: {' '.join(args[1:])}", pipe)
+        return output("", pipe)
 
     elif args[0] == "remove":
         find_status_file = computer.fs.find("/var/lib/dpkg/status")

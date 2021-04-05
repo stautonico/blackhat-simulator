@@ -137,6 +137,7 @@ class Computer:
                 print(f"There was an error when running command: {command}")
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
+
     def set_hostname(self, hostname: str) -> SysCallStatus:
         """
         An easy function to update the hostname (also updates /etc/hostname)
@@ -816,7 +817,6 @@ class Router(Computer):
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
-
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)

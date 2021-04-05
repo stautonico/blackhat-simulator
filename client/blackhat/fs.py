@@ -393,7 +393,7 @@ class StandardFS:
             self.files.add_file(directory)
 
         # TODO: Replace all these with `mkdir -p` commands
-        # TODO: Create temporary root session to execute these commands
+        # NOTE: FS doesn't exist at this point so running commands might not be possible (since some commands need fs)
         # Individually setup each directory in the root
         self.setup_bin()
         self.setup_etc()
@@ -434,6 +434,7 @@ class StandardFS:
             <li>/etc/hostname - The hostname of the given `Computer`</li>
             <li>/etc/skel -  A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)</li>
             <li>/etc/sudoers - The file that contains all of the sudo permissions</li>
+            <li>/etc/apt/sources.list - Contains urls of apt repo servers</li>
         </ul>
 
         Returns:
@@ -475,6 +476,13 @@ class StandardFS:
         sudoers_file: File = File("sudoers", "root ALL=(ALL) ALL\n", etc_dir, 0, 0)
         sudoers_file.permissions = {"read": ["owner", "group"], "write": [], "execute": []}
         etc_dir.add_file(sudoers_file)
+
+        # /etc/apt/sources.list
+        apt_dir: Directory = Directory("apt", etc_dir, 0, 0)
+        etc_dir.add_file(apt_dir)
+
+        sources_file: File = File("sources.list", "", apt_dir, 0, 0)
+        apt_dir.add_file(sources_file)
 
     def setup_root(self) -> None:
         """

@@ -21,6 +21,22 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         env_value = split_args[1].replace("\"", "")
         env_value = env_value.replace("\'", "")
 
+        if env_value.startswith("$"):
+            env_value = computer.get_env(env_value.replace("$", ""))
+            if not env_value:
+                env_value = ""
+        else:
+            if ":" in env_value:
+                new_env_value = []
+                for val in env_value.split(":"):
+                    if val.startswith("$"):
+                        val = computer.get_env(val.replace("$", ""))
+                        if not val:
+                            val = ""
+                    new_env_value.append(val)
+
+                env_value = ":".join(new_env_value)
+
         computer.sessions[-1].env[split_args[0]] = env_value
 
     return output("", pipe)

@@ -4,6 +4,7 @@ import sys
 from getpass import getpass
 
 from blackhat.computer import Computer, Router, ISPRouter
+from blackhat.services.aptserver import AptServer
 from blackhat.services.sshserver import SSHServer
 from blackhat.services.webserver import WebServer
 from blackhat.session import Session
@@ -92,6 +93,11 @@ if not load_save_success:
 
         sudoers_file.content += "steve ALL=(ALL) ALL"
 
+        # Add `google.com` to our apt repos
+        apt_source_file = comp.fs.find("/etc/apt/sources.list").data
+
+        apt_source_file.content = "google.com\n"
+
         session = Session(1000, comp.fs.files, 0)
 
         # Tests for networking
@@ -133,16 +139,36 @@ if not load_save_success:
 
         lan2.services[2222] = SSHServer(lan2)
 
-        lan2.port_forwarding = {2222: lan2}
+        lan2.port_forwarding = {2222: lan2, 22: lan2_client2, 80: lan2_client2}
+
+        lan2_client2.services[80] = AptServer(lan2_client2)
+        lan2_client2.services[22] = SSHServer(lan2_client2)
+
+        # Create a temporary root session for initializing stuff
+        lan2_client2.sessions = [Session(0, lan2_client2.fs.files, 0)]
+
+        # Setup our apt server
+        # To setup an apt server, we need /var/www/html/repo
+        # And inside the /repo folder, we need a file with the name of each package that the given server has for download
+        # This example apt server has all the "installable" packages
+        lan2_client2.run_command("mkdir", ["/var/www/html/repo"], pipe=True)
+        lan2_client2.run_command("cd", ["/var/www/html/repo"], pipe=True)
+        for file in os.listdir("./blackhat/bin/installable"):
+            if file not in ["__init__.py", "__pycache__"]:
+                file = file.replace(".py", "")
+                lan2_client2.run_command("touch", [file], pipe=True)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
         comp.sessions = []
+        lan2_client2.sessions = []
 
         comp.sessions.append(session)
 
-        comp.update_passwd()
-        comp.update_groups()
+        for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
+            computer.update_passwd()
+            computer.update_groups()
+
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
 

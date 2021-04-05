@@ -1,7 +1,7 @@
-from ..lib.output import output
-from ..helpers import SysCallStatus, SysCallMessages
 from ..computer import Computer
 from ..fs import Directory
+from ..helpers import SysCallStatus
+from ..lib.output import output
 
 __COMMAND__ = "mkdir"
 __VERSION__ = "1.0.0"
@@ -14,6 +14,11 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     if "--version" in args:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
+    create_parent = False
+
+    if "-p" in args:
+        create_parent = True
+        args.remove("-p")
 
     for filename in args:
         new_filename = None
@@ -28,7 +33,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 # If this fails, we can assume that the directory the user entered is bad
                 if not result.success:
                     return output(f"{__COMMAND__}: cannot touch '{filename}': No such file or directory", pipe,
-                                        success=False)
+                                  success=False)
                 # Success!
                 new_filename = filename.split("/")[-1]
                 dir_to_write_to = result.data
