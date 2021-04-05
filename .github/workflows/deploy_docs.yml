@@ -22,6 +22,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=True client.blackhat --force
+          cp docs/ website/ -r
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@4.1.0
         with:
