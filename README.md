@@ -60,12 +60,29 @@
 
 [![Product Name Screen Shot][product-screenshot]](https://example.com)
 
-This game was inspired by the games [Grey Hack](https://store.steampowered.com/app/605230/Grey_Hack/), [Hacknet](https://store.steampowered.com/app/365450/Hacknet/), and [NITE Team 4](https://store.steampowered.com/app/544390/NITE_Team_4__Military_Hacking_Division/) on steam. I originally started this project in C++ because I wanted an easy way for the user to build and compile their own binaries, then run them within the game without creating a programming language from scratch. This was accomplished by compiling without standard libraries and using custom replacements that interact with the game instance instead of the actual machine they're running on. However, due to my lack of knowledge of C++ (and probably many other reasons), I hit a dead-end and put the project on pause for a while. I decided to re-start the project in python (without some features I originally wanted) because I am much more knowledgeable when it comes to python. Note that this software is still in very early stages and is subject to change.
+This game was inspired by the games [Grey Hack](https://store.steampowered.com/app/605230/Grey_Hack/)
+, [Hacknet](https://store.steampowered.com/app/365450/Hacknet/),
+and [NITE Team 4](https://store.steampowered.com/app/544390/NITE_Team_4__Military_Hacking_Division/) on steam. I
+originally started this project in C++ because I wanted an easy way for the user to build and compile their own
+binaries, then run them within the game without creating a programming language from scratch. This was accomplished by
+compiling without standard libraries and using custom replacements that interact with the game instance instead of the
+actual machine they're running on. However, due to my lack of knowledge of C++ (and probably many other reasons), I hit
+a dead-end and put the project on pause for a while. I decided to re-start the project in python (without some features
+I originally wanted) because I am much more knowledgeable when it comes to python. Note that this software is still in
+very early stages and is subject to change.
+<br />
+
+**Note**: Some of the games "implementations" are only loosely based on their real world counterpart for one or more of
+these reasons:
+
+1. I was too lazy / will come back to it later
+2. Since this is intended to be a simulator type game, some of these items might ruin the experience/won't be fun in a video game
+3. My knowledge of the given topic isn't sufficient to create an accurate "implementation" of the item.
 
 ### Built With
 
 * [Python3+](https://www.python.org/)
-* [PyGame](https://www.pygame.org/)
+* [PyGame (Not yet)](https://www.pygame.org/)
 * [SQLite(3)](https://www.sqlite.org/index.html)
 * [My Big Brain](https://blackhat.tautonico.tech/errors/404.html?ref=github)
 
@@ -73,7 +90,7 @@ This game was inspired by the games [Grey Hack](https://store.steampowered.com/a
 
 ## Getting Started
 
-This program was only tested on Linux (arch specificity), but hypothetically, it should work on Windows (🤞)
+This program was only tested on Linux (arch specifically), but hypothetically, it should work on Windows (🤞)
 
 ### Prerequisites
 
@@ -102,7 +119,8 @@ Python must be installed. All dependencies are listed in [`requirements.txt`](re
 
 <br>
 
-All "documentation" is generated through the use of docstrings (google format) and `pdoc3`. **To generate documentation:** 
+All "documentation" is generated through the use of docstrings (google format) and `pdoc3`. **To generate
+documentation:**
 
 ```shell
 pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=True client.blackhat
@@ -110,6 +128,27 @@ pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=
 
 If you have an issue with overwriting, you can add the `--force` tag, which will automatically overwrite any old files.
 
+
+
+<!-- ROAD MAP --->
+
+## Road Map
+
+**These are some features I have in mind (sorted by priority)**
+
+### Close 🔍
+
+Theres nothing here yet...🚧
+
+### Far 🔭
+
+- [ ] Multiplayer (This may be unlikely due to the fact that the "game" has many vulnerabilities that may allow the
+  players' system to be compromised in a multiplayer scenario, but this may change in the future.)
+
+- [ ] PyGame based UI (instead of terminal based game) (This is likely to occur, but isn't my top priority.)
+
+- [ ] Story (As of now, this project is closer to being a game framework then being an actual game. After the project's
+  functionality becomes more saturated, a single player "story" mode is likely to come to fruition.)
 
 <!-- CONTRIBUTING -->
 
