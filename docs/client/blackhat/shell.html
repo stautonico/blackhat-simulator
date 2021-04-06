@@ -52,12 +52,22 @@ class Shell:
         readline.set_completer(self.autocomplete)
 
     def autocomplete(self, text, state):
-        bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
+        try:
+            bin_dirs_text = self.computers[-1].sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
 
-        if bin_dir_result.success:
-            commands = list(bin_dir_result.data.files.keys())
-        else:
-            commands = []
+            for dir in bin_dirs_text:
+                find_dir = self.computers[-1].fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.computers[-1].fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+        commands = [x for sub in bin_dirs for x in list(sub.files.keys())]
 
         results = [x for x in commands if x.startswith(text)] + [None]
         return results[state]
@@ -270,11 +280,9 @@ class Shell:
                         # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                         # We don&#39;t need to re-write it
                         if special_character == &#34;&gt;&#34;:
-                            file_to_write.write(self.computers[-1].get_uid(),
-                                                message_to_write, self.computers[-1])
+                            file_to_write.write(message_to_write, self.computers[-1])
                         elif special_character == &#34;&gt;&gt;&#34;:
-                            file_to_write.append(self.computers[-1].get_uid(),
-                                                 message_to_write, self.computers[-1])
+                            file_to_write.append(message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -299,7 +307,7 @@ class Shell:
             if command:
                 for cmd in command.split(&#34;&amp;&amp;&#34;):
                     self.handle_command(cmd)
-                    
+
             self.prompt = self.generate_prompt()</code></pre>
 </details>
 </section>
@@ -346,12 +354,22 @@ This will be removed once the GUI is working</p>
         readline.set_completer(self.autocomplete)
 
     def autocomplete(self, text, state):
-        bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
+        try:
+            bin_dirs_text = self.computers[-1].sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
 
-        if bin_dir_result.success:
-            commands = list(bin_dir_result.data.files.keys())
-        else:
-            commands = []
+            for dir in bin_dirs_text:
+                find_dir = self.computers[-1].fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.computers[-1].fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+        commands = [x for sub in bin_dirs for x in list(sub.files.keys())]
 
         results = [x for x in commands if x.startswith(text)] + [None]
         return results[state]
@@ -564,11 +582,9 @@ This will be removed once the GUI is working</p>
                         # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                         # We don&#39;t need to re-write it
                         if special_character == &#34;&gt;&#34;:
-                            file_to_write.write(self.computers[-1].get_uid(),
-                                                message_to_write, self.computers[-1])
+                            file_to_write.write(message_to_write, self.computers[-1])
                         elif special_character == &#34;&gt;&gt;&#34;:
-                            file_to_write.append(self.computers[-1].get_uid(),
-                                                 message_to_write, self.computers[-1])
+                            file_to_write.append(message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -593,7 +609,7 @@ This will be removed once the GUI is working</p>
             if command:
                 for cmd in command.split(&#34;&amp;&amp;&#34;):
                     self.handle_command(cmd)
-                    
+
             self.prompt = self.generate_prompt()</code></pre>
 </details>
 <h3>Methods</h3>
@@ -608,12 +624,22 @@ This will be removed once the GUI is working</p>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def autocomplete(self, text, state):
-    bin_dir_result = self.computers[-1].fs.find(&#34;/bin&#34;)
+    try:
+        bin_dirs_text = self.computers[-1].sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+        bin_dirs = []
 
-    if bin_dir_result.success:
-        commands = list(bin_dir_result.data.files.keys())
-    else:
-        commands = []
+        for dir in bin_dirs_text:
+            find_dir = self.computers[-1].fs.find(dir)
+            if find_dir.success:
+                bin_dirs.append(find_dir.data)
+    except AttributeError:
+        find_bin = self.computers[-1].fs.find(&#34;/bin&#34;)
+        if find_bin.success:
+            bin_dirs = [find_bin.data]
+        else:
+            bin_dirs = []
+
+    commands = [x for sub in bin_dirs for x in list(sub.files.keys())]
 
     results = [x for x in commands if x.startswith(text)] + [None]
     return results[state]</code></pre>
@@ -802,11 +828,9 @@ Determine how to route input and output between commands</p>
                     # Since the rest of the code for the &gt; and &gt;&gt; is the same up until this point
                     # We don&#39;t need to re-write it
                     if special_character == &#34;&gt;&#34;:
-                        file_to_write.write(self.computers[-1].get_uid(),
-                                            message_to_write, self.computers[-1])
+                        file_to_write.write(message_to_write, self.computers[-1])
                     elif special_character == &#34;&gt;&gt;&#34;:
-                        file_to_write.append(self.computers[-1].get_uid(),
-                                             message_to_write, self.computers[-1])
+                        file_to_write.append(message_to_write, self.computers[-1])
 
                     prev_command_result = None
                 # Pass the input of the previous command to the current command
@@ -843,7 +867,7 @@ Determine how to route input and output between commands</p>
         if command:
             for cmd in command.split(&#34;&amp;&amp;&#34;):
                 self.handle_command(cmd)
-                
+
         self.prompt = self.generate_prompt()</code></pre>
 </details>
 </dd>

@@ -28,33 +28,48 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;load&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: Missing file to load&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        if not args.file.endswith(&#34;.save&#34;):
+            args.file += &#34;.save&#34;
 
-    if not args[0].endswith(&#34;.save&#34;):
-        args[0] += &#34;.save&#34;
-
-    try:
-        # Make sure the save location is readable
-        with open(args[0], &#34;r&#34;) as f:
-            # Open the toload file which the game will load from
-            with open(&#34;toload&#34;, &#34;w&#34;) as load:
-                # Write the filename to load from
-                # The client checks if the &#39;toload&#39; file has content which determines if we should load a game save or not
-                load.write(args[0])
-        return output(f&#34;Successfully loaded {args[0]}. Please restart the game to load the save&#34;, pipe)
-    except Exception as e:
-        return output(f&#34;{__COMMAND__}: Failed to load save: {args[0]}&#34;, pipe, success=False)</code></pre>
+        try:
+            # Make sure the save location is readable
+            with open(args.file, &#34;r&#34;) as f:
+                # Open the toload file which the game will load from
+                with open(&#34;toload&#34;, &#34;w&#34;) as load:
+                    # Write the filename to load from
+                    # The client checks if the &#39;toload&#39; file has content which determines if we should load a game save or not
+                    load.write(args.file)
+            return output(f&#34;Successfully loaded {args.file}. Please restart the game to load the save&#34;, pipe)
+        except Exception as e:
+            return output(f&#34;{__COMMAND__}: Failed to load save: {args.file}&#34;, pipe, success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -68,32 +83,46 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: Missing file to load&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        if not args.file.endswith(&#34;.save&#34;):
+            args.file += &#34;.save&#34;
 
-    if not args[0].endswith(&#34;.save&#34;):
-        args[0] += &#34;.save&#34;
-
-    try:
-        # Make sure the save location is readable
-        with open(args[0], &#34;r&#34;) as f:
-            # Open the toload file which the game will load from
-            with open(&#34;toload&#34;, &#34;w&#34;) as load:
-                # Write the filename to load from
-                # The client checks if the &#39;toload&#39; file has content which determines if we should load a game save or not
-                load.write(args[0])
-        return output(f&#34;Successfully loaded {args[0]}. Please restart the game to load the save&#34;, pipe)
-    except Exception as e:
-        return output(f&#34;{__COMMAND__}: Failed to load save: {args[0]}&#34;, pipe, success=False)</code></pre>
+        try:
+            # Make sure the save location is readable
+            with open(args.file, &#34;r&#34;) as f:
+                # Open the toload file which the game will load from
+                with open(&#34;toload&#34;, &#34;w&#34;) as load:
+                    # Write the filename to load from
+                    # The client checks if the &#39;toload&#39; file has content which determines if we should load a game save or not
+                    load.write(args.file)
+            return output(f&#34;Successfully loaded {args.file}. Please restart the game to load the save&#34;, pipe)
+        except Exception as e:
+            return output(f&#34;{__COMMAND__}: Failed to load save: {args.file}&#34;, pipe, success=False)</code></pre>
 </details>
 </dd>
 </dl>

@@ -825,7 +825,7 @@ class Router(Computer):
                     # We found the other router
                     # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
                     if not port:
-                        return SysCallStatus(success=True, data=wan_client)
+                        return SysCallStatus(success=True, data=wan_client.data)
                     else:
                         # If there is a port, we want to ask the external router for the client behind that port
                         # We can ask that router directly
@@ -947,7 +947,7 @@ class ISPRouter(Router):
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         &#34;&#34;&#34;
         while True:
-            ip = &#34;.&#34;.join([str(randint(1, 256)) for _ in range(4)])
+            ip = &#34;.&#34;.join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
             if ip not in self.used_ips:
                 self.used_ips.append(ip)
                 return SysCallStatus(success=True, data=ip)
@@ -2937,7 +2937,7 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         &#34;&#34;&#34;
         while True:
-            ip = &#34;.&#34;.join([str(randint(1, 256)) for _ in range(4)])
+            ip = &#34;.&#34;.join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
             if ip not in self.used_ips:
                 self.used_ips.append(ip)
                 return SysCallStatus(success=True, data=ip)
@@ -3160,7 +3160,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
         SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
     &#34;&#34;&#34;
     while True:
-        ip = &#34;.&#34;.join([str(randint(1, 256)) for _ in range(4)])
+        ip = &#34;.&#34;.join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
         if ip not in self.used_ips:
             self.used_ips.append(ip)
             return SysCallStatus(success=True, data=ip)</code></pre>
@@ -3460,7 +3460,7 @@ This class represents what a real router would be in real life</p></div>
                     # We found the other router
                     # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
                     if not port:
-                        return SysCallStatus(success=True, data=wan_client)
+                        return SysCallStatus(success=True, data=wan_client.data)
                     else:
                         # If there is a port, we want to ask the external router for the client behind that port
                         # We can ask that router directly
@@ -3761,7 +3761,7 @@ ask the <code><a title="client.blackhat.computer.ISPRouter" href="#client.blackh
                 # We found the other router
                 # If there&#39;s no port, we&#39;re done (we wanted the router not a host behind the router)
                 if not port:
-                    return SysCallStatus(success=True, data=wan_client)
+                    return SysCallStatus(success=True, data=wan_client.data)
                 else:
                     # If there is a port, we want to ask the external router for the client behind that port
                     # We can ask that router directly

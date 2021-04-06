@@ -28,27 +28,55 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;dig&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;domains&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, &#34;-v&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: A domain name is required&#34;, pipe, success=False)
+    args = parser.parse_args(args)
 
-    domain_name = args[0]
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;DiG (blackhat netutils) {__VERSION__}&#34;, pipe)
 
-    result = computer.parent.resolve_dns(domain_name)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if not result.success:
-        result.data = &#34;&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
 
-    return output(f&#34;{domain_name}   A  {result.data}&#34;, pipe)</code></pre>
+        # Find the longest domain name (for formatting)
+        longest_domain = len(max(args.domains, key=len))
+
+        for domain in args.domains:
+            result = computer.parent.resolve_dns(domain)
+
+            if len(domain) == longest_domain:
+                output_text += f&#34;{domain}   A  &#34;
+            else:
+                # Space difference allows the &#34;A  &lt;IP_ADDRESS&#34; to be aligned nicely
+                space_difference = longest_domain - len(domain) + 3
+                output_text += f&#34;{domain}{&#39; &#39; * space_difference}A  &#34;
+
+            if not result.success:
+                output_text += f&#34;  \n&#34;
+            else:
+                output_text += f&#34;  {result.data}\n&#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -62,26 +90,53 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;domains&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, &#34;-v&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: A domain name is required&#34;, pipe, success=False)
+    args = parser.parse_args(args)
 
-    domain_name = args[0]
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;DiG (blackhat netutils) {__VERSION__}&#34;, pipe)
 
-    result = computer.parent.resolve_dns(domain_name)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if not result.success:
-        result.data = &#34;&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
 
-    return output(f&#34;{domain_name}   A  {result.data}&#34;, pipe)</code></pre>
+        # Find the longest domain name (for formatting)
+        longest_domain = len(max(args.domains, key=len))
+
+        for domain in args.domains:
+            result = computer.parent.resolve_dns(domain)
+
+            if len(domain) == longest_domain:
+                output_text += f&#34;{domain}   A  &#34;
+            else:
+                # Space difference allows the &#34;A  &lt;IP_ADDRESS&#34; to be aligned nicely
+                space_difference = longest_domain - len(domain) + 3
+                output_text += f&#34;{domain}{&#39; &#39; * space_difference}A  &#34;
+
+            if not result.success:
+                output_text += f&#34;  \n&#34;
+            else:
+                output_text += f&#34;  {result.data}\n&#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </dd>
 </dl>

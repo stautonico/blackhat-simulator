@@ -28,33 +28,39 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;users&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Slightly different from the standard linux command with the same name
     This command displays all users that exist in the system
-
-    Args:
-        computer:
-        args:
-        pipe:
-
-    Returns:
-
     &#34;&#34;&#34;
-    if &#34;--version&#34; in args:
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    output_text = &#34;&#34;
-    for user in computer.get_all_users().data:
-        output_text += f&#34;{user.username} &#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
+        for user in computer.get_all_users().data:
+            output_text += f&#34;{user.username} &#34;
 
-    return output(output_text, pipe)</code></pre>
+        return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -69,12 +75,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 </code></dt>
 <dd>
 <div class="desc"><p>Slightly different from the standard linux command with the same name
-This command displays all users that exist in the system</p>
-<h2 id="args">Args</h2>
-<p>computer:
-args:
-pipe:
-Returns:</p></div>
+This command displays all users that exist in the system</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -83,23 +84,28 @@ Returns:</p></div>
     &#34;&#34;&#34;
     Slightly different from the standard linux command with the same name
     This command displays all users that exist in the system
-
-    Args:
-        computer:
-        args:
-        pipe:
-
-    Returns:
-
     &#34;&#34;&#34;
-    if &#34;--version&#34; in args:
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    output_text = &#34;&#34;
-    for user in computer.get_all_users().data:
-        output_text += f&#34;{user.username} &#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
+        for user in computer.get_all_users().data:
+            output_text += f&#34;{user.username} &#34;
 
-    return output(output_text, pipe)</code></pre>
+        return output(output_text, pipe)</code></pre>
 </details>
 </dd>
 </dl>

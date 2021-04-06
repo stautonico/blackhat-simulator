@@ -26,76 +26,71 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from .cp import copy
-from ..computer import Computer
+<pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
+from .cp import copy
 
 __COMMAND__ = &#34;mv&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) &lt; 2:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;source&#34;)
+    parser.add_argument(&#34;destination&#34;)
+    parser.add_argument(&#34;-v&#34;, &#34;--verbose&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    recursive = False
-    preserve_permissions = False
-    verbose = False
-
-    if &#34;-r&#34; in args:
-        recursive = True
-        args.remove(&#34;-r&#34;)
-
-    if &#34;-p&#34; in args:
-        preserve_permissions = True
-        args.remove(&#34;-p&#34;)
-
-    if &#34;-v&#34; in args:
-        verbose = True
-        args.remove(&#34;-v&#34;)
-
-    src = args[0]
-    dst = args[1]
-
-    src_result = computer.fs.find(src)
-
-    if not src_result.success:
-        return output(f&#34;{__COMMAND__}: cannot find &#39;{src}&#39;: No such file or directory&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        if src_result.data.is_directory() and not recursive:
-            return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{src}&#39;&#34;, pipe, success=False)
+        src_result = computer.fs.find(args.source)
+
+        if not src_result.success:
+            return output(f&#34;{__COMMAND__}: cannot find &#39;{args.source}&#39;: No such file or directory&#34;, pipe, success=False)
         else:
             # Make sure we have proper permissions before copying
             if src_result.data.check_perm(&#34;read&#34;, computer).success and src_result.data.check_perm(
                     &#34;write&#34;, computer).success:
-                copy_result = copy(computer, src_result.data, dst, preserve_permissions, verbose)
+                copy_result = copy(computer, src_result.data, args.destination, True, args.verbose)
 
                 if not copy_result.success:
                     if copy_result.message == SysCallMessages.NOT_FOUND:
-                        return output(f&#34;{__COMMAND__}: cannot find &#39;{dst}&#39;: No such file or directory&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.GENERIC:
-                        return output(f&#34;{__COMMAND__}: invalid destination &#39;{dst}&#39;&#34;, pipe, success=False)
+                        return output(f&#34;{__COMMAND__}: invalid destination &#39;{args.destination}&#39;&#34;, pipe, success=False)
                     elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{src}&#39; for reading: Permission denied&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{dst} for writing: Permission denied&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.destination} for writing: Permission denied&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
-                        return output(f&#34;{__COMMAND__}: cannot write &#39;{dst}: Directory already exists&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;, pipe,
                                       success=False)
                 else:
-                    computer.run_command(&#34;rm&#34;, [src, &#34;-r&#34;], pipe)
-                    if verbose:
-                        print(f&#34;{src} -&gt; {dst}&#34;)
+                    computer.run_command(&#34;rm&#34;, [args.source, &#34;-r&#34;], pipe)
+                    if args.verbose:
+                        print(f&#34;{args.source} -&gt; {args.destination}&#34;)
                     return output(&#34;&#34;, pipe)
             else:
-                return output(f&#34;{__COMMAND__}: cannot open &#39;{src}&#39;: Permission denied&#34;, pipe, success=False)</code></pre>
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39;: Permission denied&#34;, pipe, success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -109,72 +104,66 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) &lt; 2:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;source&#34;)
+    parser.add_argument(&#34;destination&#34;)
+    parser.add_argument(&#34;-v&#34;, &#34;--verbose&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    recursive = False
-    preserve_permissions = False
-    verbose = False
-
-    if &#34;-r&#34; in args:
-        recursive = True
-        args.remove(&#34;-r&#34;)
-
-    if &#34;-p&#34; in args:
-        preserve_permissions = True
-        args.remove(&#34;-p&#34;)
-
-    if &#34;-v&#34; in args:
-        verbose = True
-        args.remove(&#34;-v&#34;)
-
-    src = args[0]
-    dst = args[1]
-
-    src_result = computer.fs.find(src)
-
-    if not src_result.success:
-        return output(f&#34;{__COMMAND__}: cannot find &#39;{src}&#39;: No such file or directory&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        if src_result.data.is_directory() and not recursive:
-            return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{src}&#39;&#34;, pipe, success=False)
+        src_result = computer.fs.find(args.source)
+
+        if not src_result.success:
+            return output(f&#34;{__COMMAND__}: cannot find &#39;{args.source}&#39;: No such file or directory&#34;, pipe, success=False)
         else:
             # Make sure we have proper permissions before copying
             if src_result.data.check_perm(&#34;read&#34;, computer).success and src_result.data.check_perm(
                     &#34;write&#34;, computer).success:
-                copy_result = copy(computer, src_result.data, dst, preserve_permissions, verbose)
+                copy_result = copy(computer, src_result.data, args.destination, True, args.verbose)
 
                 if not copy_result.success:
                     if copy_result.message == SysCallMessages.NOT_FOUND:
-                        return output(f&#34;{__COMMAND__}: cannot find &#39;{dst}&#39;: No such file or directory&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.GENERIC:
-                        return output(f&#34;{__COMMAND__}: invalid destination &#39;{dst}&#39;&#34;, pipe, success=False)
+                        return output(f&#34;{__COMMAND__}: invalid destination &#39;{args.destination}&#39;&#34;, pipe, success=False)
                     elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{src}&#39; for reading: Permission denied&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{dst} for writing: Permission denied&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.destination} for writing: Permission denied&#34;, pipe,
                                       success=False)
                     elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
-                        return output(f&#34;{__COMMAND__}: cannot write &#39;{dst}: Directory already exists&#34;, pipe,
+                        return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;, pipe,
                                       success=False)
                 else:
-                    computer.run_command(&#34;rm&#34;, [src, &#34;-r&#34;], pipe)
-                    if verbose:
-                        print(f&#34;{src} -&gt; {dst}&#34;)
+                    computer.run_command(&#34;rm&#34;, [args.source, &#34;-r&#34;], pipe)
+                    if args.verbose:
+                        print(f&#34;{args.source} -&gt; {args.destination}&#34;)
                     return output(&#34;&#34;, pipe)
             else:
-                return output(f&#34;{__COMMAND__}: cannot open &#39;{src}&#39;: Permission denied&#34;, pipe, success=False)</code></pre>
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39;: Permission denied&#34;, pipe, success=False)</code></pre>
 </details>
 </dd>
 </dl>

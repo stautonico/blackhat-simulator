@@ -31,38 +31,53 @@
 from ..computer import Computer
 from ..fs import File
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;sha1sum&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    find_file_result = computer.fs.find(args[0])
-    if not find_file_result.success:
-        output_text = f&#34;{sha1(&#39; &#39;.join(args).encode()).hexdigest()}  -&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
         output_text = &#34;&#34;
-        for arg in args:
-            find_file_result = computer.fs.find(args[0])
+
+        for filename in args.files:
+            find_file_result = computer.fs.find(filename)
             if not find_file_result.success:
-                output_text += f&#34;{__COMMAND__}: {arg}: No such file or directory\n&#34;
+                output_text += f&#34;{filename}: No such file or directory\n&#34;
             else:
                 file: File = find_file_result.data
                 if file.is_directory():
-                    output_text += f&#34;{__COMMAND__}: {arg}: Is a directory\n&#34;
+                    output_text += f&#34;{filename}: Is a directory\n&#34;
                 else:
                     # We need read perms!
                     if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{__COMMAND__}: {arg}: Permission denied\n&#34;
+                        output_text += f&#34;{filename}: Permission denied\n&#34;
                     else:
                         hash = sha1(file.content.encode()).hexdigest()
-                        output_text += f&#34;{hash}  {arg}\n&#34;
-        output_text = output_text[:-1]
-    return output(output_text, pipe)</code></pre>
+                        output_text += f&#34;{hash}  {filename}\n&#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -76,37 +91,51 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    find_file_result = computer.fs.find(args[0])
-    if not find_file_result.success:
-        output_text = f&#34;{sha1(&#39; &#39;.join(args).encode()).hexdigest()}  -&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
         output_text = &#34;&#34;
-        for arg in args:
-            find_file_result = computer.fs.find(args[0])
+
+        for filename in args.files:
+            find_file_result = computer.fs.find(filename)
             if not find_file_result.success:
-                output_text += f&#34;{__COMMAND__}: {arg}: No such file or directory\n&#34;
+                output_text += f&#34;{filename}: No such file or directory\n&#34;
             else:
                 file: File = find_file_result.data
                 if file.is_directory():
-                    output_text += f&#34;{__COMMAND__}: {arg}: Is a directory\n&#34;
+                    output_text += f&#34;{filename}: Is a directory\n&#34;
                 else:
                     # We need read perms!
                     if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{__COMMAND__}: {arg}: Permission denied\n&#34;
+                        output_text += f&#34;{filename}: Permission denied\n&#34;
                     else:
                         hash = sha1(file.content.encode()).hexdigest()
-                        output_text += f&#34;{hash}  {arg}\n&#34;
-        output_text = output_text[:-1]
-    return output(output_text, pipe)</code></pre>
+                        output_text += f&#34;{hash}  {filename}\n&#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </dd>
 </dl>

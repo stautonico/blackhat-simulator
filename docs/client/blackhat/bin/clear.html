@@ -28,24 +28,41 @@
 </summary>
 <pre><code class="python">from os import system as syscall
 from platform import system
+
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;clear&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if system() == &#34;Windows&#34;:
-        syscall(&#34;cls&#34;)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        syscall(&#34;clear&#34;)
+        if system() == &#34;Windows&#34;:
+            syscall(&#34;cls&#34;)
+        else:
+            syscall(&#34;clear&#34;)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -59,21 +76,36 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if system() == &#34;Windows&#34;:
-        syscall(&#34;cls&#34;)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        syscall(&#34;clear&#34;)
+        if system() == &#34;Windows&#34;:
+            syscall(&#34;cls&#34;)
+        else:
+            syscall(&#34;clear&#34;)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </dd>
 </dl>

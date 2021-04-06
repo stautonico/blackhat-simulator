@@ -31,118 +31,128 @@
 from ..computer import Computer
 from ..fs import File, Directory
 from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;apt&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: an argument is required&#34;, pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;command&#34;)
+    parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    if computer.get_uid() != 0:
-        return output(f&#34;{__COMMAND__}: Unable to acquire the dpkg lock (/var/lib/dpkg), are you root?&#34;, pipe,
-                      success=False)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if args[0] == &#34;install&#34;:
-        if len(args) &lt; 2:
-            return output(f&#34;{__COMMAND__}: operation &#39;install&#39; requires an argument&#34;, pipe, success=False)
-        # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
-        find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
-        find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-        find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
-        if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
-            # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
-            return output(f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
-                          pipe,
-                          success=False)
+        if not args.version and not args.command and not args.packages:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False,
+                          success_message=SysCallMessages.MISSING_ARGUMENT)
 
-        usr_bin: Directory = find_usr_bin.data
-        status_file: File = find_usr_lib_dpkg_status.data
-        sources_file: File = find_apt_sources.data
-
-        # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
-        servers = sources_file.content.split(&#34;\n&#34;)
-
-        while &#34;&#34; in servers:
-            servers.remove(&#34;&#34;)
-
-        outstanding_packages = args[1:]
-
-        for server in servers:
-            split_server = server.split(&#34;:&#34;)
-            if len(split_server) == 1:
-                port = 80
-            else:
-                port = split_server[1]
-
-            host = split_server[0]
-
-            ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
-            if ask_server_result.success:
-                if ask_server_result.data.get(&#34;have&#34;):
-                    for package in ask_server_result.data.get(&#34;have&#34;):
-                        if package in outstanding_packages:
-                            outstanding_packages.remove(package)
-
-
-        # Check if the package we&#39;re trying to install exists
-        exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
-        exists_clean = []
-        for file in exists_dirty:
-            if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
-                exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
-
-        # We want to install only the packages that we found (not outstanding)
-        for to_install in args[1:]:
-            if to_install not in exists_clean or to_install in outstanding_packages:
-                print(f&#34;Unable to locate package {to_install}&#34;)
-            else:
-                # Add the file to /usr/bin
-                current_file = File(to_install, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
-                usr_bin.add_file(current_file)
-                status_file.append(to_install, computer)
-                print(f&#34;Successfully installed package {to_install}&#34;)
-
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output(&#34;&#34;, pipe)
-
-    elif args[0] == &#34;remove&#34;:
-        find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-        if not find_status_file.success:
-            return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-        status_file = find_status_file.data
-
-        read_status = status_file.read(computer)
-
-        if not read_status.success:
-            return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-        installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
-
-        # Make sure all the packages we&#39;re trying to remove are actually installed
-        for to_remove in args[1:]:
-            if to_remove not in installed_packages:
-                return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
-                              success=False)
-
-        for to_remove in args[1:]:
-            computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
-            installed_packages.remove(to_remove)
-
-        # Update the content of /var/lib/dpkg/status
-        status_file.write(&#34;\n&#34;.join(installed_packages), computer)
-
-        return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args[1:])}&#34;, pipe)
-
-
     else:
-        return output(f&#34;{__COMMAND__}: invalid operation: {args[0]}&#34;, pipe, success=False)</code></pre>
+        if args.command == &#34;install&#34;:
+            # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
+            find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
+            find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+            find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
+            if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
+                # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
+                return output(
+                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
+                    pipe,
+                    success=False)
+
+            usr_bin: Directory = find_usr_bin.data
+            status_file: File = find_usr_lib_dpkg_status.data
+            sources_file: File = find_apt_sources.data
+
+            # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
+            servers = sources_file.content.split(&#34;\n&#34;)
+
+            while &#34;&#34; in servers:
+                servers.remove(&#34;&#34;)
+
+            outstanding_packages = args.packages.copy()
+
+            for server in servers:
+                split_server = server.split(&#34;:&#34;)
+                if len(split_server) == 1:
+                    port = 80
+                else:
+                    port = split_server[1]
+
+                host = split_server[0]
+
+                ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
+                if ask_server_result.success:
+                    if ask_server_result.data.get(&#34;have&#34;):
+                        for package in ask_server_result.data.get(&#34;have&#34;):
+                            if package in outstanding_packages:
+                                outstanding_packages.remove(package)
+
+            # Check if the package we&#39;re trying to install exists
+            exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
+            exists_clean = []
+            for file in exists_dirty:
+                if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
+                    exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
+
+            # We want to install only the packages that we found (not outstanding)
+            for to_install in args.packages:
+                if to_install not in exists_clean or to_install in outstanding_packages:
+                    print(f&#34;Unable to locate package {to_install}&#34;)
+                else:
+                    # Add the file to /usr/bin
+                    current_file = File(to_install, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
+                    usr_bin.add_file(current_file)
+                    status_file.append(to_install, computer)
+                    print(f&#34;Successfully installed package {to_install}&#34;)
+
+            return output(&#34;&#34;, pipe)
+
+        elif args.command == &#34;remove&#34;:
+            find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+            if not find_status_file.success:
+                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+
+            status_file = find_status_file.data
+
+            read_status = status_file.read(computer)
+
+            if not read_status.success:
+                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+
+            installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
+
+            # Make sure all the packages we&#39;re trying to remove are actually installed
+            for to_remove in args.packages:
+                if to_remove not in installed_packages:
+                    return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
+                                  success=False)
+
+            for to_remove in args.packages:
+                computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                installed_packages.remove(to_remove)
+
+            # Update the content of /var/lib/dpkg/status
+            status_file.write(&#34;\n&#34;.join(installed_packages), computer)
+
+            return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
+
+
+        else:
+            return output(f&#34;{__COMMAND__}: invalid operation: {args.command}&#34;, pipe, success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -156,117 +166,126 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: an argument is required&#34;, pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;command&#34;)
+    parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    if computer.get_uid() != 0:
-        return output(f&#34;{__COMMAND__}: Unable to acquire the dpkg lock (/var/lib/dpkg), are you root?&#34;, pipe,
-                      success=False)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if args[0] == &#34;install&#34;:
-        if len(args) &lt; 2:
-            return output(f&#34;{__COMMAND__}: operation &#39;install&#39; requires an argument&#34;, pipe, success=False)
-        # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
-        find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
-        find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-        find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
-        if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
-            # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
-            return output(f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
-                          pipe,
-                          success=False)
+        if not args.version and not args.command and not args.packages:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False,
+                          success_message=SysCallMessages.MISSING_ARGUMENT)
 
-        usr_bin: Directory = find_usr_bin.data
-        status_file: File = find_usr_lib_dpkg_status.data
-        sources_file: File = find_apt_sources.data
-
-        # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
-        servers = sources_file.content.split(&#34;\n&#34;)
-
-        while &#34;&#34; in servers:
-            servers.remove(&#34;&#34;)
-
-        outstanding_packages = args[1:]
-
-        for server in servers:
-            split_server = server.split(&#34;:&#34;)
-            if len(split_server) == 1:
-                port = 80
-            else:
-                port = split_server[1]
-
-            host = split_server[0]
-
-            ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
-            if ask_server_result.success:
-                if ask_server_result.data.get(&#34;have&#34;):
-                    for package in ask_server_result.data.get(&#34;have&#34;):
-                        if package in outstanding_packages:
-                            outstanding_packages.remove(package)
-
-
-        # Check if the package we&#39;re trying to install exists
-        exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
-        exists_clean = []
-        for file in exists_dirty:
-            if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
-                exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
-
-        # We want to install only the packages that we found (not outstanding)
-        for to_install in args[1:]:
-            if to_install not in exists_clean or to_install in outstanding_packages:
-                print(f&#34;Unable to locate package {to_install}&#34;)
-            else:
-                # Add the file to /usr/bin
-                current_file = File(to_install, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
-                usr_bin.add_file(current_file)
-                status_file.append(to_install, computer)
-                print(f&#34;Successfully installed package {to_install}&#34;)
-
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output(&#34;&#34;, pipe)
-
-    elif args[0] == &#34;remove&#34;:
-        find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-        if not find_status_file.success:
-            return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-        status_file = find_status_file.data
-
-        read_status = status_file.read(computer)
-
-        if not read_status.success:
-            return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-        installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
-
-        # Make sure all the packages we&#39;re trying to remove are actually installed
-        for to_remove in args[1:]:
-            if to_remove not in installed_packages:
-                return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
-                              success=False)
-
-        for to_remove in args[1:]:
-            computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
-            installed_packages.remove(to_remove)
-
-        # Update the content of /var/lib/dpkg/status
-        status_file.write(&#34;\n&#34;.join(installed_packages), computer)
-
-        return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args[1:])}&#34;, pipe)
-
-
     else:
-        return output(f&#34;{__COMMAND__}: invalid operation: {args[0]}&#34;, pipe, success=False)</code></pre>
+        if args.command == &#34;install&#34;:
+            # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
+            find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
+            find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+            find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
+            if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
+                # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
+                return output(
+                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
+                    pipe,
+                    success=False)
+
+            usr_bin: Directory = find_usr_bin.data
+            status_file: File = find_usr_lib_dpkg_status.data
+            sources_file: File = find_apt_sources.data
+
+            # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
+            servers = sources_file.content.split(&#34;\n&#34;)
+
+            while &#34;&#34; in servers:
+                servers.remove(&#34;&#34;)
+
+            outstanding_packages = args.packages.copy()
+
+            for server in servers:
+                split_server = server.split(&#34;:&#34;)
+                if len(split_server) == 1:
+                    port = 80
+                else:
+                    port = split_server[1]
+
+                host = split_server[0]
+
+                ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
+                if ask_server_result.success:
+                    if ask_server_result.data.get(&#34;have&#34;):
+                        for package in ask_server_result.data.get(&#34;have&#34;):
+                            if package in outstanding_packages:
+                                outstanding_packages.remove(package)
+
+            # Check if the package we&#39;re trying to install exists
+            exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
+            exists_clean = []
+            for file in exists_dirty:
+                if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
+                    exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
+
+            # We want to install only the packages that we found (not outstanding)
+            for to_install in args.packages:
+                if to_install not in exists_clean or to_install in outstanding_packages:
+                    print(f&#34;Unable to locate package {to_install}&#34;)
+                else:
+                    # Add the file to /usr/bin
+                    current_file = File(to_install, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
+                    usr_bin.add_file(current_file)
+                    status_file.append(to_install, computer)
+                    print(f&#34;Successfully installed package {to_install}&#34;)
+
+            return output(&#34;&#34;, pipe)
+
+        elif args.command == &#34;remove&#34;:
+            find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+            if not find_status_file.success:
+                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+
+            status_file = find_status_file.data
+
+            read_status = status_file.read(computer)
+
+            if not read_status.success:
+                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+
+            installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
+
+            # Make sure all the packages we&#39;re trying to remove are actually installed
+            for to_remove in args.packages:
+                if to_remove not in installed_packages:
+                    return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
+                                  success=False)
+
+            for to_remove in args.packages:
+                computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                installed_packages.remove(to_remove)
+
+            # Update the content of /var/lib/dpkg/status
+            status_file.write(&#34;\n&#34;.join(installed_packages), computer)
+
+            return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
+
+
+        else:
+            return output(f&#34;{__COMMAND__}: invalid operation: {args.command}&#34;, pipe, success=False)</code></pre>
 </details>
 </dd>
 </dl>

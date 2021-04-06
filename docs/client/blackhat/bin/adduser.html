@@ -26,162 +26,159 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from getpass import getpass
-
-from ..computer import Computer
-from ..fs import Directory
+<pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..fs import Directory
+from ..lib.input import ArgParser
 from ..lib.output import output
+from getpass import getpass
 
 __COMMAND__ = &#34;adduser&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;username&#34;)
+    parser.add_argument(&#34;-p&#34;, dest=&#34;password&#34;)
+    parser.add_argument(&#34;-n&#34;, dest=&#34;noninteractive&#34;, action=&#34;store_false&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    # Only root can add new users
-    if computer.get_uid() != 0:
-        return output(f&#34;{__COMMAND__}: Only root may add a user or group to the system.&#34;, pipe, success=False)
+    args = parser.parse_args(args)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: a username is required&#34;, pipe, success=False)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    password = None
-    interactive = True
+        if not args.version and not args.username:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    # Check for non-interactive arg
-    if &#34;-n&#34; in args:
-        interactive = False
-        args.remove(&#34;-n&#34;)
-        # Make sure that the user specified -p with -n (a password is required for non-interactive mode)
-        if &#34;-p&#34; not in args:
-            return output(f&#34;{__COMMAND__}: -p must be used with -n&#34;, pipe, success=False)
-
-    if &#34;-p&#34; in args:
-        try:
-            password = args[args.index(&#34;-p&#34;) + 1]
-            # Remove the flag and arg from the args to prevent &#39;user -p does not exist&#39;
-            args.remove(&#34;-p&#34;)
-            args.remove(password)
-        except IndexError:
-            return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
-
-    if computer.find_user(username=args[0]).success:
-        return output(f&#34;{__COMMAND__}: The user &#39;{args[0]}&#39; already exists.&#34;, pipe, success=False)
-
-    prev_uid = computer.get_all_users().data[-1].uid
-
-    if prev_uid == 0:
-        next_uid = 1000
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        next_uid = prev_uid + 1
 
-    if not password:
-        if interactive:
-            print(f&#34;Adding user &#39;{args[0]}&#39; ...&#34;)
-            print(f&#34;Adding new group &#39;{args[0]}&#39; ({next_uid}) ...&#34;)
-            print(f&#34;Adding new user &#39;{args[0]}&#39; ({next_uid}) with group &#39;{args[0]}&#39; ...&#34;)
-            print(f&#34;Creating home directory &#39;/home/{args[0]}&#39; ...&#34;)
-            print(f&#34;Copying files from &#39;/etc/skel&#39; ...&#34;)
+        if computer.find_user(username=args.username).success:
+            return output(f&#34;{__COMMAND__}: The user &#39;{args.username}&#39; already exists.&#34;, pipe, success=False)
 
-        # Loop to try to get new password
-        for _ in range(3):
-            password = getpass(&#34;Enter new UNIX password: &#34;)
-            retype_new_password = getpass(&#34;Retype new UNIX password: &#34;)
+        prev_uid = computer.get_all_users().data[-1].uid
 
-            if password != retype_new_password:
-                print(&#34;Sorry, passwords do not match.&#34;)
-                try_again = input(&#34;Try again? [y/N] &#34;)
-                if try_again != &#34;y&#34;:
-                    return output(&#34;&#34;, pipe, success=False)
-            else:
-                break
-        # Fails password auth 3 times
+        if prev_uid == 0:
+            next_uid = 1000
         else:
-            # Quit
-            return output(&#34;&#34;, pipe)
+            next_uid = prev_uid + 1
 
-    user_result = computer.add_user(args[0], password)
-    group_result = computer.add_group(args[0])
-    # Find the user object and its its group to the new group
-    computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
+        if not args.password:
+            if args.noninteractive:
+                print(f&#34;Adding user &#39;{args.username}&#39; ...&#34;)
+                print(f&#34;Adding new group &#39;{args.username}&#39; ({next_uid}) ...&#34;)
+                print(f&#34;Adding new user &#39;{args.username}&#39; ({next_uid}) with group &#39;{args.username}&#39; ...&#34;)
+                print(f&#34;Creating home directory &#39;/home/{args.username}&#39; ...&#34;)
+                print(f&#34;Copying files from &#39;/etc/skel&#39; ...&#34;)
 
-    update_passwd_result = computer.update_passwd()
-    update_group_result = computer.update_groups()
+                # Loop to try to get new password
+                for _ in range(3):
+                    password = getpass(&#34;Enter new UNIX password: &#34;)
+                    retype_new_password = getpass(&#34;Retype new UNIX password: &#34;)
 
-    if not update_passwd_result.success:
-        return output(&#34;passwd: Failed to update password&#34;, pipe, success=False)
+                    if password != retype_new_password:
+                        print(&#34;Sorry, passwords do not match.&#34;)
+                        try_again = input(&#34;Try again? [y/N] &#34;)
+                        if try_again != &#34;y&#34;:
+                            return output(&#34;&#34;, pipe, success=False)
+                    else:
+                        break
+                # Fails password auth 3 times
+                else:
+                    # Quit
+                    return output(&#34;&#34;, pipe)
+            else:
+                password = &#34;&#34;
+        else:
+            password = args.password
 
-    if not update_group_result.success:
-        return output(f&#34;passwd: Failed to update groups&#34;, pipe, success=False)
+        user_result = computer.add_user(args.username, password)
+        group_result = computer.add_group(args.username)
+        # Find the user object and its its group to the new group
+        computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
 
-    # Create the users home directory (from /etc/skel)
+        update_passwd_result = computer.update_passwd()
+        update_group_result = computer.update_groups()
 
-    home_folder_find = computer.fs.find(&#34;/home&#34;)
-    skel_dir_find = computer.fs.find(&#34;/etc/skel&#34;)
+        if not update_passwd_result.success:
+            return output(&#34;passwd: Failed to update password&#34;, pipe, success=False)
 
-    if not home_folder_find.success:
-        return output(f&#34;{__COMMAND__}: /home is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
+        if not update_group_result.success:
+            return output(f&#34;passwd: Failed to update groups&#34;, pipe, success=False)
 
-    if not skel_dir_find.success:
-        return output(f&#34;{__COMMAND__}: /etc/skel is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
+        # Create the users home directory (from /etc/skel)
 
-    home_folder: Directory = home_folder_find.data
-    skel_dir: Directory = skel_dir_find.data
+        home_folder_find = computer.fs.find(&#34;/home&#34;)
+        skel_dir_find = computer.fs.find(&#34;/etc/skel&#34;)
 
-    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, group_result.data)
-    home_folder.add_file(new_user_folder)
+        if not home_folder_find.success:
+            return output(f&#34;{__COMMAND__}: /home is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
 
-    # Copy the contents of /etc/skel to the new users folder
-    for file in skel_dir.files.values():
-        computer.run_command(&#34;cp&#34;, [f&#34;/etc/skel/{file.name}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;, &#34;-r&#34;], pipe)
+        if not skel_dir_find.success:
+            return output(f&#34;{__COMMAND__}: /etc/skel is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
 
-        computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
-        computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
-        # # Locate the new file and update the permissions
-        # TODO: Replace this with the -R flag in chmod (recursive)
-        new_file_find = computer.fs.find(f&#34;/home/{args[0]}/{file.name}&#34;)
-        if new_file_find.success:
-            computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
-            computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
+        home_folder: Directory = home_folder_find.data
+        skel_dir: Directory = skel_dir_find.data
 
-            # Change the file&#39;s owner (user and group)
-            computer.run_command(&#34;chown&#34;, [f&#34;{args[0]}:{args[0]}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
+        new_user_folder: Directory = Directory(args.username, home_folder, user_result.data, group_result.data)
+        home_folder.add_file(new_user_folder)
 
-    # Write `export HOME=/home/args[0]` and `export PATH=/bin:` to the new ~/.shellrc
-    new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
+        # Copy the contents of /etc/skel to the new users folder
+        for file in skel_dir.files.values():
+            computer.run_command(&#34;cp&#34;, [f&#34;/etc/skel/{file.name}&#34;, f&#34;/home/{args.username}/{file.name}&#34;, &#34;-r&#34;], pipe)
 
-    if new_shellrc_result.success:
-        new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
+            computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
+            computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
+            # # Locate the new file and update the permissions
+            # TODO: Replace this with the -R flag in chmod (recursive)
+            new_file_find = computer.fs.find(f&#34;/home/{args.username}/{file.name}&#34;)
+            if new_file_find.success:
+                computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
+                computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
 
-    # Check if we should ask the user for Full name, etc
-    if interactive:
-        while True:
-            print(&#34;Enter the new value, or press ENTER for the default&#34;)
-            full_name = input(&#34;\tFull Name []: &#34;)
-            room_num = input(&#34;\tRoom Number []: &#34;)
-            work_phone = input(&#34;\tWork Phone []: &#34;)
-            home_phone = input(&#34;\tHome Phone []: &#34;)
-            other = input(&#34;\tOther []: &#34;)
-            correct = input(&#34;Is the information correct? [Y/n] &#34;)
-            if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
-                pass
-                # computer.users[user_result.data].full_name = full_name
-                # computer.users[user_result.data].room_number = room_num
-                # computer.users[user_result.data].work_phone = work_phone
-                # computer.users[user_result.data].home_phone = home_phone
-                # computer.users[user_result.data].other = other
-                break
+                # Change the file&#39;s owner (user and group)
+                computer.run_command(&#34;chown&#34;, [f&#34;{args.username}:{args.username}&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
 
-    if not update_passwd_result.success:
-        passwd_file = computer.fs.find(&#34;/etc/passwd&#34;)
+        # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
+        new_shellrc_result = computer.fs.find(f&#34;/home/{args.username}/.shellrc&#34;)
 
-        if not passwd_file.success:
-            return output(f&#34;{__COMMAND__}: /etc/passwd file missing! Cannot add new user&#34;, pipe, success=False)
+        if new_shellrc_result.success:
+            new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args.username}&#34;, computer)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+        # Check if we should ask the user for Full name, etc
+        if args.noninteractive:
+            while True:
+                print(&#34;Enter the new value, or press ENTER for the default&#34;)
+                full_name = input(&#34;\tFull Name []: &#34;)
+                room_num = input(&#34;\tRoom Number []: &#34;)
+                work_phone = input(&#34;\tWork Phone []: &#34;)
+                home_phone = input(&#34;\tHome Phone []: &#34;)
+                other = input(&#34;\tOther []: &#34;)
+                correct = input(&#34;Is the information correct? [Y/n] &#34;)
+                if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
+                    pass
+                    # computer.users[user_result.data].full_name = full_name
+                    # computer.users[user_result.data].room_number = room_num
+                    # computer.users[user_result.data].work_phone = work_phone
+                    # computer.users[user_result.data].home_phone = home_phone
+                    # computer.users[user_result.data].other = other
+                    break
+
+        if not update_passwd_result.success:
+            passwd_file = computer.fs.find(&#34;/etc/passwd&#34;)
+
+            if not passwd_file.success:
+                return output(f&#34;{__COMMAND__}: /etc/passwd file missing! Cannot add new user&#34;, pipe, success=False)
+
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -195,156 +192,153 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;username&#34;)
+    parser.add_argument(&#34;-p&#34;, dest=&#34;password&#34;)
+    parser.add_argument(&#34;-n&#34;, dest=&#34;noninteractive&#34;, action=&#34;store_false&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    # Only root can add new users
-    if computer.get_uid() != 0:
-        return output(f&#34;{__COMMAND__}: Only root may add a user or group to the system.&#34;, pipe, success=False)
+    args = parser.parse_args(args)
 
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: a username is required&#34;, pipe, success=False)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    password = None
-    interactive = True
+        if not args.version and not args.username:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    # Check for non-interactive arg
-    if &#34;-n&#34; in args:
-        interactive = False
-        args.remove(&#34;-n&#34;)
-        # Make sure that the user specified -p with -n (a password is required for non-interactive mode)
-        if &#34;-p&#34; not in args:
-            return output(f&#34;{__COMMAND__}: -p must be used with -n&#34;, pipe, success=False)
-
-    if &#34;-p&#34; in args:
-        try:
-            password = args[args.index(&#34;-p&#34;) + 1]
-            # Remove the flag and arg from the args to prevent &#39;user -p does not exist&#39;
-            args.remove(&#34;-p&#34;)
-            args.remove(password)
-        except IndexError:
-            return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
-
-    if computer.find_user(username=args[0]).success:
-        return output(f&#34;{__COMMAND__}: The user &#39;{args[0]}&#39; already exists.&#34;, pipe, success=False)
-
-    prev_uid = computer.get_all_users().data[-1].uid
-
-    if prev_uid == 0:
-        next_uid = 1000
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        next_uid = prev_uid + 1
 
-    if not password:
-        if interactive:
-            print(f&#34;Adding user &#39;{args[0]}&#39; ...&#34;)
-            print(f&#34;Adding new group &#39;{args[0]}&#39; ({next_uid}) ...&#34;)
-            print(f&#34;Adding new user &#39;{args[0]}&#39; ({next_uid}) with group &#39;{args[0]}&#39; ...&#34;)
-            print(f&#34;Creating home directory &#39;/home/{args[0]}&#39; ...&#34;)
-            print(f&#34;Copying files from &#39;/etc/skel&#39; ...&#34;)
+        if computer.find_user(username=args.username).success:
+            return output(f&#34;{__COMMAND__}: The user &#39;{args.username}&#39; already exists.&#34;, pipe, success=False)
 
-        # Loop to try to get new password
-        for _ in range(3):
-            password = getpass(&#34;Enter new UNIX password: &#34;)
-            retype_new_password = getpass(&#34;Retype new UNIX password: &#34;)
+        prev_uid = computer.get_all_users().data[-1].uid
 
-            if password != retype_new_password:
-                print(&#34;Sorry, passwords do not match.&#34;)
-                try_again = input(&#34;Try again? [y/N] &#34;)
-                if try_again != &#34;y&#34;:
-                    return output(&#34;&#34;, pipe, success=False)
-            else:
-                break
-        # Fails password auth 3 times
+        if prev_uid == 0:
+            next_uid = 1000
         else:
-            # Quit
-            return output(&#34;&#34;, pipe)
+            next_uid = prev_uid + 1
 
-    user_result = computer.add_user(args[0], password)
-    group_result = computer.add_group(args[0])
-    # Find the user object and its its group to the new group
-    computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
+        if not args.password:
+            if args.noninteractive:
+                print(f&#34;Adding user &#39;{args.username}&#39; ...&#34;)
+                print(f&#34;Adding new group &#39;{args.username}&#39; ({next_uid}) ...&#34;)
+                print(f&#34;Adding new user &#39;{args.username}&#39; ({next_uid}) with group &#39;{args.username}&#39; ...&#34;)
+                print(f&#34;Creating home directory &#39;/home/{args.username}&#39; ...&#34;)
+                print(f&#34;Copying files from &#39;/etc/skel&#39; ...&#34;)
 
-    update_passwd_result = computer.update_passwd()
-    update_group_result = computer.update_groups()
+                # Loop to try to get new password
+                for _ in range(3):
+                    password = getpass(&#34;Enter new UNIX password: &#34;)
+                    retype_new_password = getpass(&#34;Retype new UNIX password: &#34;)
 
-    if not update_passwd_result.success:
-        return output(&#34;passwd: Failed to update password&#34;, pipe, success=False)
+                    if password != retype_new_password:
+                        print(&#34;Sorry, passwords do not match.&#34;)
+                        try_again = input(&#34;Try again? [y/N] &#34;)
+                        if try_again != &#34;y&#34;:
+                            return output(&#34;&#34;, pipe, success=False)
+                    else:
+                        break
+                # Fails password auth 3 times
+                else:
+                    # Quit
+                    return output(&#34;&#34;, pipe)
+            else:
+                password = &#34;&#34;
+        else:
+            password = args.password
 
-    if not update_group_result.success:
-        return output(f&#34;passwd: Failed to update groups&#34;, pipe, success=False)
+        user_result = computer.add_user(args.username, password)
+        group_result = computer.add_group(args.username)
+        # Find the user object and its its group to the new group
+        computer.add_user_to_group(user_result.data, group_result.data, membership_type=&#34;primary&#34;)
 
-    # Create the users home directory (from /etc/skel)
+        update_passwd_result = computer.update_passwd()
+        update_group_result = computer.update_groups()
 
-    home_folder_find = computer.fs.find(&#34;/home&#34;)
-    skel_dir_find = computer.fs.find(&#34;/etc/skel&#34;)
+        if not update_passwd_result.success:
+            return output(&#34;passwd: Failed to update password&#34;, pipe, success=False)
 
-    if not home_folder_find.success:
-        return output(f&#34;{__COMMAND__}: /home is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
+        if not update_group_result.success:
+            return output(f&#34;passwd: Failed to update groups&#34;, pipe, success=False)
 
-    if not skel_dir_find.success:
-        return output(f&#34;{__COMMAND__}: /etc/skel is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
+        # Create the users home directory (from /etc/skel)
 
-    home_folder: Directory = home_folder_find.data
-    skel_dir: Directory = skel_dir_find.data
+        home_folder_find = computer.fs.find(&#34;/home&#34;)
+        skel_dir_find = computer.fs.find(&#34;/etc/skel&#34;)
 
-    new_user_folder: Directory = Directory(args[0], home_folder, user_result.data, group_result.data)
-    home_folder.add_file(new_user_folder)
+        if not home_folder_find.success:
+            return output(f&#34;{__COMMAND__}: /home is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
 
-    # Copy the contents of /etc/skel to the new users folder
-    for file in skel_dir.files.values():
-        computer.run_command(&#34;cp&#34;, [f&#34;/etc/skel/{file.name}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;, &#34;-r&#34;], pipe)
+        if not skel_dir_find.success:
+            return output(f&#34;{__COMMAND__}: /etc/skel is missing, unable to create user&#39;s home folder&#34;, pipe, success=False)
 
-        computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
-        computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
-        # # Locate the new file and update the permissions
-        # TODO: Replace this with the -R flag in chmod (recursive)
-        new_file_find = computer.fs.find(f&#34;/home/{args[0]}/{file.name}&#34;)
-        if new_file_find.success:
-            computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
-            computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
+        home_folder: Directory = home_folder_find.data
+        skel_dir: Directory = skel_dir_find.data
 
-            # Change the file&#39;s owner (user and group)
-            computer.run_command(&#34;chown&#34;, [f&#34;{args[0]}:{args[0]}&#34;, f&#34;/home/{args[0]}/{file.name}&#34;], pipe)
+        new_user_folder: Directory = Directory(args.username, home_folder, user_result.data, group_result.data)
+        home_folder.add_file(new_user_folder)
 
-    # Write `export HOME=/home/args[0]` and `export PATH=/bin:` to the new ~/.shellrc
-    new_shellrc_result = computer.fs.find(f&#34;/home/{args[0]}/.shellrc&#34;)
+        # Copy the contents of /etc/skel to the new users folder
+        for file in skel_dir.files.values():
+            computer.run_command(&#34;cp&#34;, [f&#34;/etc/skel/{file.name}&#34;, f&#34;/home/{args.username}/{file.name}&#34;, &#34;-r&#34;], pipe)
 
-    if new_shellrc_result.success:
-        new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args[0]}&#34;, computer)
+            computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
+            computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
+            # # Locate the new file and update the permissions
+            # TODO: Replace this with the -R flag in chmod (recursive)
+            new_file_find = computer.fs.find(f&#34;/home/{args.username}/{file.name}&#34;)
+            if new_file_find.success:
+                computer.run_command(&#34;chmod&#34;, [&#34;a-rwx&#34;, new_file_find.data.pwd()], pipe=False)
+                computer.run_command(&#34;chmod&#34;, [&#34;u+rwx&#34;, new_file_find.data.pwd()], pipe=False)
 
-    # Check if we should ask the user for Full name, etc
-    if interactive:
-        while True:
-            print(&#34;Enter the new value, or press ENTER for the default&#34;)
-            full_name = input(&#34;\tFull Name []: &#34;)
-            room_num = input(&#34;\tRoom Number []: &#34;)
-            work_phone = input(&#34;\tWork Phone []: &#34;)
-            home_phone = input(&#34;\tHome Phone []: &#34;)
-            other = input(&#34;\tOther []: &#34;)
-            correct = input(&#34;Is the information correct? [Y/n] &#34;)
-            if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
-                pass
-                # computer.users[user_result.data].full_name = full_name
-                # computer.users[user_result.data].room_number = room_num
-                # computer.users[user_result.data].work_phone = work_phone
-                # computer.users[user_result.data].home_phone = home_phone
-                # computer.users[user_result.data].other = other
-                break
+                # Change the file&#39;s owner (user and group)
+                computer.run_command(&#34;chown&#34;, [f&#34;{args.username}:{args.username}&#34;, f&#34;/home/{args.username}/{file.name}&#34;], pipe)
 
-    if not update_passwd_result.success:
-        passwd_file = computer.fs.find(&#34;/etc/passwd&#34;)
+        # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
+        new_shellrc_result = computer.fs.find(f&#34;/home/{args.username}/.shellrc&#34;)
 
-        if not passwd_file.success:
-            return output(f&#34;{__COMMAND__}: /etc/passwd file missing! Cannot add new user&#34;, pipe, success=False)
+        if new_shellrc_result.success:
+            new_shellrc_result.data.write(f&#34;export PATH=/bin:\nexport HOME=/home/{args.username}&#34;, computer)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+        # Check if we should ask the user for Full name, etc
+        if args.noninteractive:
+            while True:
+                print(&#34;Enter the new value, or press ENTER for the default&#34;)
+                full_name = input(&#34;\tFull Name []: &#34;)
+                room_num = input(&#34;\tRoom Number []: &#34;)
+                work_phone = input(&#34;\tWork Phone []: &#34;)
+                home_phone = input(&#34;\tHome Phone []: &#34;)
+                other = input(&#34;\tOther []: &#34;)
+                correct = input(&#34;Is the information correct? [Y/n] &#34;)
+                if correct in [&#34;y&#34;, &#34;Y&#34;, &#34;&#34;]:
+                    pass
+                    # computer.users[user_result.data].full_name = full_name
+                    # computer.users[user_result.data].room_number = room_num
+                    # computer.users[user_result.data].work_phone = work_phone
+                    # computer.users[user_result.data].home_phone = home_phone
+                    # computer.users[user_result.data].other = other
+                    break
+
+        if not update_passwd_result.success:
+            passwd_file = computer.fs.find(&#34;/etc/passwd&#34;)
+
+            if not passwd_file.success:
+                return output(f&#34;{__COMMAND__}: /etc/passwd file missing! Cannot add new user&#34;, pipe, success=False)
+
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </dd>
 </dl>

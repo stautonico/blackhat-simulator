@@ -543,15 +543,23 @@ class StandardFS:
         share_dir: Directory = Directory(&#34;share&#34;, usr_dir, 0, 0)
         usr_dir.add_file(share_dir)
 
-        # /usr/share/man (stores man pages from __DOC__)
+        # /usr/share/man (stores man pages from __doc__)
         man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and check if they have a __DOC__.
+        # Loop through all the files in /bin and check if they have a __doc__.
         for binary in self.files.find(&#34;bin&#34;).files.keys():
             try:
                 module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                current_manpage = File(binary, module.__DOC__, man_dir, 0, 0)
+                # If we have a __doc__, we need to format it for printing
+                if module.main.__doc__:
+                    # Extract only the top lines and remove the leading spaces
+                    manpage = module.main.__doc__.replace(&#34;    &#34;, &#34;&#34;)
+                    # Remove the extra \n at the beginning and end
+                    manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+                else:
+                    manpage = &#34;&#34;
+                current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
             except AttributeError as e:
                 pass
@@ -1913,15 +1921,23 @@ Also, recursively tells it's parent to update its size.</p>
         share_dir: Directory = Directory(&#34;share&#34;, usr_dir, 0, 0)
         usr_dir.add_file(share_dir)
 
-        # /usr/share/man (stores man pages from __DOC__)
+        # /usr/share/man (stores man pages from __doc__)
         man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and check if they have a __DOC__.
+        # Loop through all the files in /bin and check if they have a __doc__.
         for binary in self.files.find(&#34;bin&#34;).files.keys():
             try:
                 module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                current_manpage = File(binary, module.__DOC__, man_dir, 0, 0)
+                # If we have a __doc__, we need to format it for printing
+                if module.main.__doc__:
+                    # Extract only the top lines and remove the leading spaces
+                    manpage = module.main.__doc__.replace(&#34;    &#34;, &#34;&#34;)
+                    # Remove the extra \n at the beginning and end
+                    manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+                else:
+                    manpage = &#34;&#34;
+                current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
             except AttributeError as e:
                 pass
@@ -2376,15 +2392,23 @@ Otherwise, the format of root's home folder is the same as any other user</p>
     share_dir: Directory = Directory(&#34;share&#34;, usr_dir, 0, 0)
     usr_dir.add_file(share_dir)
 
-    # /usr/share/man (stores man pages from __DOC__)
+    # /usr/share/man (stores man pages from __doc__)
     man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
     share_dir.add_file(man_dir)
 
-    # Loop through all the files in /bin and check if they have a __DOC__.
+    # Loop through all the files in /bin and check if they have a __doc__.
     for binary in self.files.find(&#34;bin&#34;).files.keys():
         try:
             module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-            current_manpage = File(binary, module.__DOC__, man_dir, 0, 0)
+            # If we have a __doc__, we need to format it for printing
+            if module.main.__doc__:
+                # Extract only the top lines and remove the leading spaces
+                manpage = module.main.__doc__.replace(&#34;    &#34;, &#34;&#34;)
+                # Remove the extra \n at the beginning and end
+                manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+            else:
+                manpage = &#34;&#34;
+            current_manpage = File(binary, manpage, man_dir, 0, 0)
             man_dir.add_file(current_manpage)
         except AttributeError as e:
             pass

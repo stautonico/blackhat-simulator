@@ -50,7 +50,11 @@ def output(text: str, pipe: bool, success: bool = True,
     # This function will handle all the logic for pipe/output
     if not pipe:
         if text != &#34;&#34;:
+            while text.endswith(&#34;\n&#34;):
+                text = text[:-1]
             print(text)
+    else:
+        text = text + &#34;\n&#34;
 
     return SysCallStatus(success=success, message=success_message, data=text)</code></pre>
 </details>
@@ -107,7 +111,11 @@ If pipe is <code>True</code> (we're passing the output of a command into the inp
     # This function will handle all the logic for pipe/output
     if not pipe:
         if text != &#34;&#34;:
+            while text.endswith(&#34;\n&#34;):
+                text = text[:-1]
             print(text)
+    else:
+        text = text + &#34;\n&#34;
 
     return SysCallStatus(success=success, message=success_message, data=text)</code></pre>
 </details>

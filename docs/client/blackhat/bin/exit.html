@@ -28,32 +28,46 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;exit&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-    # -f is force (immediately exit)
-    if &#34;-f&#34; in args:
-        if len(computer.shell.computers) == 1:
-            computer.save()
-            exit(0)
-        else:
-            computer.sessions = []
-            computer.shell.computers.pop()
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;-f&#34;, &#34;--force&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(computer.shell.computers) == 1:
-        if len(computer.sessions) == 1:
-            computer.save()
-            exit(0)
-        else:
-            computer.sessions.pop()
+    args = parser.parse_args(args)
+
+    if args.version:
+        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        computer.shell.computers.pop()
+        if args.force:
+            if len(computer.shell.computers) == 1:
+                computer.save()
+                exit(0)
+            else:
+                computer.sessions = []
+                computer.shell.computers.pop()
+
+        if len(computer.shell.computers) == 1:
+            if len(computer.sessions) == 1:
+                computer.save()
+                exit(0)
+            else:
+                computer.sessions.pop()
+        else:
+            computer.shell.computers.pop()
 
     return output(&#34;&#34;, pipe)</code></pre>
 </details>
@@ -69,31 +83,44 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-    # -f is force (immediately exit)
-    if &#34;-f&#34; in args:
-        if len(computer.shell.computers) == 1:
-            computer.save()
-            exit(0)
-        else:
-            computer.sessions = []
-            computer.shell.computers.pop()
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;-f&#34;, &#34;--force&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(computer.shell.computers) == 1:
-        if len(computer.sessions) == 1:
-            computer.save()
-            exit(0)
-        else:
-            computer.sessions.pop()
+    args = parser.parse_args(args)
+
+    if args.version:
+        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        computer.shell.computers.pop()
+        if args.force:
+            if len(computer.shell.computers) == 1:
+                computer.save()
+                exit(0)
+            else:
+                computer.sessions = []
+                computer.shell.computers.pop()
+
+        if len(computer.shell.computers) == 1:
+            if len(computer.sessions) == 1:
+                computer.save()
+                exit(0)
+            else:
+                computer.sessions.pop()
+        else:
+            computer.shell.computers.pop()
 
     return output(&#34;&#34;, pipe)</code></pre>
 </details>

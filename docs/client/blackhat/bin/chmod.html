@@ -28,10 +28,11 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;chmod&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def parse_characters(chars, current_perms):
@@ -113,32 +114,49 @@ def parse_characters(chars, current_perms):
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) &lt; 2:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;umask&#34;)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    # Try to find the target file
-    find_file_response = computer.fs.find(args[1])
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if not find_file_response.success:
-        return output(f&#34;{__COMMAND__}: cannot access &#39;{args[1]}&#39;: No such file or directory&#34;, pipe, success=False)
+        if not args.version and not args.umask and not args.file:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    file_to_update = find_file_response.data
-
-    # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
-
-    # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-    if file_to_update.check_owner(computer):
-        new_perms = parse_characters(args[0], file_to_update.permissions)
-
-        if not new_perms:
-            return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args[0]}&#39;&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output(&#34;&#34;, pipe)
     else:
-        return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args[1]}&#39;: Operation not permitted&#34;, pipe,
-                      success=False)</code></pre>
+        # Try to find the target file
+        find_file_response = computer.fs.find(args.file)
+
+        if not find_file_response.success:
+            return output(f&#34;{__COMMAND__}: cannot access &#39;{args.file}&#39;: No such file or directory&#34;, pipe,
+                          success=False)
+
+        file_to_update = find_file_response.data
+
+        # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
+
+        # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
+        if file_to_update.check_owner(computer):
+            new_perms = parse_characters(args.umask, file_to_update.permissions)
+
+            if not new_perms:
+                return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
+            return output(&#34;&#34;, pipe)
+        else:
+            return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
+                          pipe,
+                          success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -152,38 +170,55 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) &lt; 2:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;umask&#34;)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    # Try to find the target file
-    find_file_response = computer.fs.find(args[1])
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if not find_file_response.success:
-        return output(f&#34;{__COMMAND__}: cannot access &#39;{args[1]}&#39;: No such file or directory&#34;, pipe, success=False)
+        if not args.version and not args.umask and not args.file:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    file_to_update = find_file_response.data
-
-    # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
-
-    # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-    if file_to_update.check_owner(computer):
-        new_perms = parse_characters(args[0], file_to_update.permissions)
-
-        if not new_perms:
-            return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args[0]}&#39;&#34;, pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output(&#34;&#34;, pipe)
     else:
-        return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args[1]}&#39;: Operation not permitted&#34;, pipe,
-                      success=False)</code></pre>
+        # Try to find the target file
+        find_file_response = computer.fs.find(args.file)
+
+        if not find_file_response.success:
+            return output(f&#34;{__COMMAND__}: cannot access &#39;{args.file}&#39;: No such file or directory&#34;, pipe,
+                          success=False)
+
+        file_to_update = find_file_response.data
+
+        # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
+
+        # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
+        if file_to_update.check_owner(computer):
+            new_perms = parse_characters(args.umask, file_to_update.permissions)
+
+            if not new_perms:
+                return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
+            return output(&#34;&#34;, pipe)
+        else:
+            return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
+                          pipe,
+                          success=False)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.bin.chmod.parse_characters"><code class="name flex">

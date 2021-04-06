@@ -31,82 +31,88 @@ from hashlib import md5
 
 from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
-from ..session import Session
 
 __COMMAND__ = &#34;ssh&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
+
+from ..session import Session
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;host&#34;)
+    parser.add_argument(&#34;-p&#34;, dest=&#34;port&#34;, default=22, type=int)
+    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    port = 22
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if &#34;-p&#34; in args:
-        try:
-            port = int(args[args.index(&#34;-p&#34;) + 1])
-            # Remove the flag and arg from the args to prevent &#39;user -p does not exist&#39;
-            args.remove(&#34;-p&#34;)
-            args.remove(str(port))
-        except IndexError:
-            return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
+    if args.version:
+        return output(f&#34;BlackhatSSH: {__VERSION__}&#34;, pipe)
 
-    split_args = args[0].split(&#34;@&#34;)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        split_args = args.host.split(&#34;@&#34;)
 
-    if len(split_args) != 2:
-        return output(f&#34;{__COMMAND__}: Could not resolve hostname : Name or service not known&#34;, pipe, success=False)
+        if len(split_args) != 2:
+            return output(f&#34;{__COMMAND__}: Could not resolve hostname : Name or service not known&#34;, pipe, success=False)
 
-    username = split_args[0]
-    host = split_args[1]
+        username = split_args[0]
+        host = split_args[1]
 
-    computer_result = computer.parent.find_client(host, port=port)
+        computer_result = computer.parent.find_client(host, port=args.port)
 
-    if not computer_result.success:
-        return output(f&#34;{__COMMAND__}: Could not resolve hostname {host}: Name or service not known&#34;, pipe,
-                      success=False)
+        if not computer_result.success:
+            return output(f&#34;{__COMMAND__}: Could not resolve hostname {host}: Name or service not known&#34;, pipe,
+                          success=False)
 
-    # Double check that the computer has an ssh server running
-    if port not in computer_result.data.services:
-        return output(f&#34;{__COMMAND__}: connect to host {host} port {port}: Connection refused&#34;, pipe,
-                      success=False)
+        # Double check that the computer has an ssh server running
+        if args.port not in computer_result.data.services:
+            return output(f&#34;{__COMMAND__}: connect to host {host} port {args.port}: Connection refused&#34;, pipe,
+                          success=False)
 
-    # Try to get the user from the remote computer
-    user_result = computer_result.data.find_user(username=username)
+        # Try to get the user from the remote computer
+        user_result = computer_result.data.find_user(username=username)
 
-    # If we found the host, let&#39;s try to authenticate with the given host
-    for x in range(3):
-        password = getpass(f&#34;{args[0]}&#39;s password: &#34;)
+        # If we found the host, let&#39;s try to authenticate with the given host
+        for x in range(3):
+            password = getpass(f&#34;{args.host}&#39;s password: &#34;)
 
-        hashed_password = md5(password.encode()).hexdigest()
+            hashed_password = md5(password.encode()).hexdigest()
 
-        if user_result.success:
-            if user_result.data.password == hashed_password:
-                computer.shell.computers.append(computer_result.data)
+            if user_result.success:
+                if user_result.data.password == hashed_password:
+                    computer.shell.computers.append(computer_result.data)
 
-                computer_result.data.shell = computer.shell
+                    computer_result.data.shell = computer.shell
 
-                if len(computer_result.data.sessions) == 0:
-                    new_session = Session(user_result.data.uid, computer_result.data.fs.files, 0)
-                else:
-                    new_session = Session(user_result.data.uid, computer_result.data.fs.files,
-                                          computer_result.data.sessions[-1].id + 1)
+                    if len(computer_result.data.sessions) == 0:
+                        new_session = Session(user_result.data.uid, computer_result.data.fs.files, 0)
+                    else:
+                        new_session = Session(user_result.data.uid, computer_result.data.fs.files,
+                                              computer_result.data.sessions[-1].id + 1)
 
-                computer_result.data.sessions.append(new_session)
+                    computer_result.data.sessions.append(new_session)
 
-                computer_result.data.run_current_user_shellrc()
-                computer_result.data.run_command(&#34;cd&#34;, [&#34;~&#34;], False)
-                return output(&#34;&#34;, pipe)
+                    computer_result.data.run_current_user_shellrc()
+                    computer_result.data.run_command(&#34;cd&#34;, [&#34;~&#34;], False)
+                    return output(&#34;&#34;, pipe)
 
-        print(f&#34;Permission denied, please try again.&#34;)
+            print(f&#34;Permission denied, please try again.&#34;)
 
-    # PS1=\u@\h@\w\$:
+        # PS1=\u@\h@\w\$:
 
-    return output(f&#34;{args[0]}: Permission denied (password).&#34;, pipe, success=False)</code></pre>
+        return output(f&#34;{args.host}: Permission denied (password).&#34;, pipe, success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -120,80 +126,84 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if len(args) == 0:
-        return output(f&#34;{__COMMAND__}: missing arguments&#34;, pipe, success=False)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;host&#34;)
+    parser.add_argument(&#34;-p&#34;, dest=&#34;port&#34;, default=22, type=int)
+    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    args = parser.parse_args(args)
 
-    port = 22
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if &#34;-p&#34; in args:
-        try:
-            port = int(args[args.index(&#34;-p&#34;) + 1])
-            # Remove the flag and arg from the args to prevent &#39;user -p does not exist&#39;
-            args.remove(&#34;-p&#34;)
-            args.remove(str(port))
-        except IndexError:
-            return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;p&#39;&#34;, pipe, success=False)
+    if args.version:
+        return output(f&#34;BlackhatSSH: {__VERSION__}&#34;, pipe)
 
-    split_args = args[0].split(&#34;@&#34;)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        split_args = args.host.split(&#34;@&#34;)
 
-    if len(split_args) != 2:
-        return output(f&#34;{__COMMAND__}: Could not resolve hostname : Name or service not known&#34;, pipe, success=False)
+        if len(split_args) != 2:
+            return output(f&#34;{__COMMAND__}: Could not resolve hostname : Name or service not known&#34;, pipe, success=False)
 
-    username = split_args[0]
-    host = split_args[1]
+        username = split_args[0]
+        host = split_args[1]
 
-    computer_result = computer.parent.find_client(host, port=port)
+        computer_result = computer.parent.find_client(host, port=args.port)
 
-    if not computer_result.success:
-        return output(f&#34;{__COMMAND__}: Could not resolve hostname {host}: Name or service not known&#34;, pipe,
-                      success=False)
+        if not computer_result.success:
+            return output(f&#34;{__COMMAND__}: Could not resolve hostname {host}: Name or service not known&#34;, pipe,
+                          success=False)
 
-    # Double check that the computer has an ssh server running
-    if port not in computer_result.data.services:
-        return output(f&#34;{__COMMAND__}: connect to host {host} port {port}: Connection refused&#34;, pipe,
-                      success=False)
+        # Double check that the computer has an ssh server running
+        if args.port not in computer_result.data.services:
+            return output(f&#34;{__COMMAND__}: connect to host {host} port {args.port}: Connection refused&#34;, pipe,
+                          success=False)
 
-    # Try to get the user from the remote computer
-    user_result = computer_result.data.find_user(username=username)
+        # Try to get the user from the remote computer
+        user_result = computer_result.data.find_user(username=username)
 
-    # If we found the host, let&#39;s try to authenticate with the given host
-    for x in range(3):
-        password = getpass(f&#34;{args[0]}&#39;s password: &#34;)
+        # If we found the host, let&#39;s try to authenticate with the given host
+        for x in range(3):
+            password = getpass(f&#34;{args.host}&#39;s password: &#34;)
 
-        hashed_password = md5(password.encode()).hexdigest()
+            hashed_password = md5(password.encode()).hexdigest()
 
-        if user_result.success:
-            if user_result.data.password == hashed_password:
-                computer.shell.computers.append(computer_result.data)
+            if user_result.success:
+                if user_result.data.password == hashed_password:
+                    computer.shell.computers.append(computer_result.data)
 
-                computer_result.data.shell = computer.shell
+                    computer_result.data.shell = computer.shell
 
-                if len(computer_result.data.sessions) == 0:
-                    new_session = Session(user_result.data.uid, computer_result.data.fs.files, 0)
-                else:
-                    new_session = Session(user_result.data.uid, computer_result.data.fs.files,
-                                          computer_result.data.sessions[-1].id + 1)
+                    if len(computer_result.data.sessions) == 0:
+                        new_session = Session(user_result.data.uid, computer_result.data.fs.files, 0)
+                    else:
+                        new_session = Session(user_result.data.uid, computer_result.data.fs.files,
+                                              computer_result.data.sessions[-1].id + 1)
 
-                computer_result.data.sessions.append(new_session)
+                    computer_result.data.sessions.append(new_session)
 
-                computer_result.data.run_current_user_shellrc()
-                computer_result.data.run_command(&#34;cd&#34;, [&#34;~&#34;], False)
-                return output(&#34;&#34;, pipe)
+                    computer_result.data.run_current_user_shellrc()
+                    computer_result.data.run_command(&#34;cd&#34;, [&#34;~&#34;], False)
+                    return output(&#34;&#34;, pipe)
 
-        print(f&#34;Permission denied, please try again.&#34;)
+            print(f&#34;Permission denied, please try again.&#34;)
 
-    # PS1=\u@\h@\w\$:
+        # PS1=\u@\h@\w\$:
 
-    return output(f&#34;{args[0]}: Permission denied (password).&#34;, pipe, success=False)</code></pre>
+        return output(f&#34;{args.host}: Permission denied (password).&#34;, pipe, success=False)</code></pre>
 </details>
 </dd>
 </dl>

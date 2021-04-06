@@ -27,47 +27,69 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;export&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;var&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(args) == 0:
-        return computer.run_command(&#34;env&#34;, [], pipe)
+    args = parser.parse_args(args)
 
-    split_args = &#34; &#34;.join(args).split(&#34;=&#34;)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if len(split_args) == 1:
-        computer.sessions[-1].env[split_args[0]] = &#34;&#34;
+        if not args.version and not args.var:
+            return computer.run_command(&#34;env&#34;, [], pipe)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
-        env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
+        split_args = &#34; &#34;.join(args.var).split(&#34;=&#34;)
 
-        if env_value.startswith(&#34;$&#34;):
-            env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
-            if not env_value:
-                env_value = &#34;&#34;
+        # The key doesn&#39;t need any spaces
+        split_args[0] = split_args[0].strip(&#34; &#34;)
+
+        # Remove extra space in front of value
+        if split_args[1].startswith(&#34; &#34;):
+            split_args[1] = split_args[1][1:]
+
+        if len(split_args) == 1:
+            computer.sessions[-1].env[split_args[0]] = &#34;&#34;
         else:
-            if &#34;:&#34; in env_value:
-                new_env_value = []
-                for val in env_value.split(&#34;:&#34;):
-                    if val.startswith(&#34;$&#34;):
-                        val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
-                        if not val:
-                            val = &#34;&#34;
-                    new_env_value.append(val)
+            env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
+            env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
 
-                env_value = &#34;:&#34;.join(new_env_value)
+            if env_value.startswith(&#34;$&#34;):
+                env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
+                if not env_value:
+                    env_value = &#34;&#34;
+            else:
+                if &#34;:&#34; in env_value:
+                    new_env_value = []
+                    for val in env_value.split(&#34;:&#34;):
+                        if val.startswith(&#34;$&#34;):
+                            val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
+                            if not val:
+                                val = &#34;&#34;
+                        new_env_value.append(val)
 
-        computer.sessions[-1].env[split_args[0]] = env_value
+                    env_value = &#34;:&#34;.join(new_env_value)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+            computer.sessions[-1].env[split_args[0]] = env_value
+
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -81,45 +103,66 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;var&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
 
-    if len(args) == 0:
-        return computer.run_command(&#34;env&#34;, [], pipe)
+    args = parser.parse_args(args)
 
-    split_args = &#34; &#34;.join(args).split(&#34;=&#34;)
+    if parser.error_message:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    if len(split_args) == 1:
-        computer.sessions[-1].env[split_args[0]] = &#34;&#34;
+        if not args.version and not args.var:
+            return computer.run_command(&#34;env&#34;, [], pipe)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
     else:
-        env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
-        env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
+        split_args = &#34; &#34;.join(args.var).split(&#34;=&#34;)
 
-        if env_value.startswith(&#34;$&#34;):
-            env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
-            if not env_value:
-                env_value = &#34;&#34;
+        # The key doesn&#39;t need any spaces
+        split_args[0] = split_args[0].strip(&#34; &#34;)
+
+        # Remove extra space in front of value
+        if split_args[1].startswith(&#34; &#34;):
+            split_args[1] = split_args[1][1:]
+
+        if len(split_args) == 1:
+            computer.sessions[-1].env[split_args[0]] = &#34;&#34;
         else:
-            if &#34;:&#34; in env_value:
-                new_env_value = []
-                for val in env_value.split(&#34;:&#34;):
-                    if val.startswith(&#34;$&#34;):
-                        val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
-                        if not val:
-                            val = &#34;&#34;
-                    new_env_value.append(val)
+            env_value = split_args[1].replace(&#34;\&#34;&#34;, &#34;&#34;)
+            env_value = env_value.replace(&#34;\&#39;&#34;, &#34;&#34;)
 
-                env_value = &#34;:&#34;.join(new_env_value)
+            if env_value.startswith(&#34;$&#34;):
+                env_value = computer.get_env(env_value.replace(&#34;$&#34;, &#34;&#34;))
+                if not env_value:
+                    env_value = &#34;&#34;
+            else:
+                if &#34;:&#34; in env_value:
+                    new_env_value = []
+                    for val in env_value.split(&#34;:&#34;):
+                        if val.startswith(&#34;$&#34;):
+                            val = computer.get_env(val.replace(&#34;$&#34;, &#34;&#34;))
+                            if not val:
+                                val = &#34;&#34;
+                        new_env_value.append(val)
 
-        computer.sessions[-1].env[split_args[0]] = env_value
+                    env_value = &#34;:&#34;.join(new_env_value)
 
-    return output(&#34;&#34;, pipe)</code></pre>
+            computer.sessions[-1].env[split_args[0]] = env_value
+
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </dd>
 </dl>

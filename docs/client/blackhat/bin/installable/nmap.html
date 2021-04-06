@@ -26,17 +26,80 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ...lib.output import output
-from ...helpers import SysCallStatus, SysCallMessages
+<pre><code class="python">import ipaddress
+
+from tabulate import tabulate
+
 from ...computer import Computer
+from ...helpers import SysCallStatus
+from ...lib.input import ArgParser
+from ...lib.output import output
 
 __COMMAND__ = &#34;nmap&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)</code></pre>
+    &#34;&#34;&#34;
+    nmap - Network exploration tool and security / port scanner
+
+    # TODO: Complete this manpage
+    &#34;&#34;&#34;
+    # TODO: Add some of the flags that nmap has
+
+    parser = ArgParser(prog=__COMMAND__)
+
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;host&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        # `host` argument is required unless we have --version
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        if not args.host and not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    else:
+        # If we specific -h/--help, args will be empty, so exit gracefully
+        if not args:
+            return output(f&#34;&#34;, pipe)
+        else:
+            # Lets try to find the computer by address
+            find_computer_result = computer.parent.find_client(args.host)
+
+            if find_computer_result.success:
+                found_comp = find_computer_result.data
+                # Now, lets generate a table for outputting
+                # Table format is [[&lt;PORT&gt;/tcp, &#34;open&#34;, &lt;SERVICE_NAME&gt;]]
+                headers = [&#34;PORT&#34;, &#34;STATE&#34;, &#34;SERVICE&#34;]
+                table = []
+                # Sort the results by port number (asc)
+                for key, value in sorted(found_comp.port_forwarding.items(), key=lambda item: int(item[0])):
+                    table.append([f&#34;{key}/tcp&#34;, &#34;open&#34;, value.services[key].name])
+
+                try:
+                    is_ipv4 = ipaddress.ip_address(args.host)
+                except ValueError:
+                    is_ipv4 = False
+                    # Try to resolve the domain to get the ip manually
+                    resolve_host = computer.parent.resolve_dns(args.host)
+                    if resolve_host.success:
+                        domain_ip_address = resolve_host.data
+                    else:
+                        domain_ip_address = &#34;?&#34;
+
+                # Initial message is different depending on if we passed an ip address or domain name
+                if is_ipv4:
+                    output_text = f&#34;Nmap scan report for {args.host}&#34;
+                else:
+                    output_text = f&#34;Nmap scan report for {args.host} ({domain_ip_address})&#34;
+
+                output_text += &#34;\n&#34; + tabulate(table, headers=headers, tablefmt=&#34;plain&#34;)
+
+                return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -50,14 +113,73 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>nmap - Network exploration tool and security / port scanner</p>
+<h1 id="todo-complete-this-manpage">TODO: Complete this manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)</code></pre>
+    &#34;&#34;&#34;
+    nmap - Network exploration tool and security / port scanner
+
+    # TODO: Complete this manpage
+    &#34;&#34;&#34;
+    # TODO: Add some of the flags that nmap has
+
+    parser = ArgParser(prog=__COMMAND__)
+
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;host&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        # `host` argument is required unless we have --version
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        if not args.host and not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    else:
+        # If we specific -h/--help, args will be empty, so exit gracefully
+        if not args:
+            return output(f&#34;&#34;, pipe)
+        else:
+            # Lets try to find the computer by address
+            find_computer_result = computer.parent.find_client(args.host)
+
+            if find_computer_result.success:
+                found_comp = find_computer_result.data
+                # Now, lets generate a table for outputting
+                # Table format is [[&lt;PORT&gt;/tcp, &#34;open&#34;, &lt;SERVICE_NAME&gt;]]
+                headers = [&#34;PORT&#34;, &#34;STATE&#34;, &#34;SERVICE&#34;]
+                table = []
+                # Sort the results by port number (asc)
+                for key, value in sorted(found_comp.port_forwarding.items(), key=lambda item: int(item[0])):
+                    table.append([f&#34;{key}/tcp&#34;, &#34;open&#34;, value.services[key].name])
+
+                try:
+                    is_ipv4 = ipaddress.ip_address(args.host)
+                except ValueError:
+                    is_ipv4 = False
+                    # Try to resolve the domain to get the ip manually
+                    resolve_host = computer.parent.resolve_dns(args.host)
+                    if resolve_host.success:
+                        domain_ip_address = resolve_host.data
+                    else:
+                        domain_ip_address = &#34;?&#34;
+
+                # Initial message is different depending on if we passed an ip address or domain name
+                if is_ipv4:
+                    output_text = f&#34;Nmap scan report for {args.host}&#34;
+                else:
+                    output_text = f&#34;Nmap scan report for {args.host} ({domain_ip_address})&#34;
+
+                output_text += &#34;\n&#34; + tabulate(table, headers=headers, tablefmt=&#34;plain&#34;)
+
+                return output(output_text, pipe)</code></pre>
 </details>
 </dd>
 </dl>

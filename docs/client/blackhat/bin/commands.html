@@ -27,26 +27,56 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;commands&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    output_text = &#34;&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
 
-    bin_dir_result = computer.fs.find(&#34;/bin&#34;)
+        try:
+            bin_dirs_text = computer.sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
 
-    if bin_dir_result.success:
-        for command in list(bin_dir_result.data.files.keys()):
-            output_text += f&#34;{command} &#34;
+            for dir in bin_dirs_text:
+                find_dir = computer.fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = computer.fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
 
-    return output(output_text, pipe)</code></pre>
+        for dir in bin_dirs:
+            for command in list(dir.files.keys()):
+                output_text += f&#34;{command} &#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -60,24 +90,53 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    if &#34;--version&#34; in args:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    if args.version:
         return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-    output_text = &#34;&#34;
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        output_text = &#34;&#34;
 
-    bin_dir_result = computer.fs.find(&#34;/bin&#34;)
+        try:
+            bin_dirs_text = computer.sessions[-1].env.get(&#34;PATH&#34;).split(&#34;:&#34;)
+            bin_dirs = []
 
-    if bin_dir_result.success:
-        for command in list(bin_dir_result.data.files.keys()):
-            output_text += f&#34;{command} &#34;
+            for dir in bin_dirs_text:
+                find_dir = computer.fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = computer.fs.find(&#34;/bin&#34;)
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
 
-    return output(output_text, pipe)</code></pre>
+        for dir in bin_dirs:
+            for command in list(dir.files.keys()):
+                output_text += f&#34;{command} &#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </dd>
 </dl>

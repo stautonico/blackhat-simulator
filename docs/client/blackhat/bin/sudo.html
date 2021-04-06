@@ -35,12 +35,13 @@ from ..helpers import SysCallMessages, SysCallStatus
 from ..lib.output import output
 
 __COMMAND__ = &#34;sudo&#34;
-__VERSION__ = &#34;1.0.0&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    # TODO: Find a way to do this with arg parser without it breaking lol
     if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        return output(f&#34;Sudo version {__VERSION__} (miscutils)&#34;, pipe)
 
     if len(args) == 0:
         return output(f&#34;{__COMMAND__}: missing argument: command&#34;, pipe, success=False,
@@ -181,8 +182,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    # TODO: Find a way to do this with arg parser without it breaking lol
     if &#34;--version&#34; in args:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        return output(f&#34;Sudo version {__VERSION__} (miscutils)&#34;, pipe)
 
     if len(args) == 0:
         return output(f&#34;{__COMMAND__}: missing argument: command&#34;, pipe, success=False,
