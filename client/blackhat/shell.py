@@ -24,12 +24,22 @@ class Shell:
         readline.set_completer(self.autocomplete)
 
     def autocomplete(self, text, state):
-        bin_dir_result = self.computers[-1].fs.find("/bin")
+        try:
+            bin_dirs_text = self.computers[-1].sessions[-1].env.get("PATH").split(":")
+            bin_dirs = []
 
-        if bin_dir_result.success:
-            commands = list(bin_dir_result.data.files.keys())
-        else:
-            commands = []
+            for dir in bin_dirs_text:
+                find_dir = self.computers[-1].fs.find(dir)
+                if find_dir.success:
+                    bin_dirs.append(find_dir.data)
+        except AttributeError:
+            find_bin = self.computers[-1].fs.find("/bin")
+            if find_bin.success:
+                bin_dirs = [find_bin.data]
+            else:
+                bin_dirs = []
+
+        commands = [x for sub in bin_dirs for x in list(sub.files.keys())]
 
         results = [x for x in commands if x.startswith(text)] + [None]
         return results[state]
@@ -242,11 +252,9 @@ class Shell:
                         # Since the rest of the code for the > and >> is the same up until this point
                         # We don't need to re-write it
                         if special_character == ">":
-                            file_to_write.write(self.computers[-1].get_uid(),
-                                                message_to_write, self.computers[-1])
+                            file_to_write.write(message_to_write, self.computers[-1])
                         elif special_character == ">>":
-                            file_to_write.append(self.computers[-1].get_uid(),
-                                                 message_to_write, self.computers[-1])
+                            file_to_write.append(message_to_write, self.computers[-1])
 
                         prev_command_result = None
                     # Pass the input of the previous command to the current command
@@ -271,5 +279,5 @@ class Shell:
             if command:
                 for cmd in command.split("&&"):
                     self.handle_command(cmd)
-                    
+
             self.prompt = self.generate_prompt()

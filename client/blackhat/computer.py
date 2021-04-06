@@ -797,7 +797,7 @@ class Router(Computer):
                     # We found the other router
                     # If there's no port, we're done (we wanted the router not a host behind the router)
                     if not port:
-                        return SysCallStatus(success=True, data=wan_client)
+                        return SysCallStatus(success=True, data=wan_client.data)
                     else:
                         # If there is a port, we want to ask the external router for the client behind that port
                         # We can ask that router directly
@@ -919,7 +919,7 @@ class ISPRouter(Router):
             SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         """
         while True:
-            ip = ".".join([str(randint(1, 256)) for _ in range(4)])
+            ip = ".".join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
             if ip not in self.used_ips:
                 self.used_ips.append(ip)
                 return SysCallStatus(success=True, data=ip)

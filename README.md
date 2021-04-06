@@ -76,7 +76,8 @@ very early stages and is subject to change.
 these reasons:
 
 1. I was too lazy / will come back to it later
-2. Since this is intended to be a simulator type game, some of these items might ruin the experience/won't be fun in a video game
+2. Since this is intended to be a simulator type game, some of these items might ruin the experience/won't be fun in a
+   video game
 3. My knowledge of the given topic isn't sufficient to create an accurate "implementation" of the item.
 
 ### Built With
@@ -138,7 +139,9 @@ If you have an issue with overwriting, you can add the `--force` tag, which will
 
 ### Close 🔍
 
-Theres nothing here yet...🚧
+- [ ] Increase "coreutils" functionality (most bins only have basic functionality, they should be more accurate to the
+  real world)
+- [ ] Manpages (None have manuals/instructions)
 
 ### Far 🔭
 

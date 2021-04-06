@@ -1,51 +1,63 @@
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "cat"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    if len(args) == 0:
-        return output(f"{__COMMAND__}: a file argument is required", pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+    """
+    # TODO: Add docstring for manpage
+    """
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("files", nargs="+")
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
 
-    if "--version" in args:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+    args = parser.parse_args(args)
 
-    output_text = ""
+    if parser.error_message:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-    for file in args:
-        to_read_result = computer.fs.find(file)
+        if not args.version:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-        if not to_read_result.success:
-            if to_read_result.message == SysCallMessages.NOT_FOUND:
-                output_text += f"{__COMMAND__}: {file}: No such file or directory\n"
-            else:
-                output_text += f"{__COMMAND__}: Failed to read file\n"
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output("", pipe)
+    else:
+        output_text = ""
 
-        else:
-            to_read = to_read_result.data
+        for file in args.files:
+            to_read_result = computer.fs.find(file)
 
-            if to_read.is_directory():
-                output_text += f"{__COMMAND__}: {file}: Is a directory\n"
-            else:
-                # Permission checking
-                read_response = to_read.read(computer)
-
-                if read_response.success:
-                    if read_response.data:
-                        # Make sure they're are no extra \n at the end
-                        if read_response.data.endswith("\n"):
-                            read_response.data = read_response.data[:-1]
-                        output_text += read_response.data
+            if not to_read_result.success:
+                if to_read_result.message == SysCallMessages.NOT_FOUND:
+                    output_text += f"{__COMMAND__}: {file}: No such file or directory\n"
                 else:
-                    if read_response.message == SysCallMessages.NOT_ALLOWED:
-                        output_text += f"{__COMMAND__}: {to_read.name}: Permission denied\n"
+                    output_text += f"{__COMMAND__}: Failed to read file\n"
 
-    # Remove extra new lines
-    if output_text.endswith("\n"):
-        output_text = output_text[:-1]
+            else:
+                to_read = to_read_result.data
 
-    return output(output_text, pipe)
+                if to_read.is_directory():
+                    output_text += f"{__COMMAND__}: {file}: Is a directory\n"
+                else:
+                    # Permission checking
+                    read_response = to_read.read(computer)
+
+                    if read_response.success:
+                        if read_response.data:
+                            # Make sure they're are no extra \n at the end
+                            if read_response.data.endswith("\n"):
+                                read_response.data = read_response.data[:-1]
+                            output_text += read_response.data
+                    else:
+                        if read_response.message == SysCallMessages.NOT_ALLOWED:
+                            output_text += f"{__COMMAND__}: {to_read.name}: Permission denied\n"
+
+
+        return output(output_text, pipe)
+

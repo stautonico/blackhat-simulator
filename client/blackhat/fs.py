@@ -515,15 +515,23 @@ class StandardFS:
         share_dir: Directory = Directory("share", usr_dir, 0, 0)
         usr_dir.add_file(share_dir)
 
-        # /usr/share/man (stores man pages from __DOC__)
+        # /usr/share/man (stores man pages from __doc__)
         man_dir: Directory = Directory("man", share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and check if they have a __DOC__.
+        # Loop through all the files in /bin and check if they have a __doc__.
         for binary in self.files.find("bin").files.keys():
             try:
                 module = importlib.import_module(f"blackhat.bin.{binary}")
-                current_manpage = File(binary, module.__DOC__, man_dir, 0, 0)
+                # If we have a __doc__, we need to format it for printing
+                if module.main.__doc__:
+                    # Extract only the top lines and remove the leading spaces
+                    manpage = module.main.__doc__.replace("    ", "")
+                    # Remove the extra \n at the beginning and end
+                    manpage = manpage.removeprefix("\n").removesuffix("\n")
+                else:
+                    manpage = ""
+                current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
             except AttributeError as e:
                 pass

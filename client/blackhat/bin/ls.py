@@ -1,12 +1,12 @@
-from colorama import Fore, Style
-
 from ..computer import Computer
 from ..helpers import SysCallMessages, SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
-__COMMAND__ = "ls"
-__VERSION__ = "1.0.0"
+from colorama import Fore, Style
 
+__COMMAND__ = "ls"
+__VERSION__ = "1.1"
 
 def calculate_permission_string(fileobj):
     # Permission format
@@ -58,7 +58,6 @@ def calculate_permission_string(fileobj):
 
     return "".join(permissions)
 
-
 def calculate_output(directory, computer, all=False, long=False):
     output_text = ""
     # Output a file (only show that one thing)
@@ -100,52 +99,54 @@ def calculate_output(directory, computer, all=False, long=False):
                         output_text += f"{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} "
     return output_text
 
-
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    all = "-a" in args
-    long = "-l" in args
+    """
+    # TODO: Add docstring for manpage
+    """
 
-    if "-la" in args or "-al" in args:
-        all, long = True, True
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("files", nargs="+", default=".")
+    parser.add_argument("-a", dest="all", action="store_true")
+    parser.add_argument("-l", dest="long", action="store_true")
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
 
-    if "-a" in args:
-        args.remove("-a")
+    args = parser.parse_args(args)
 
-    if "-l" in args:
-        args.remove("-l")
+    if parser.error_message:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-    if "-la" in args:
-        args.remove("-la")
-
-    if "-al" in args:
-        args.remove("-al")
-
-    if "--version" in args:
-        return output(f"{__COMMAND__} (h3xNet coreutils) {__VERSION__}", pipe)
-
-    if len(args) > 0:
-
-        response = computer.fs.find(args[0])
-
-        if response.success:
-            output_text = calculate_output(response.data, computer, all=all, long=long)
-        else:
-            return output(f"{__COMMAND__}: cannot access '{args[0]}': No such file or directory", pipe,
-                          success=False, success_message=SysCallMessages.NOT_FOUND)
-
-    # No file args were specified (so print the local dir)
-    else:
-        response = computer.fs.find(".")
-
-        if response.success:
-            output_text = calculate_output(response.data, computer, all=all, long=long)
-        else:
-            return output("Error", pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
-
-    if not output_text:
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output("", pipe)
     else:
-        if output_text.endswith("\n"):
-            output_text = output_text[:-1]
+        output_text = ""
+        if len(args.files) > 0:
 
-        return output(output_text, pipe)
+            for file in args.files:
+
+                response = computer.fs.find(file)
+
+                if response.success:
+                    if len(args.files) > 1:
+                        if response.data.is_directory():
+                            output_text += f"{file}: \n"
+                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long) + "\n\n"
+                else:
+                    output_text += f"cannot access '{file}': No such file or directory\n\n"
+
+        # No file args were specified (so print the local dir)
+        else:
+            response = computer.fs.find(".")
+
+            if response.success:
+                output_text = calculate_output(response.data, computer, all=args.all, long=args.long)
+            else:
+                return output("Error", pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
+
+        if not output_text:
+            return output("", pipe)
+        else:
+
+            return output(output_text, pipe)
+

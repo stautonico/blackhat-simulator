@@ -1,30 +1,43 @@
 from ..computer import Computer
 from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "chown"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    # args[0] = new owner
-    # args[1] = file to change owner of
-    if len(args) < 2:
-        return output(f"{__COMMAND__}: missing arguments", pipe, success=False)
+    """
+    # TODO: Add docstring for manpage
+    """
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("owner")
+    parser.add_argument("file")
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
+        if not args.version and not args.owner and not args.file:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output("", pipe)
     else:
-
-        if "--version" in args:
-            return output(f"{__COMMAND__} (h3xNet coreutils) {__VERSION__}", pipe)
-
-        owner = args[0]
         group_owner = None
 
-        if ":" in owner:
-            params_split = owner.split(":")
+        if ":" in args.owner:
+            params_split = args.owner.split(":")
             owner = params_split[0]
             group_owner = params_split[1]
-
-        file_to_change = args[1]
+        else:
+            owner = args.owner
 
         check_user_exists = computer.find_user(username=owner)
 
@@ -42,7 +55,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             else:
                 group_owner = check_group_exists.data.gid
 
-        result = computer.fs.find(file_to_change)
+        result = computer.fs.find(args.file)
 
         if result.success:
             # Check if the dir we're trying to change is the root dir (we cant change perm)
@@ -55,14 +68,15 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 if not update_response.success:
                     if update_response.message == SysCallMessages.NOT_ALLOWED:
                         return output(
-                            f"{__COMMAND__}: changing ownership of '{file_to_change}': Operation not permitted", pipe,
+                            f"{__COMMAND__}: changing ownership of '{args.file}': Operation not permitted",
+                            pipe,
                             success=False)
                     else:
                         return output(
-                            f"{__COMMAND__}: changing ownership of '{file_to_change}': Failed to change", pipe,
+                            f"{__COMMAND__}: changing ownership of '{args.file}': Failed to change", pipe,
                             success=False)
         else:
-            return output(f"{__COMMAND__}: cannot access '{file_to_change}': No such file or directory", pipe,
+            return output(f"{__COMMAND__}: cannot access '{args.file}': No such file or directory", pipe,
                           success=False)
 
     return output("", pipe)

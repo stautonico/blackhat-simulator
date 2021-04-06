@@ -22,6 +22,10 @@ def output(text: str, pipe: bool, success: bool = True,
     # This function will handle all the logic for pipe/output
     if not pipe:
         if text != "":
+            while text.endswith("\n"):
+                text = text[:-1]
             print(text)
+    else:
+        text = text + "\n"
 
     return SysCallStatus(success=success, message=success_message, data=text)

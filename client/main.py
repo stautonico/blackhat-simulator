@@ -147,6 +147,8 @@ if not load_save_success:
         # Create a temporary root session for initializing stuff
         lan2_client2.sessions = [Session(0, lan2_client2.fs.files, 0)]
 
+        isp.add_dns_record("google.com", lan2.wan)
+        
         # Setup our apt server
         # To setup an apt server, we need /var/www/html/repo
         # And inside the /repo folder, we need a file with the name of each package that the given server has for download
@@ -157,6 +159,12 @@ if not load_save_success:
             if file not in ["__init__.py", "__pycache__"]:
                 file = file.replace(".py", "")
                 lan2_client2.run_command("touch", [file], pipe=True)
+
+        # During our temporary root session, we want to install the current "installable" tool that's being developed
+        # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it
+        # This has to happen after we add our apt server to /etc/apt/sources.list and after the network is fully inited
+        # but before we remove our temporary root session
+        comp.run_command("apt", ["install", "nmap"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
@@ -171,8 +179,7 @@ if not load_save_success:
 
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
-
-        isp.add_dns_record("google.com", lan2.wan)
+        comp.run_command("export", ["PATH=/usr/bin:$PATH"], False)
 
 shell = Shell(comp)
 shell.main()

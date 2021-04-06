@@ -1,20 +1,37 @@
 from os import system as syscall
 from platform import system
+
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "clear"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    if "--version" in args:
+    """
+    # TODO: Add docstring for manpage
+    """
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+
+    if args.version:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-    if system() == "Windows":
-        syscall("cls")
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output("", pipe)
     else:
-        syscall("clear")
+        if system() == "Windows":
+            syscall("cls")
+        else:
+            syscall("clear")
 
-    return output("", pipe)
+        return output("", pipe)

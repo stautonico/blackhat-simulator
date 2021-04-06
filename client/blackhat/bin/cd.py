@@ -1,28 +1,42 @@
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "cd"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    if "--version" in args:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+    """
+    # TODO: Add docstring for manpage
+    """
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("directory")
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
 
-    if len(args) == 0:
-        computer.sessions[-1].current_dir = computer.fs.files
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
+        if not args.version and not args.directory:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
         return output("", pipe)
-
-    response = computer.fs.find(args[0])
-
-    if response.success:
-        if response.data.is_file():
-            return output(f"{__COMMAND__}: not a directory: {args[0]}", pipe, success=False,
-                          success_message=SysCallMessages.IS_FILE)
-        else:
-            computer.sessions[-1].current_dir = response.data
-            return output("", pipe)
     else:
-        return output(f"{__COMMAND__}: no such file or directory: {args[0]}", pipe, success=False,
-                      success_message=SysCallMessages.NOT_FOUND)
+        response = computer.fs.find(args.directory)
+
+        if response.success:
+            if response.data.is_file():
+                return output(f"{__COMMAND__}: not a directory: {args.directory}", pipe, success=False,
+                              success_message=SysCallMessages.IS_FILE)
+            else:
+                computer.sessions[-1].current_dir = response.data
+                return output("", pipe)
+        else:
+            return output(f"{__COMMAND__}: no such file or directory: {args.directory}", pipe, success=False,
+                          success_message=SysCallMessages.NOT_FOUND)

@@ -7,12 +7,13 @@ from ..helpers import SysCallMessages, SysCallStatus
 from ..lib.output import output
 
 __COMMAND__ = "sudo"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+    # TODO: Find a way to do this with arg parser without it breaking lol
     if "--version" in args:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+        return output(f"Sudo version {__VERSION__} (miscutils)", pipe)
 
     if len(args) == 0:
         return output(f"{__COMMAND__}: missing argument: command", pipe, success=False,

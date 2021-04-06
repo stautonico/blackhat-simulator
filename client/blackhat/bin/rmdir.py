@@ -1,44 +1,59 @@
 from ..computer import Computer
 from ..helpers import SysCallStatus, SysCallMessages
+from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "rmdir"
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.1"
 
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    if len(args) == 0:
-        return output(f"{__COMMAND__}: missing arguments", pipe, success=False)
+    """
+    # TODO: Add docstring for manpage
+    """
+    parser = ArgParser(prog=__COMMAND__)
+    parser.add_argument("sources", nargs="+")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
 
-    if "--version" in args:
+    args = parser.parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+
+    if args.version:
         return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-    verbose = False
-
-    if "-v" in args:
-        verbose = True
-        args.remove("-v")
-
-    src = args[0]
-
-    result = computer.fs.find(src)
-
-    if not result.success:
-        return output(f"{__COMMAND__}: cannot find '{src}': No such file or directory", pipe, success=False)
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output("", pipe)
     else:
-        if result.data.is_file():
-            return output(f"{__COMMAND__}: failed to remove '{src}': Not a directory", pipe, success=False)
-        else:
-            # rmdir only removes empty dirs
-            if len(result.data.files) > 0:
-                return output(f"{__COMMAND__}: failed to remove '{src}': Directory not empty", pipe,
-                              success=False)
+        output_text = ""
+
+        for file in args.sources:
+            result = computer.fs.find(file)
+
+            if not result.success:
+                output_text += f"cannot find '{file}': No such file or directory\n"
+                continue
             else:
-                response = result.data.delete(computer)
+                if result.data.is_file():
+                    output_text += f"failed to remove '{file}': Not a directory\n"
+                    continue
+                else:
+                    # rmdir only removes empty dirs
+                    if len(result.data.files) > 0:
+                        output_text += f"failed to remove '{file}': Directory not empty\n"
+                        continue
+                    else:
+                        response = result.data.delete(computer)
 
-                if not response.success:
-                    if response.message == SysCallMessages.NOT_ALLOWED:
-                        return output(f"{__COMMAND__}: cannot remove '{src}': Permission denied", pipe,
-                                      success=False)
+                        if not response.success:
+                            if response.message == SysCallMessages.NOT_ALLOWED:
+                                output_text += f"cannot remove '{file}': Permission denied"
+                                continue
+            if args.verbose:
+                output_text += f"removed '{file}'\n"
 
-    return output(f"removed '{src}'", pipe)
+        return output(output_text, pipe)
