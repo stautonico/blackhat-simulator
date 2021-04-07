@@ -1,7 +1,7 @@
-from ..computer import Computer
-from ..helpers import SysCallStatus
-from ..lib.input import ArgParser
-from ..lib.output import output
+from ...computer import Computer
+from ...helpers import SysCallStatus
+from ...lib.input import ArgParser
+from ...lib.output import output
 
 __COMMAND__ = "ifconfig"
 __VERSION__ = "1.1"

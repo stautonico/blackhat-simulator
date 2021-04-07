@@ -1,6 +1,6 @@
 from .service import Service
-from ..helpers import SysCallStatus, SysCallMessages
 from ..fs import Directory
+from ..helpers import SysCallStatus, SysCallMessages
 
 
 class AptServer(Service):
@@ -26,7 +26,12 @@ class AptServer(Service):
                 for package in args.get("packages"):
                     find_package = repo_dir.find(package)
                     if find_package:
-                        packages_we_have.append(package)
+                        # We want to check if its a directory (because then we then we pass all the packages within)
+                        if find_package.is_directory():
+                            for subpackage in find_package.files.keys():
+                                packages_we_have.append(subpackage)
+                        else:
+                            packages_we_have.append(package)
                     else:
                         packages_we_dont_have.append(package)
 

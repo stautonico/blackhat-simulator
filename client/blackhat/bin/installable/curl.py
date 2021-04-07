@@ -1,7 +1,7 @@
-from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
-from ..lib.input import ArgParser
-from ..lib.output import output
+from ...computer import Computer
+from ...helpers import SysCallStatus, SysCallMessages
+from ...lib.input import ArgParser
+from ...lib.output import output
 
 __COMMAND__ = "curl"
 __VERSION__ = "1.1"

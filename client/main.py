@@ -148,7 +148,7 @@ if not load_save_success:
         lan2_client2.sessions = [Session(0, lan2_client2.fs.files, 0)]
 
         isp.add_dns_record("google.com", lan2.wan)
-        
+
         # Setup our apt server
         # To setup an apt server, we need /var/www/html/repo
         # And inside the /repo folder, we need a file with the name of each package that the given server has for download
@@ -157,8 +157,13 @@ if not load_save_success:
         lan2_client2.run_command("cd", ["/var/www/html/repo"], pipe=True)
         for file in os.listdir("./blackhat/bin/installable"):
             if file not in ["__init__.py", "__pycache__"]:
+
                 file = file.replace(".py", "")
                 lan2_client2.run_command("touch", [file], pipe=True)
+
+        lan2_client2.run_command("mkdir", ["netutils"], True)
+        lan2_client2.run_command("cd", ["netutils"], True)
+        lan2_client2.run_command("touch", ["ping", "curl", "dig", "ifconfig"], True)
 
         # During our temporary root session, we want to install the current "installable" tool that's being developed
         # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it

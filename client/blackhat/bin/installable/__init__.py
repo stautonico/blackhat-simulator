@@ -1,1 +1,1 @@
-from . import nmap
+from . import ifconfig

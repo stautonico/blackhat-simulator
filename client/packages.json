@@ -1,4 +1,3 @@
-// I may or may not do anything with this, it all depends
 {
   "coreutils": [
     "adduser",
@@ -65,6 +64,7 @@
     "uptime"
   ],
   "misc": [
-    "BlackhatSSH"
+    "BlackhatSSH",
+    "nmap"
   ]
 }

@@ -2,10 +2,10 @@ import ipaddress
 from random import randint
 from time import sleep
 
-from ..computer import Computer
-from ..helpers import SysCallStatus
-from ..lib.input import ArgParser
-from ..lib.output import output
+from ...computer import Computer
+from ...helpers import SysCallStatus
+from ...lib.input import ArgParser
+from ...lib.output import output
 
 __COMMAND__ = "ping"
 __VERSION__ = "1.1"

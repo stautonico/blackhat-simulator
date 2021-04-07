@@ -1,4 +1,5 @@
 import os
+from json import loads
 
 from ..computer import Computer
 from ..fs import File, Directory
@@ -33,6 +34,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     if not args:
         return output("", pipe)
     else:
+        # Read the packages.json file to substitute packages with a list of their subpackages (if they have)
+        with open("packages.json", "r") as f:
+            all_packages = loads(f.read())
         if args.command == "install":
             # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
             find_usr_bin = computer.fs.find("/usr/bin")
@@ -73,6 +77,21 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                             if package in outstanding_packages:
                                 outstanding_packages.remove(package)
 
+            arg_packages = {}
+
+            for pkg in args.packages:
+                if pkg in all_packages.keys():
+                    for subpkg in all_packages[pkg]:
+                        if arg_packages.get(pkg):
+                            arg_packages[pkg].append(subpkg)
+                        else:
+                            arg_packages[pkg] = [subpkg]
+                else:
+                    if arg_packages.get("other"):
+                        arg_packages["other"].append(pkg)
+                    else:
+                        arg_packages["other"] = [pkg]
+
             # Check if the package we're trying to install exists
             exists_dirty = os.listdir("./blackhat/bin/installable")
             exists_clean = []
@@ -81,18 +100,42 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     exists_clean.append(file.replace(".py", ""))
 
             # We want to install only the packages that we found (not outstanding)
-            for to_install in args.packages:
-                if to_install not in exists_clean or to_install in outstanding_packages:
-                    print(f"Unable to locate package {to_install}")
+            for pkg_group, packages in arg_packages.items():
+                for pkg in packages:
+                    # Create a list of already installed packages to determine if we should install it again
+                    installed_packages = status_file.read(computer)
+                    if installed_packages.success:
+                        installed_packages = installed_packages.data.split("\n")
+                    else:
+                        installed_packages = []
+
+                    if pkg not in exists_clean or pkg in outstanding_packages:
+                        print(f"Unable to locate package {pkg}")
+                    else:
+                        to_check = pkg if pkg_group == "other" else pkg_group
+                        if to_check in installed_packages:
+                            print(f"{to_check} is already at the newest version, skipping...")
+                            if pkg_group != "other":
+                                # If we're doing a package with subpackages, it'll print our error message multiple times
+                                break
+                            else:
+                                continue
+                        # Add the file to /usr/bin
+                        current_file = File(pkg, "[BINARY DATA]", usr_bin, 0, 0)
+                        usr_bin.add_file(current_file)
+                        # We only want to store the package name if its not a subpackage
+                        if pkg_group == "other":
+                            status_file.append(pkg + "\n", computer)
+                            print(f"Successfully installed package {pkg}")
+
                 else:
-                    # Add the file to /usr/bin
-                    current_file = File(to_install, "[BINARY DATA]", usr_bin, 0, 0)
-                    usr_bin.add_file(current_file)
-                    status_file.append(to_install, computer)
-                    print(f"Successfully installed package {to_install}")
+                    if pkg_group != "other":
+                        status_file.append(pkg_group + "\n", computer)
+                        print(f"Successfully installed package {pkg_group}")
 
             return output("", pipe)
 
+        # TODO: Fix remove feature
         elif args.command == "remove":
             find_status_file = computer.fs.find("/var/lib/dpkg/status")
             if not find_status_file.success:
