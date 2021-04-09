@@ -378,6 +378,25 @@ class Computer:
                                            (self.id, uid)).fetchall()
             return SysCallStatus(success=True, data=[x[0] for x in result])
 
+    def find_user_primary_group(self, uid: int) -> SysCallStatus:
+        """
+        Get the `Group` GID's that is the `User`s primary `Group` (by UID)
+
+        Args:
+            uid (int): The UID of the user to lookup
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+        """
+        # Double check if the user exists
+        if not self.find_user(uid=uid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        else:
+            # Ask the database for the GIDs
+            result = self.database.execute("SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;",
+                                           (self.id, uid, "primary")).fetchone()
+            return SysCallStatus(success=True, data=[x for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
         """
         Remove a user from a group (by uid and gid)

@@ -18,7 +18,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument("command")
     parser.add_argument("packages", nargs="+")
-    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
 
@@ -93,11 +93,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                         arg_packages["other"] = [pkg]
 
             # Check if the package we're trying to install exists
-            exists_dirty = os.listdir("./blackhat/bin/installable")
-            exists_clean = []
-            for file in exists_dirty:
-                if file not in ["__pycache__", "__init__.py"]:
-                    exists_clean.append(file.replace(".py", ""))
+            exists = [file.replace(".py", "") for file in os.listdir("./blackhat/bin/installable") if file not in ["__init__.py", "__pycache__"]]
 
             # We want to install only the packages that we found (not outstanding)
             for pkg_group, packages in arg_packages.items():
@@ -109,7 +105,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     else:
                         installed_packages = []
 
-                    if pkg not in exists_clean or pkg in outstanding_packages:
+                    if pkg not in exists or pkg in outstanding_packages:
                         print(f"Unable to locate package {pkg}")
                     else:
                         to_check = pkg if pkg_group == "other" else pkg_group
@@ -135,7 +131,6 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
             return output("", pipe)
 
-        # TODO: Fix remove feature
         elif args.command == "remove":
             find_status_file = computer.fs.find("/var/lib/dpkg/status")
             if not find_status_file.success:
@@ -157,7 +152,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                                   success=False)
 
             for to_remove in args.packages:
-                computer.run_command("rm", [f"/usr/bin/{to_remove}"], pipe)
+                # Check if the package we're trying to remove has subpackages
+                subpackages = all_packages.get(to_remove)
+                if subpackages:
+                    for subpkg in subpackages:
+                        computer.run_command("rm", [f"/usr/bin/{subpkg}"], pipe)
+                else:
+                    computer.run_command("rm", [f"/usr/bin/{to_remove}"], pipe)
                 installed_packages.remove(to_remove)
 
             # Update the content of /var/lib/dpkg/status

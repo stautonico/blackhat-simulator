@@ -19,7 +19,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument("host")
     parser.add_argument("-p", dest="port", default=22, type=int)
-    parser.add_argument("--version", "-V", action="store_true", help=f"Print the binaries' version number and exit")
+    parser.add_argument("--version", "-V", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
 

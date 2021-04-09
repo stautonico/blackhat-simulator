@@ -131,7 +131,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     parser.add_argument("-r", dest="recursive", action="store_true")
     parser.add_argument("-p", dest="preserve_permissions", action="store_true")
     parser.add_argument("-v", dest="verbose", action="store_true")
-    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
 

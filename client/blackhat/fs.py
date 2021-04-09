@@ -4,6 +4,7 @@ import sys
 from random import choice
 from string import ascii_uppercase, digits
 from typing import Optional, Dict, List, Literal, Union
+from colorama import Style
 
 from .helpers import SysCallStatus, SysCallMessages
 
@@ -515,22 +516,16 @@ class StandardFS:
         share_dir: Directory = Directory("share", usr_dir, 0, 0)
         usr_dir.add_file(share_dir)
 
-        # /usr/share/man (stores man pages from __doc__)
+        # /usr/share/man
         man_dir: Directory = Directory("man", share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and check if they have a __doc__.
+        # Loop through all the files in /bin and run "parse_args()" with the `doc` set to `True`
         for binary in self.files.find("bin").files.keys():
             try:
                 module = importlib.import_module(f"blackhat.bin.{binary}")
-                # If we have a __doc__, we need to format it for printing
-                if module.main.__doc__:
-                    # Extract only the top lines and remove the leading spaces
-                    manpage = module.main.__doc__.replace("    ", "")
-                    # Remove the extra \n at the beginning and end
-                    manpage = manpage.removeprefix("\n").removesuffix("\n")
-                else:
-                    manpage = ""
+                manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/", Style.RESET_ALL)
+                manpage = manpage.removeprefix("\n").removesuffix("\n")
                 current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
             except AttributeError as e:

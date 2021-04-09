@@ -108,7 +108,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     parser.add_argument("files", nargs="+", default=".")
     parser.add_argument("-a", dest="all", action="store_true")
     parser.add_argument("-l", dest="long", action="store_true")
-    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
 

@@ -252,3 +252,5 @@ pip-selfcheck.json
 client/blackhat.db
 
 systems.db
+
+client/blackhat/to_modify.txt

@@ -4,18 +4,59 @@ from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "echo"
-__VERSION__ = "1.1"
+__DESCRIPTION__ = "display a line of text"
+__DESCRIPTION_LONG__ = """Echo the STRING(s) to standard output
 
+"""
+__VERSION__ = "1.2"
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    """
-    # TODO: Add docstring for manpage
-    """
-    parser = ArgParser(prog=__COMMAND__)
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("string", nargs="+")
-    parser.add_argument("--version", action="store_true", help=f"Print the binaries' version number and exit")
+    parser.add_argument("-n", dest="nonewline", action="store_true", help="do not output the trailing newline")
+    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            elif item.nargs == "+":
+                SYNOPSIS += f"[{item.dest.upper()}]... "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+    # TODO: Add -e flag
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -39,4 +80,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             else:
                 clean_args.append(arg)
 
-        return output(" ".join(clean_args), pipe)
+        output_text = " ".join(clean_args)
+
+        if args.nonewline:
+            if output_text.endswith("\n"):
+                output_text = output_text[:-1]
+
+        return output(output_text, pipe)
