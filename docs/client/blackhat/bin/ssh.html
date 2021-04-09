@@ -47,7 +47,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;host&#34;)
     parser.add_argument(&#34;-p&#34;, dest=&#34;port&#34;, default=22, type=int)
-    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 
@@ -138,7 +138,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;host&#34;)
     parser.add_argument(&#34;-p&#34;, dest=&#34;port&#34;, default=22, type=int)
-    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 

@@ -45,7 +45,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser.add_argument(&#34;username&#34;)
     parser.add_argument(&#34;-p&#34;, dest=&#34;password&#34;)
     parser.add_argument(&#34;-n&#34;, dest=&#34;noninteractive&#34;, action=&#34;store_false&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 
@@ -205,7 +205,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser.add_argument(&#34;username&#34;)
     parser.add_argument(&#34;-p&#34;, dest=&#34;password&#34;)
     parser.add_argument(&#34;-n&#34;, dest=&#34;noninteractive&#34;, action=&#34;store_false&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 

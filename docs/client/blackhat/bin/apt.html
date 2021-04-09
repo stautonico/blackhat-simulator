@@ -46,7 +46,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;command&#34;)
     parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 
@@ -121,11 +121,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         arg_packages[&#34;other&#34;] = [pkg]
 
             # Check if the package we&#39;re trying to install exists
-            exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
-            exists_clean = []
-            for file in exists_dirty:
-                if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
-                    exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
+            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
 
             # We want to install only the packages that we found (not outstanding)
             for pkg_group, packages in arg_packages.items():
@@ -137,7 +133,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     else:
                         installed_packages = []
 
-                    if pkg not in exists_clean or pkg in outstanding_packages:
+                    if pkg not in exists or pkg in outstanding_packages:
                         print(f&#34;Unable to locate package {pkg}&#34;)
                     else:
                         to_check = pkg if pkg_group == &#34;other&#34; else pkg_group
@@ -163,7 +159,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
             return output(&#34;&#34;, pipe)
 
-        # TODO: Fix remove feature
         elif args.command == &#34;remove&#34;:
             find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
             if not find_status_file.success:
@@ -185,7 +180,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                                   success=False)
 
             for to_remove in args.packages:
-                computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                # Check if the package we&#39;re trying to remove has subpackages
+                subpackages = all_packages.get(to_remove)
+                if subpackages:
+                    for subpkg in subpackages:
+                        computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
+                else:
+                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
                 installed_packages.remove(to_remove)
 
             # Update the content of /var/lib/dpkg/status
@@ -221,7 +222,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;command&#34;)
     parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 
@@ -296,11 +297,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         arg_packages[&#34;other&#34;] = [pkg]
 
             # Check if the package we&#39;re trying to install exists
-            exists_dirty = os.listdir(&#34;./blackhat/bin/installable&#34;)
-            exists_clean = []
-            for file in exists_dirty:
-                if file not in [&#34;__pycache__&#34;, &#34;__init__.py&#34;]:
-                    exists_clean.append(file.replace(&#34;.py&#34;, &#34;&#34;))
+            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
 
             # We want to install only the packages that we found (not outstanding)
             for pkg_group, packages in arg_packages.items():
@@ -312,7 +309,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     else:
                         installed_packages = []
 
-                    if pkg not in exists_clean or pkg in outstanding_packages:
+                    if pkg not in exists or pkg in outstanding_packages:
                         print(f&#34;Unable to locate package {pkg}&#34;)
                     else:
                         to_check = pkg if pkg_group == &#34;other&#34; else pkg_group
@@ -338,7 +335,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
             return output(&#34;&#34;, pipe)
 
-        # TODO: Fix remove feature
         elif args.command == &#34;remove&#34;:
             find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
             if not find_status_file.success:
@@ -360,7 +356,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                                   success=False)
 
             for to_remove in args.packages:
-                computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                # Check if the package we&#39;re trying to remove has subpackages
+                subpackages = all_packages.get(to_remove)
+                if subpackages:
+                    for subpkg in subpackages:
+                        computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
+                else:
+                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
                 installed_packages.remove(to_remove)
 
             # Update the content of /var/lib/dpkg/status

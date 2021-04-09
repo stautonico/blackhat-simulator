@@ -32,34 +32,129 @@ from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;id&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;print real and effective user and group IDs&#34;
+__DESCRIPTION_LONG__ = &#34;Print user and group information for each specified USER, or (when USER omitted) for the current user.&#34;
+__VERSION__ = &#34;1.2&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;user&#34;, nargs=&#34;?&#34;)
+    parser.add_argument(&#34;-g&#34;, &#34;--group&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective group ID&#34;)
+    parser.add_argument(&#34;-G&#34;, &#34;--groups&#34;, action=&#34;store_true&#34;, help=&#34;print all group IDs&#34;)
+    parser.add_argument(&#34;-n&#34;, &#34;--name&#34;, action=&#34;store_true&#34;, help=&#34;print a name instead of a number, for -u&#34;)
+    parser.add_argument(&#34;-u&#34;, &#34;--user&#34;, dest=&#34;user_only&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective user ID&#34;)
+    parser.add_argument(&#34;-z&#34;, &#34;--zero&#34;, action=&#34;store_true&#34;,
+                        help=&#34;delimit entries with NUL characters, not whitespace;\n\n\t\tnot permitted in default format&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
 
-    # TODO: Add ability to lookup UID of user by username/uid (arg[0])
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        # Get the current user&#39;s username
-        username = computer.find_user(computer.get_uid()).data.username
-        return output(f&#34;uid={computer.get_uid()}({username})&#34;, pipe)</code></pre>
+        if args.user:
+            # Check if a UID was entered
+            try:
+                uid = int(args.user)
+                user_to_lookup_result = computer.find_user(uid=uid)
+            except ValueError:
+                # That means we entered a username
+                user_to_lookup_result = computer.find_user(username=args.user)
+        else:
+            user_to_lookup_result = computer.find_user(uid=computer.get_uid())
+
+        if not user_to_lookup_result.success:
+            return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)
+        else:
+            user = user_to_lookup_result.data
+            uid = user.uid
+            primary_group = computer.find_user_primary_group(uid).data[0]
+            secondary_groups = computer.find_user_groups(uid)
+            secondary_groups = secondary_groups.data if secondary_groups.success else []
+            secondary_groups.remove(primary_group)
+
+            if args.group:
+                return output(f&#34;{primary_group}&#34;, pipe)
+
+            if args.groups:
+                if args.zero:
+                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+
+            if args.name:
+                return output(user.username, pipe)
+
+            if args.user_only:
+                return output(f&#34;{uid}&#34;, pipe)
+
+            if args.zero:
+                return output(f&#34;{__COMMAND__}: option --zero not permitted in default format&#34;, pipe, success=False)
+
+            output_text = f&#34;uid={uid}({user.username}) gid={primary_group}({user.username}) &#34;
+
+            if len(secondary_groups) &gt; 0:
+                output_text += &#34;groups=&#34;
+
+            for group in secondary_groups:
+                group_lookup = computer.find_group(gid=group)
+                if group_lookup.success:
+                    output_text += f&#34;{group}({group.data.name}),&#34;
+                else:
+                    output_text += f&#34;{group}(?),&#34;
+
+            if output_text.endswith(&#34;,&#34;):
+                output_text = output_text[:-1]
+
+            return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -73,36 +168,138 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;Print the binaries&#39; version number and exit&#34;)
-
-    args = parser.parse_args(args)
-
-    # TODO: Add ability to lookup UID of user by username/uid (arg[0])
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        # Get the current user&#39;s username
-        username = computer.find_user(computer.get_uid()).data.username
-        return output(f&#34;uid={computer.get_uid()}({username})&#34;, pipe)</code></pre>
+        if args.user:
+            # Check if a UID was entered
+            try:
+                uid = int(args.user)
+                user_to_lookup_result = computer.find_user(uid=uid)
+            except ValueError:
+                # That means we entered a username
+                user_to_lookup_result = computer.find_user(username=args.user)
+        else:
+            user_to_lookup_result = computer.find_user(uid=computer.get_uid())
+
+        if not user_to_lookup_result.success:
+            return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)
+        else:
+            user = user_to_lookup_result.data
+            uid = user.uid
+            primary_group = computer.find_user_primary_group(uid).data[0]
+            secondary_groups = computer.find_user_groups(uid)
+            secondary_groups = secondary_groups.data if secondary_groups.success else []
+            secondary_groups.remove(primary_group)
+
+            if args.group:
+                return output(f&#34;{primary_group}&#34;, pipe)
+
+            if args.groups:
+                if args.zero:
+                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+
+            if args.name:
+                return output(user.username, pipe)
+
+            if args.user_only:
+                return output(f&#34;{uid}&#34;, pipe)
+
+            if args.zero:
+                return output(f&#34;{__COMMAND__}: option --zero not permitted in default format&#34;, pipe, success=False)
+
+            output_text = f&#34;uid={uid}({user.username}) gid={primary_group}({user.username}) &#34;
+
+            if len(secondary_groups) &gt; 0:
+                output_text += &#34;groups=&#34;
+
+            for group in secondary_groups:
+                group_lookup = computer.find_group(gid=group)
+                if group_lookup.success:
+                    output_text += f&#34;{group}({group.data.name}),&#34;
+                else:
+                    output_text += f&#34;{group}(?),&#34;
+
+            if output_text.endswith(&#34;,&#34;):
+                output_text = output_text[:-1]
+
+            return output(output_text, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.id.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;user&#34;, nargs=&#34;?&#34;)
+    parser.add_argument(&#34;-g&#34;, &#34;--group&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective group ID&#34;)
+    parser.add_argument(&#34;-G&#34;, &#34;--groups&#34;, action=&#34;store_true&#34;, help=&#34;print all group IDs&#34;)
+    parser.add_argument(&#34;-n&#34;, &#34;--name&#34;, action=&#34;store_true&#34;, help=&#34;print a name instead of a number, for -u&#34;)
+    parser.add_argument(&#34;-u&#34;, &#34;--user&#34;, dest=&#34;user_only&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective user ID&#34;)
+    parser.add_argument(&#34;-z&#34;, &#34;--zero&#34;, action=&#34;store_true&#34;,
+                        help=&#34;delimit entries with NUL characters, not whitespace;\n\n\t\tnot permitted in default format&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -124,6 +321,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.id.main" href="#client.blackhat.bin.id.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.id.parse_args" href="#client.blackhat.bin.id.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>
