@@ -7,7 +7,7 @@ from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = "cp"
-__VERSION__ = "1.1"
+__VERSION__ = "1.1.1"
 
 
 # TODO: This is old code from the original demo, this will be re-written soon
@@ -34,6 +34,8 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
         # If we found the parent folder, set the filename to the parent folder
         if dst_path.split("/")[-1] != to_write.name:
             new_file_name = dst_path.split("/")[-1]
+            if new_file_name == "":
+                new_file_name = src.name
         else:
             new_file_name = src.name
 
