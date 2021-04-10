@@ -1,20 +1,22 @@
+from time import sleep
+
 from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
 
-__COMMAND__ = "who"
-__DESCRIPTION__ = "show who is logged on"
-__DESCRIPTION_LONG__ = "Print information about users who are currently logged in."
+__COMMAND__ = "poweroff"
+__DESCRIPTION__ = "power-off or reboot the machine"
+__DESCRIPTION_LONG__ = "**poweroff*/, **reboot*/ may be used to power-off or reboot the machine. Both commands take the same options."
 __VERSION__ = "1.2"
 
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
-    parser.add_argument("-b", "--boot", action="store_true", help="time of last system boot")
-    parser.add_argument("-H", "--heading", action="store_true", help="print line of column headings")
-    parser.add_argument("-q", "--count", action="store_true", help="all login names and number of users logged on")
-    parser.add_argument("--version", action="store_true", help=f"print program version")
+    parser.add_argument("-p", "--poweroff", action="store_true",
+                        help="Power-off the machine, regardless of which one of the two commands is invoked.")
+    parser.add_argument("--reboot", action="store_true",
+                        help="Reboot the machine, regardless of which one of the three commands is invoked.")
 
     args = parser.parse_args(args)
 
@@ -59,43 +61,25 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     args, parser = parse_args(args)
 
     if parser.error_message:
-        if not args.version:
-            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+        return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
-        if args.version:
-            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+        # TODO: Add ability to power off/reboot external machines via SSH
+        # Only root can reboot/power off
+        if computer.get_uid() == 0:
+            if args.reboot:
+                print(f"Rebooting...")
+                sleep(1)
+                computer.run_command("clear", [], pipe=True)
+                computer.init()
+                while len(computer.sessions) != 1:
+                    computer.run_command("exit", [], pipe=True)
 
-        if args.boot:
-            return output(f"\tsystem boot  {computer.boot_time.strftime('%Y-%m-%d %H:%M')}", pipe)
+                return output("", pipe)
 
-        if args.count:
-            usernames = []
-            for session in computer.sessions:
-                username_result = computer.find_user(session.real_uid)
-                if username_result.success:
-                    username = username_result.data.username
-                else:
-                    username = "?"
-                if username not in usernames:
-                    usernames.append(username)
-
-            return output(f"{' '.join(usernames)}\n# users={len(usernames)}", pipe)
-
-        output_text = ""
-
-        if args.heading:
-            output_text += "NAME\tLINE\n"
-
-        for session in computer.sessions:
-            username_result = computer.find_user(session.real_uid)
-            if username_result.success:
-                username = username_result.data.username
-            else:
-                username = "?"
-            output_text += f"{username}\tpts/{session.id}\n"
-
-        return output(output_text, pipe)
+            exit(0)
+        else:
+            return output(f"{__COMMAND__}: permission denied", pipe, success=False)

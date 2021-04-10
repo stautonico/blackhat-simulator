@@ -143,6 +143,8 @@ If you have an issue with overwriting, you can add the `--force` tag, which will
   real world)
 - [ ] Manpages (None have manuals/instructions)
 
+- [ ] Tests (As of now, any code, working or not working, gets pushed to main (that's not good lol))
+
 ### Far 🔭
 
 - [ ] Multiplayer (This may be unlikely due to the fact that the "game" has many vulnerabilities that may allow the
@@ -179,4 +181,5 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 ## Acknowledgements
 
 * [Robin Selmer (website error page)](https://codepen.io/robinselmer/pen/vJjbOZ?css-preprocessor=none)
-
+* [kirb](https://github.com/kirb)
+  / [theos](https://github.com/theos/theos) ([PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md))

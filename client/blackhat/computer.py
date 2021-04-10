@@ -6,7 +6,7 @@ import sqlite3
 from hashlib import md5
 from random import choice, randint
 from secrets import token_hex
-from time import perf_counter
+from datetime import datetime
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
@@ -23,7 +23,7 @@ class Computer:
         """
         self.connection = sqlite3.connect("blackhat.db")
         self.database = self.connection.cursor()
-        self.boot_time = perf_counter()
+        self.boot_time = datetime.now()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
         self.users: Dict[int, User] = {}
@@ -48,6 +48,7 @@ class Computer:
         Returns:
             None
         """
+        self.boot_time = datetime.now()
         # Try to setup the user, group, and group membership tables
         init_tables = open("blackhat/database/init_tables.sql").read()
         self.database.executescript(init_tables)
