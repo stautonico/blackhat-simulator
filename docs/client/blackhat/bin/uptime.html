@@ -26,7 +26,7 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from time import perf_counter
+<pre><code class="python">from datetime import datetime
 
 from ..computer import Computer
 from ..helpers import SysCallStatus
@@ -34,39 +34,104 @@ from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;uptime&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;Tell how long the system has been running.&#34;
+__DESCRIPTION_LONG__ = &#34;**uptime*/  gives  a  one line display of the following information.  The current time and how long the system has been running.&#34;
+__VERSION__ = &#34;1.2&#34;
+
+
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;-p&#34;, &#34;--pretty&#34;, action=&#34;store_true&#34;, help=&#34;show uptime in pretty format&#34;)
+    parser.add_argument(&#34;-s&#34;, &#34;--since&#34;, action=&#34;store_true&#34;, help=&#34;system up since, in yyyy-mm-dd HH:MM:SS format&#34;)
+    parser.add_argument(&#34;-V&#34;, &#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        now = perf_counter()
-        total_seconds = now - computer.boot_time
+        if args.version:
+            return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
+
+        now = datetime.now()
+        total_seconds = (now - computer.boot_time).total_seconds()
 
         seconds = total_seconds % (24 * 3600)
-        hour = seconds // 3600
+        hours = seconds // 3600
         seconds %= 3600
         minutes = seconds // 60
         seconds %= 60
 
-        output_time = &#34;%d:%02d:%02d&#34; % (hour, minutes, seconds)
+        if args.since:
+            return output(computer.boot_time.strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
+
+        if args.pretty:
+            if hours == 0:
+                if minutes == 1:
+                    output_text = &#34;up %d minute&#34; % minutes
+                else:
+                    output_text = &#34;up %d minutes&#34; % minutes
+            else:
+                output_text = &#34;up %d &#34;
+                if hours == 1:
+                    output_text += &#34;hour, %d &#34;
+                else:
+                    output_text += &#34;hours, %d &#34;
+
+                if minutes == 1:
+                    output_text += &#34;minute&#34;
+                else:
+                    output_text += &#34;minutes&#34;
+
+                output_text = output_text % (hours, minutes)
+            return output(output_text, pipe)
+
+        output_time = &#34;%d:%02d:%02d&#34; % (hours, minutes, seconds)
 
         return output(f&#34;uptime: {output_time}&#34;, pipe)</code></pre>
 </details>
@@ -82,43 +147,115 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        now = perf_counter()
-        total_seconds = now - computer.boot_time
+        if args.version:
+            return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
+
+        now = datetime.now()
+        total_seconds = (now - computer.boot_time).total_seconds()
 
         seconds = total_seconds % (24 * 3600)
-        hour = seconds // 3600
+        hours = seconds // 3600
         seconds %= 3600
         minutes = seconds // 60
         seconds %= 60
 
-        output_time = &#34;%d:%02d:%02d&#34; % (hour, minutes, seconds)
+        if args.since:
+            return output(computer.boot_time.strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
+
+        if args.pretty:
+            if hours == 0:
+                if minutes == 1:
+                    output_text = &#34;up %d minute&#34; % minutes
+                else:
+                    output_text = &#34;up %d minutes&#34; % minutes
+            else:
+                output_text = &#34;up %d &#34;
+                if hours == 1:
+                    output_text += &#34;hour, %d &#34;
+                else:
+                    output_text += &#34;hours, %d &#34;
+
+                if minutes == 1:
+                    output_text += &#34;minute&#34;
+                else:
+                    output_text += &#34;minutes&#34;
+
+                output_text = output_text % (hours, minutes)
+            return output(output_text, pipe)
+
+        output_time = &#34;%d:%02d:%02d&#34; % (hours, minutes, seconds)
 
         return output(f&#34;uptime: {output_time}&#34;, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.uptime.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;-p&#34;, &#34;--pretty&#34;, action=&#34;store_true&#34;, help=&#34;show uptime in pretty format&#34;)
+    parser.add_argument(&#34;-s&#34;, &#34;--since&#34;, action=&#34;store_true&#34;, help=&#34;system up since, in yyyy-mm-dd HH:MM:SS format&#34;)
+    parser.add_argument(&#34;-V&#34;, &#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -140,6 +277,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.uptime.main" href="#client.blackhat.bin.uptime.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.uptime.parse_args" href="#client.blackhat.bin.uptime.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

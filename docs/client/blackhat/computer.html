@@ -34,7 +34,7 @@ import sqlite3
 from hashlib import md5
 from random import choice, randint
 from secrets import token_hex
-from time import perf_counter
+from datetime import datetime
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
@@ -51,7 +51,7 @@ class Computer:
         &#34;&#34;&#34;
         self.connection = sqlite3.connect(&#34;blackhat.db&#34;)
         self.database = self.connection.cursor()
-        self.boot_time = perf_counter()
+        self.boot_time = datetime.now()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
         self.users: Dict[int, User] = {}
@@ -76,6 +76,7 @@ class Computer:
         Returns:
             None
         &#34;&#34;&#34;
+        self.boot_time = datetime.now()
         # Try to setup the user, group, and group membership tables
         init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
         self.database.executescript(init_tables)
@@ -1105,7 +1106,7 @@ class ISPRouter(Router):
         &#34;&#34;&#34;
         self.connection = sqlite3.connect(&#34;blackhat.db&#34;)
         self.database = self.connection.cursor()
-        self.boot_time = perf_counter()
+        self.boot_time = datetime.now()
         self.parent: Optional[Computer, Router, ISPRouter] = None  # Router
         self.hostname: Optional[str] = None
         self.users: Dict[int, User] = {}
@@ -1130,6 +1131,7 @@ class ISPRouter(Router):
         Returns:
             None
         &#34;&#34;&#34;
+        self.boot_time = datetime.now()
         # Try to setup the user, group, and group membership tables
         init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
         self.database.executescript(init_tables)
@@ -2539,6 +2541,7 @@ user's current directory</dd>
     Returns:
         None
     &#34;&#34;&#34;
+    self.boot_time = datetime.now()
     # Try to setup the user, group, and group membership tables
     init_tables = open(&#34;blackhat/database/init_tables.sql&#34;).read()
     self.database.executescript(init_tables)

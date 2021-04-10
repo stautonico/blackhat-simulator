@@ -32,38 +32,142 @@ from ..lib.input import ArgParser
 from ..lib.output import output
 
 __COMMAND__ = &#34;wc&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;print newline, word, and byte counts for each file&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;&#34;Print newline, word, and byte counts for each FILE, and a total line if more than one FILE is specified.  A word is a non-zero-length sequence of characters delimited by white space.\n\n\tThe options below may be used to select which counts are printed, always in the following order: newline, word,  character,  byte,  maximum  line
+length.&#34;&#34;&#34;
+__VERSION__ = &#34;1.2&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;data&#34;, nargs=&#34;+&#34;)
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;file&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;-c&#34;, &#34;--bytes&#34;, action=&#34;store_true&#34;, help=&#34;print the byte counts&#34;)
+    parser.add_argument(&#34;-m&#34;, &#34;--chars&#34;, action=&#34;store_true&#34;, help=&#34;print the character counts&#34;)
+    parser.add_argument(&#34;-l&#34;, &#34;--lines&#34;, action=&#34;store_true&#34;, help=&#34;print the newline counts&#34;)
+    parser.add_argument(&#34;-L&#34;, &#34;--max-line-length&#34;, dest=&#34;maxlinelength&#34;, action=&#34;store_true&#34;,
+                        help=&#34;print the maximum display width&#34;)
+    parser.add_argument(&#34;-w&#34;, &#34;--words&#34;, action=&#34;store_true&#34;, help=&#34;print the word counts&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.data:
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        count = 0
-        for arg in args.data:
-            if type(arg) == int:
-                count += len(str(arg))
-            else:
-                count += len(arg)
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        return output(str(count), pipe)</code></pre>
+        output_text = &#34;&#34;
+
+        total_new_line_count = 0
+        total_word_count = 0
+        total_byte_count = 0
+
+        # TODO: Allow cat &lt;FILE&gt; | wc
+        for file in args.file:
+            find_file = computer.fs.find(file)
+            if not find_file.success:
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: No such file or directory\n&#34;
+                continue
+
+            found_file = find_file.data
+
+            if found_file.is_directory():
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: Is a directory\n&#34;
+                continue
+
+            try_read_file = found_file.read(computer)
+
+            if not try_read_file.success:
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: Permission denied\n&#34;
+                continue
+
+            new_line_count = try_read_file.data.count(&#34;\n&#34;)
+            word_count = len(try_read_file.data.split(&#34; &#34;))
+            byte_count = len(try_read_file.data)
+
+            total_new_line_count += new_line_count
+            total_word_count += word_count
+            total_byte_count += byte_count
+
+            # Default option
+            if not args.bytes and not args.chars and not args.lines and not args.maxlinelength and not args.words:
+                output_text += f&#34;{new_line_count} {word_count}  {byte_count} {file}\n&#34;
+                continue
+
+            # Order of flags should be: newline, word, chracter, byte, maximum line length
+
+            if args.lines:
+                output_text += f&#34;{new_line_count} &#34;
+
+            if args.words:
+                output_text += f&#34;{word_count} &#34;
+
+            if args.chars:
+                output_text += f&#34;{byte_count} &#34;
+
+            if args.bytes:
+                output_text += f&#34;{byte_count} &#34;
+
+            if args.maxlinelength:
+                max_line_length = 0
+                for item in try_read_file.data.split(&#34;\n&#34;):
+                    if len(item) &gt; max_line_length:
+                        max_line_length = len(item)
+
+                output_text += f&#34;{max_line_length} &#34;
+
+            output_text += f&#34;{file}\n&#34;
+
+        if len(args.file) &gt; 1:
+            output_text += f&#34;{total_new_line_count} {total_word_count} {total_byte_count} total&#34;
+
+        return output(output_text, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -77,40 +181,150 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;data&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
-        if not args.version and not args.data:
+        if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        count = 0
-        for arg in args.data:
-            if type(arg) == int:
-                count += len(str(arg))
-            else:
-                count += len(arg)
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        return output(str(count), pipe)</code></pre>
+        output_text = &#34;&#34;
+
+        total_new_line_count = 0
+        total_word_count = 0
+        total_byte_count = 0
+
+        # TODO: Allow cat &lt;FILE&gt; | wc
+        for file in args.file:
+            find_file = computer.fs.find(file)
+            if not find_file.success:
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: No such file or directory\n&#34;
+                continue
+
+            found_file = find_file.data
+
+            if found_file.is_directory():
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: Is a directory\n&#34;
+                continue
+
+            try_read_file = found_file.read(computer)
+
+            if not try_read_file.success:
+                output_text += f&#34;{__COMMAND__}: &#39;{file}&#39;: Permission denied\n&#34;
+                continue
+
+            new_line_count = try_read_file.data.count(&#34;\n&#34;)
+            word_count = len(try_read_file.data.split(&#34; &#34;))
+            byte_count = len(try_read_file.data)
+
+            total_new_line_count += new_line_count
+            total_word_count += word_count
+            total_byte_count += byte_count
+
+            # Default option
+            if not args.bytes and not args.chars and not args.lines and not args.maxlinelength and not args.words:
+                output_text += f&#34;{new_line_count} {word_count}  {byte_count} {file}\n&#34;
+                continue
+
+            # Order of flags should be: newline, word, chracter, byte, maximum line length
+
+            if args.lines:
+                output_text += f&#34;{new_line_count} &#34;
+
+            if args.words:
+                output_text += f&#34;{word_count} &#34;
+
+            if args.chars:
+                output_text += f&#34;{byte_count} &#34;
+
+            if args.bytes:
+                output_text += f&#34;{byte_count} &#34;
+
+            if args.maxlinelength:
+                max_line_length = 0
+                for item in try_read_file.data.split(&#34;\n&#34;):
+                    if len(item) &gt; max_line_length:
+                        max_line_length = len(item)
+
+                output_text += f&#34;{max_line_length} &#34;
+
+            output_text += f&#34;{file}\n&#34;
+
+        if len(args.file) &gt; 1:
+            output_text += f&#34;{total_new_line_count} {total_word_count} {total_byte_count} total&#34;
+
+        return output(output_text, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.wc.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;file&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;-c&#34;, &#34;--bytes&#34;, action=&#34;store_true&#34;, help=&#34;print the byte counts&#34;)
+    parser.add_argument(&#34;-m&#34;, &#34;--chars&#34;, action=&#34;store_true&#34;, help=&#34;print the character counts&#34;)
+    parser.add_argument(&#34;-l&#34;, &#34;--lines&#34;, action=&#34;store_true&#34;, help=&#34;print the newline counts&#34;)
+    parser.add_argument(&#34;-L&#34;, &#34;--max-line-length&#34;, dest=&#34;maxlinelength&#34;, action=&#34;store_true&#34;,
+                        help=&#34;print the maximum display width&#34;)
+    parser.add_argument(&#34;-w&#34;, &#34;--words&#34;, action=&#34;store_true&#34;, help=&#34;print the word counts&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -132,6 +346,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.wc.main" href="#client.blackhat.bin.wc.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.wc.parse_args" href="#client.blackhat.bin.wc.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>
