@@ -31,10 +31,13 @@ import os
 import sys
 from random import choice
 from string import ascii_uppercase, digits
-from typing import Optional, Dict, List, Literal, Union
+from typing import Optional, Dict, List, Literal, Union, Callable
+
 from colorama import Style
 
 from .helpers import SysCallStatus, SysCallMessages
+
+event_types = Literal[&#34;read&#34;, &#34;write&#34;, &#34;move&#34;, &#34;perm&#34;, &#34;delete&#34;]
 
 
 class FSBaseObject:
@@ -63,7 +66,8 @@ class FSBaseObject:
         self.mtime: int  # Last modified time (unix time stamp)
         &#34;&#34;&#34;int: Modified time; when the file&#34;s content was last modified&#34;&#34;&#34;
         self.ctime: int  # Last file status change (unix time stamp)
-        &#34;&#34;&#34;imt: Changed time; when the file&#34;s metadata was last changed (ex. perms)&#34;&#34;&#34;
+        &#34;&#34;&#34;int: Changed time; when the file&#34;s metadata was last changed (ex. perms)&#34;&#34;&#34;
+        self.events: Dict[event_types, Callable] = {}
 
     def is_directory(self) -&gt; bool:
         &#34;&#34;&#34;
@@ -215,6 +219,63 @@ class FSBaseObject:
             else:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
+    def add_event_listener(self, event: event_types, function: Callable):
+        &#34;&#34;&#34;
+        Bind a function to run whenever a given event fires.
+        A `FSBaseObject` can only have one function per event type.
+        If a function is already bound to the given event type, it will be overwritten.
+
+        Args:
+            event: The given event type to bind the given `function` to.
+            Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+            &lt;ul&gt;
+                &lt;li&gt;read - When a file is read from&lt;/li&gt;
+                &lt;li&gt;write - When a file is written to&lt;/li&gt;
+                &lt;li&gt;move - When a file is moved to a different location AKA: When a file&#39;s parent folder changes&lt;/li&gt;
+                &lt;li&gt;perm - When a file&#39;s owner, group owner, or permissions changes&lt;/li&gt;
+                &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
+            &lt;/ul&gt;
+            function: The function/method to be called when the given `event` is fired
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        self.events[event] = function
+        return SysCallStatus(success=True)
+
+    def remove_event_listener(self, event: event_types):
+        &#34;&#34;&#34;
+        Unbinds the current function from the given `event` type
+
+        Args:
+            event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        try:
+            self.events.pop(event)
+        except Exception:
+            pass
+
+        return SysCallStatus(success=True)
+
+    def handle_event(self, event: event_types):
+        &#34;&#34;&#34;
+        Handles executing the function bound to the given `event`
+
+        Args:
+            event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        if event in self.events.keys():
+            self.events[event](self)
+
+        return SysCallStatus(success=True)
+
+
 
 class File(FSBaseObject):
     def __init__(self, name: str, content: str, parent: &#34;Directory&#34;, owner: int, group_owner: int) -&gt; None:
@@ -239,9 +300,10 @@ class File(FSBaseObject):
         Args:
             computer: The current `Computer` instance
 
-        Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
+        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
+        # TODO: Decide if this should fire only if permissions are successful
+        self.handle_event(&#34;read&#34;)
         if self.check_perm(&#34;read&#34;, computer).success:
             return SysCallStatus(success=True, data=self.content)
         else:
@@ -258,6 +320,7 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
+        self.handle_event(&#34;write&#34;)
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
@@ -276,6 +339,7 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
+        self.handle_event(&#34;write&#34;)
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
@@ -459,6 +523,7 @@ class StandardFS:
         Sets up:
         &lt;ul&gt;
             &lt;li&gt;/etc/passwd - Contains the username, hashed password, and UID of all the users in the system&lt;/li&gt;
+            &lt;li&gt;/etc/shadow - Contains the username, and hashed password of all users in the system&lt;/li&gt;
             &lt;li&gt;/etc/groups - Contains the list of groups in the systems (name, GID)&lt;/li&gt;
             &lt;li&gt;/etc/hostname - The hostname of the given `Computer`&lt;/li&gt;
             &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
@@ -472,10 +537,24 @@ class StandardFS:
         # TODO: Separate /etc/passwd and /etc/shadow
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
-        # The passwd file should have roots creds (bc root is created before the file)
-        # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
         passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
+
+        # TODO: Make this actually update users instead of just printing
+        def update_passwd(file):
+            content = file.content.split(&#34;\n&#34;)
+
+            for item in content:
+                subitems = item.split(&#34;:&#34;)
+                if len(subitems) != 1:
+                    print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+
+        passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
+
         etc_dir.add_file(passwd_file)
+        # Create the /etc/shadow file and change its perms (rw-------)
+        shadow_file: File = File(&#34;shadow&#34;, f&#34;&#34;, etc_dir, 0, 0)
+        shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+        etc_dir.add_file(shadow_file)
 
         # Create the /etc/groups file
         groups_file: File = File(&#34;group&#34;, f&#34;root:x:0&#34;, etc_dir, 0, 0)
@@ -552,7 +631,8 @@ class StandardFS:
         for binary in self.files.find(&#34;bin&#34;).files.keys():
             try:
                 module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;, Style.RESET_ALL)
+                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                                   Style.RESET_ALL)
                 manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
                 current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
@@ -940,17 +1020,20 @@ Also updates its size and triggers its parent to update their size</p>
 <ul class="hlist">
 <li><code><b><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></b></code>:
 <ul class="hlist">
+<li><code><a title="client.blackhat.fs.FSBaseObject.add_event_listener" href="#client.blackhat.fs.FSBaseObject.add_event_listener">add_event_listener</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_owner" href="#client.blackhat.fs.FSBaseObject.check_owner">check_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.delete" href="#client.blackhat.fs.FSBaseObject.delete">delete</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.handle_event" href="#client.blackhat.fs.FSBaseObject.handle_event">handle_event</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_directory" href="#client.blackhat.fs.FSBaseObject.is_directory">is_directory</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_file" href="#client.blackhat.fs.FSBaseObject.is_file">is_file</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.mtime" href="#client.blackhat.fs.FSBaseObject.mtime">mtime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
 </ul>
 </li>
 </ul>
@@ -1002,7 +1085,8 @@ Also updates its size and triggers its parent to update their size</p>
         self.mtime: int  # Last modified time (unix time stamp)
         &#34;&#34;&#34;int: Modified time; when the file&#34;s content was last modified&#34;&#34;&#34;
         self.ctime: int  # Last file status change (unix time stamp)
-        &#34;&#34;&#34;imt: Changed time; when the file&#34;s metadata was last changed (ex. perms)&#34;&#34;&#34;
+        &#34;&#34;&#34;int: Changed time; when the file&#34;s metadata was last changed (ex. perms)&#34;&#34;&#34;
+        self.events: Dict[event_types, Callable] = {}
 
     def is_directory(self) -&gt; bool:
         &#34;&#34;&#34;
@@ -1152,7 +1236,63 @@ Also updates its size and triggers its parent to update their size</p>
                 del self.parent.files[self.name]
                 return SysCallStatus(success=True)
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+    def add_event_listener(self, event: event_types, function: Callable):
+        &#34;&#34;&#34;
+        Bind a function to run whenever a given event fires.
+        A `FSBaseObject` can only have one function per event type.
+        If a function is already bound to the given event type, it will be overwritten.
+
+        Args:
+            event: The given event type to bind the given `function` to.
+            Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+            &lt;ul&gt;
+                &lt;li&gt;read - When a file is read from&lt;/li&gt;
+                &lt;li&gt;write - When a file is written to&lt;/li&gt;
+                &lt;li&gt;move - When a file is moved to a different location AKA: When a file&#39;s parent folder changes&lt;/li&gt;
+                &lt;li&gt;perm - When a file&#39;s owner, group owner, or permissions changes&lt;/li&gt;
+                &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
+            &lt;/ul&gt;
+            function: The function/method to be called when the given `event` is fired
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        self.events[event] = function
+        return SysCallStatus(success=True)
+
+    def remove_event_listener(self, event: event_types):
+        &#34;&#34;&#34;
+        Unbinds the current function from the given `event` type
+
+        Args:
+            event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        try:
+            self.events.pop(event)
+        except Exception:
+            pass
+
+        return SysCallStatus(success=True)
+
+    def handle_event(self, event: event_types):
+        &#34;&#34;&#34;
+        Handles executing the function bound to the given `event`
+
+        Args:
+            event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        if event in self.events.keys():
+            self.events[event](self)
+
+        return SysCallStatus(success=True)</code></pre>
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
@@ -1167,7 +1307,7 @@ Also updates its size and triggers its parent to update their size</p>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.ctime"><code class="name">var <span class="ident">ctime</span></code></dt>
 <dd>
-<div class="desc"><p>imt: Changed time; when the file"s metadata was last changed (ex. perms)</p></div>
+<div class="desc"><p>int: Changed time; when the file"s metadata was last changed (ex. perms)</p></div>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.mtime"><code class="name">var <span class="ident">mtime</span></code></dt>
 <dd>
@@ -1180,6 +1320,64 @@ Also updates its size and triggers its parent to update their size</p>
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="client.blackhat.fs.FSBaseObject.add_event_listener"><code class="name flex">
+<span>def <span class="ident">add_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'], function: Callable)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Bind a function to run whenever a given event fires.
+A <code><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></code> can only have one function per event type.
+If a function is already bound to the given event type, it will be overwritten.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>event</code></strong></dt>
+<dd>The given event type to bind the given <code>function</code> to.</dd>
+</dl>
+<p>Valid event types include: <code>read</code>, <code>write</code>, <code>move</code>, <code>perm</code>, <code>delete</code></p>
+<ul>
+<li>read - When a file is read from</li>
+<li>write - When a file is written to</li>
+<li>move - When a file is moved to a different location AKA: When a file's parent folder changes</li>
+<li>perm - When a file's owner, group owner, or permissions changes</li>
+<li>delete - Before a file is deleted</li>
+</ul>
+<dl>
+<dt><strong><code>function</code></strong></dt>
+<dd>The function/method to be called when the given <code>event</code> is fired</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_event_listener(self, event: event_types, function: Callable):
+    &#34;&#34;&#34;
+    Bind a function to run whenever a given event fires.
+    A `FSBaseObject` can only have one function per event type.
+    If a function is already bound to the given event type, it will be overwritten.
+
+    Args:
+        event: The given event type to bind the given `function` to.
+        Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+        &lt;ul&gt;
+            &lt;li&gt;read - When a file is read from&lt;/li&gt;
+            &lt;li&gt;write - When a file is written to&lt;/li&gt;
+            &lt;li&gt;move - When a file is moved to a different location AKA: When a file&#39;s parent folder changes&lt;/li&gt;
+            &lt;li&gt;perm - When a file&#39;s owner, group owner, or permissions changes&lt;/li&gt;
+            &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
+        &lt;/ul&gt;
+        function: The function/method to be called when the given `event` is fired
+
+    Returns:
+         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    self.events[event] = function
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.fs.FSBaseObject.change_owner"><code class="name flex">
 <span>def <span class="ident">change_owner</span></span>(<span>self, computer, new_user_owner: Optional[int] = None, new_group_owner: Optional[int] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -1373,6 +1571,41 @@ Also updates its size and triggers its parent to update their size</p>
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.fs.FSBaseObject.handle_event"><code class="name flex">
+<span>def <span class="ident">handle_event</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'])</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles executing the function bound to the given <code>event</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>event</code></strong></dt>
+<dd>The event type to run. Valid event types include: <code>read</code>, <code>write</code>, <code>move</code>, <code>perm</code>, <code>delete</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def handle_event(self, event: event_types):
+    &#34;&#34;&#34;
+    Handles executing the function bound to the given `event`
+
+    Args:
+        event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+    Returns:
+         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    if event in self.events.keys():
+        self.events[event](self)
+
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.fs.FSBaseObject.is_directory"><code class="name flex">
 <span>def <span class="ident">is_directory</span></span>(<span>self) ‑> bool</span>
 </code></dt>
@@ -1461,6 +1694,43 @@ Also updates its size and triggers its parent to update their size</p>
     return working_dir</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.fs.FSBaseObject.remove_event_listener"><code class="name flex">
+<span>def <span class="ident">remove_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'])</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Unbinds the current function from the given <code>event</code> type</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>event</code></strong></dt>
+<dd>The event type to unbind. Valid event types include: <code>read</code>, <code>write</code>, <code>move</code>, <code>perm</code>, <code>delete</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def remove_event_listener(self, event: event_types):
+    &#34;&#34;&#34;
+    Unbinds the current function from the given `event` type
+
+    Args:
+        event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+    Returns:
+         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    try:
+        self.events.pop(event)
+    except Exception:
+        pass
+
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
 </dl>
 </dd>
 <dt id="client.blackhat.fs.File"><code class="flex name class">
@@ -1509,9 +1779,10 @@ Also updates its size and triggers its parent to update their size</p>
         Args:
             computer: The current `Computer` instance
 
-        Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
+        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
+        # TODO: Decide if this should fire only if permissions are successful
+        self.handle_event(&#34;read&#34;)
         if self.check_perm(&#34;read&#34;, computer).success:
             return SysCallStatus(success=True, data=self.content)
         else:
@@ -1528,6 +1799,7 @@ Also updates its size and triggers its parent to update their size</p>
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
+        self.handle_event(&#34;write&#34;)
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
@@ -1546,6 +1818,7 @@ Also updates its size and triggers its parent to update their size</p>
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
+        self.handle_event(&#34;write&#34;)
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
@@ -1608,6 +1881,7 @@ Also updates its size and triggers its parent to update their size</p>
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
     &#34;&#34;&#34;
+    self.handle_event(&#34;write&#34;)
     # NOTE: This may be unnecessary, we&#34;ll find out later
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content += data
@@ -1627,11 +1901,8 @@ Also updates its size and triggers its parent to update their size</p>
 <dt><strong><code>computer</code></strong></dt>
 <dd>The current <code>Computer</code> instance</dd>
 </dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set and the <code>data</code> flag set with the file's content if permitted</dd>
-</dl></div>
+<p>Returns: SysCallStatus: A <code>SysCallStatus</code> object with the <code>success</code> flag set and the <code>data</code> flag set with the
+file's content if permitted</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -1643,9 +1914,10 @@ Also updates its size and triggers its parent to update their size</p>
     Args:
         computer: The current `Computer` instance
 
-    Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file&#39;s content if permitted
+    Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
     &#34;&#34;&#34;
+    # TODO: Decide if this should fire only if permissions are successful
+    self.handle_event(&#34;read&#34;)
     if self.check_perm(&#34;read&#34;, computer).success:
         return SysCallStatus(success=True, data=self.content)
     else:
@@ -1713,6 +1985,7 @@ Also, recursively tells it's parent to update its size.</p>
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
     &#34;&#34;&#34;
+    self.handle_event(&#34;write&#34;)
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content = data
         self.update_size()
@@ -1726,17 +1999,20 @@ Also, recursively tells it's parent to update its size.</p>
 <ul class="hlist">
 <li><code><b><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></b></code>:
 <ul class="hlist">
+<li><code><a title="client.blackhat.fs.FSBaseObject.add_event_listener" href="#client.blackhat.fs.FSBaseObject.add_event_listener">add_event_listener</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_owner" href="#client.blackhat.fs.FSBaseObject.check_owner">check_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.delete" href="#client.blackhat.fs.FSBaseObject.delete">delete</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.handle_event" href="#client.blackhat.fs.FSBaseObject.handle_event">handle_event</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_directory" href="#client.blackhat.fs.FSBaseObject.is_directory">is_directory</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_file" href="#client.blackhat.fs.FSBaseObject.is_file">is_file</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.mtime" href="#client.blackhat.fs.FSBaseObject.mtime">mtime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
 </ul>
 </li>
 </ul>
@@ -1831,6 +2107,7 @@ Also, recursively tells it's parent to update its size.</p>
         Sets up:
         &lt;ul&gt;
             &lt;li&gt;/etc/passwd - Contains the username, hashed password, and UID of all the users in the system&lt;/li&gt;
+            &lt;li&gt;/etc/shadow - Contains the username, and hashed password of all users in the system&lt;/li&gt;
             &lt;li&gt;/etc/groups - Contains the list of groups in the systems (name, GID)&lt;/li&gt;
             &lt;li&gt;/etc/hostname - The hostname of the given `Computer`&lt;/li&gt;
             &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
@@ -1844,10 +2121,24 @@ Also, recursively tells it's parent to update its size.</p>
         # TODO: Separate /etc/passwd and /etc/shadow
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
-        # The passwd file should have roots creds (bc root is created before the file)
-        # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
         passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
+
+        # TODO: Make this actually update users instead of just printing
+        def update_passwd(file):
+            content = file.content.split(&#34;\n&#34;)
+
+            for item in content:
+                subitems = item.split(&#34;:&#34;)
+                if len(subitems) != 1:
+                    print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+
+        passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
+
         etc_dir.add_file(passwd_file)
+        # Create the /etc/shadow file and change its perms (rw-------)
+        shadow_file: File = File(&#34;shadow&#34;, f&#34;&#34;, etc_dir, 0, 0)
+        shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+        etc_dir.add_file(shadow_file)
 
         # Create the /etc/groups file
         groups_file: File = File(&#34;group&#34;, f&#34;root:x:0&#34;, etc_dir, 0, 0)
@@ -1924,7 +2215,8 @@ Also, recursively tells it's parent to update its size.</p>
         for binary in self.files.find(&#34;bin&#34;).files.keys():
             try:
                 module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;, Style.RESET_ALL)
+                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                                   Style.RESET_ALL)
                 manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
                 current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)
@@ -2249,6 +2541,7 @@ All these files represent binaries in the system</p>
 <div class="desc"><p>Sets up:</p>
 <ul>
 <li>/etc/passwd - Contains the username, hashed password, and UID of all the users in the system</li>
+<li>/etc/shadow - Contains the username, and hashed password of all users in the system</li>
 <li>/etc/groups - Contains the list of groups in the systems (name, GID)</li>
 <li>/etc/hostname - The hostname of the given <code>Computer</code></li>
 <li>/etc/skel -
@@ -2267,6 +2560,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
     Sets up:
     &lt;ul&gt;
         &lt;li&gt;/etc/passwd - Contains the username, hashed password, and UID of all the users in the system&lt;/li&gt;
+        &lt;li&gt;/etc/shadow - Contains the username, and hashed password of all users in the system&lt;/li&gt;
         &lt;li&gt;/etc/groups - Contains the list of groups in the systems (name, GID)&lt;/li&gt;
         &lt;li&gt;/etc/hostname - The hostname of the given `Computer`&lt;/li&gt;
         &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
@@ -2280,10 +2574,24 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
     # TODO: Separate /etc/passwd and /etc/shadow
     etc_dir: Directory = self.files.find(&#34;etc&#34;)
     # Create the /etc/passwd file
-    # The passwd file should have roots creds (bc root is created before the file)
-    # passwd_file: File = File(&#34;passwd&#34;, f&#34;root:{self.computer.users[0].password}\n&#34;, etc_dir, 0, 0)
     passwd_file: File = File(&#34;passwd&#34;, f&#34;&#34;, etc_dir, 0, 0)
+
+    # TODO: Make this actually update users instead of just printing
+    def update_passwd(file):
+        content = file.content.split(&#34;\n&#34;)
+
+        for item in content:
+            subitems = item.split(&#34;:&#34;)
+            if len(subitems) != 1:
+                print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+
+    passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
+
     etc_dir.add_file(passwd_file)
+    # Create the /etc/shadow file and change its perms (rw-------)
+    shadow_file: File = File(&#34;shadow&#34;, f&#34;&#34;, etc_dir, 0, 0)
+    shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+    etc_dir.add_file(shadow_file)
 
     # Create the /etc/groups file
     groups_file: File = File(&#34;group&#34;, f&#34;root:x:0&#34;, etc_dir, 0, 0)
@@ -2389,7 +2697,8 @@ Otherwise, the format of root's home folder is the same as any other user</p>
     for binary in self.files.find(&#34;bin&#34;).files.keys():
         try:
             module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-            manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;, Style.RESET_ALL)
+            manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                               Style.RESET_ALL)
             manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
             current_manpage = File(binary, manpage, man_dir, 0, 0)
             man_dir.add_file(current_manpage)
@@ -2490,18 +2799,21 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 </li>
 <li>
 <h4><code><a title="client.blackhat.fs.FSBaseObject" href="#client.blackhat.fs.FSBaseObject">FSBaseObject</a></code></h4>
-<ul class="two-column">
+<ul class="">
+<li><code><a title="client.blackhat.fs.FSBaseObject.add_event_listener" href="#client.blackhat.fs.FSBaseObject.add_event_listener">add_event_listener</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.atime" href="#client.blackhat.fs.FSBaseObject.atime">atime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.change_owner" href="#client.blackhat.fs.FSBaseObject.change_owner">change_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_owner" href="#client.blackhat.fs.FSBaseObject.check_owner">check_owner</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.check_perm" href="#client.blackhat.fs.FSBaseObject.check_perm">check_perm</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.ctime" href="#client.blackhat.fs.FSBaseObject.ctime">ctime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.delete" href="#client.blackhat.fs.FSBaseObject.delete">delete</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.handle_event" href="#client.blackhat.fs.FSBaseObject.handle_event">handle_event</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_directory" href="#client.blackhat.fs.FSBaseObject.is_directory">is_directory</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.is_file" href="#client.blackhat.fs.FSBaseObject.is_file">is_file</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.mtime" href="#client.blackhat.fs.FSBaseObject.mtime">mtime</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
 </ul>
 </li>
 <li>

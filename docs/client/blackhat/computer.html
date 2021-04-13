@@ -31,10 +31,10 @@ import ipaddress
 import os
 import pickle
 import sqlite3
-from hashlib import md5
-from random import choice, randint
-from secrets import token_hex
 from datetime import datetime
+from hashlib import md5
+from random import choice
+from secrets import token_hex
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
@@ -98,7 +98,7 @@ class Computer:
             None
         &#34;&#34;&#34;
         self.update_hostname()
-        self.update_passwd()
+        self.update_passwd_and_shadow()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
@@ -132,7 +132,6 @@ class Computer:
             else:
                 bin_dirs = []
 
-
         if len(bin_dirs) == 0:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
@@ -165,7 +164,6 @@ class Computer:
             except ImportError as e:
                 print(f&#34;There was an error when running command: {command}&#34;)
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
-
 
     def set_hostname(self, hostname: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -422,8 +420,9 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
-            result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
-                                           (self.id, uid, &#34;primary&#34;)).fetchone()
+            result = self.database.execute(
+                &#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
+                (self.id, uid, &#34;primary&#34;)).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
@@ -545,9 +544,10 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
-    def update_passwd(self) -&gt; SysCallStatus:
+    def update_passwd_and_shadow(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Makes sure that /etc/passwd matches our internal user map
+        Also makes sure that /etc/shadow matches our internal user map
 
         Returns:
             None
@@ -558,18 +558,40 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+        shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+
+        # TODO: Allow modification of home directory from here
+        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = &#34;&#34;
+        shadow_content = &#34;&#34;
 
         for user in self.get_all_users().data:
             # Find the &#34;primary&#34; group
-            passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
+            primary_group = self.find_user_primary_group(user.uid)
+            if primary_group.success:
+                if len(primary_group.data) &gt; 0:
+                    primary_group = primary_group.data[0]
+                else:
+                    primary_group = &#34;?&#34;
+            else:
+                primary_group = &#34;?&#34;
+
+            passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+            shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
         else:
             passwd_file.content = passwd_content
+
+        if not shadow_file:
+            # Create the /etc/shadow
+            etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+        else:
+            shadow_file.content = shadow_content
 
         return SysCallStatus(success=True)
 
@@ -1153,7 +1175,7 @@ class ISPRouter(Router):
             None
         &#34;&#34;&#34;
         self.update_hostname()
-        self.update_passwd()
+        self.update_passwd_and_shadow()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
@@ -1187,7 +1209,6 @@ class ISPRouter(Router):
             else:
                 bin_dirs = []
 
-
         if len(bin_dirs) == 0:
             print(f&#34;{command}: command not found&#34;)
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
@@ -1220,7 +1241,6 @@ class ISPRouter(Router):
             except ImportError as e:
                 print(f&#34;There was an error when running command: {command}&#34;)
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
-
 
     def set_hostname(self, hostname: str) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1477,8 +1497,9 @@ class ISPRouter(Router):
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
-            result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
-                                           (self.id, uid, &#34;primary&#34;)).fetchone()
+            result = self.database.execute(
+                &#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
+                (self.id, uid, &#34;primary&#34;)).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
@@ -1600,9 +1621,10 @@ class ISPRouter(Router):
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
-    def update_passwd(self) -&gt; SysCallStatus:
+    def update_passwd_and_shadow(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Makes sure that /etc/passwd matches our internal user map
+        Also makes sure that /etc/shadow matches our internal user map
 
         Returns:
             None
@@ -1613,18 +1635,40 @@ class ISPRouter(Router):
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+        shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+
+        # TODO: Allow modification of home directory from here
+        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = &#34;&#34;
+        shadow_content = &#34;&#34;
 
         for user in self.get_all_users().data:
             # Find the &#34;primary&#34; group
-            passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
+            primary_group = self.find_user_primary_group(user.uid)
+            if primary_group.success:
+                if len(primary_group.data) &gt; 0:
+                    primary_group = primary_group.data[0]
+                else:
+                    primary_group = &#34;?&#34;
+            else:
+                primary_group = &#34;?&#34;
+
+            passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+            shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
         else:
             passwd_file.content = passwd_content
+
+        if not shadow_file:
+            # Create the /etc/shadow
+            etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+        else:
+            shadow_file.content = shadow_content
 
         return SysCallStatus(success=True)
 
@@ -2294,8 +2338,9 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
     else:
         # Ask the database for the GIDs
-        result = self.database.execute(&#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
-                                       (self.id, uid, &#34;primary&#34;)).fetchone()
+        result = self.database.execute(
+            &#34;SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;&#34;,
+            (self.id, uid, &#34;primary&#34;)).fetchone()
         return SysCallStatus(success=True, data=[x for x in result])</code></pre>
 </details>
 </dd>
@@ -2575,7 +2620,7 @@ user's current directory</dd>
         None
     &#34;&#34;&#34;
     self.update_hostname()
-    self.update_passwd()
+    self.update_passwd_and_shadow()
     self.update_groups()</code></pre>
 </details>
 </dd>
@@ -2674,7 +2719,6 @@ user's current directory</dd>
             bin_dirs = [find_bin.data]
         else:
             bin_dirs = []
-
 
     if len(bin_dirs) == 0:
         print(f&#34;{command}: command not found&#34;)
@@ -2948,20 +2992,22 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
             self.hostname = hostname_file.content.split(&#34;\n&#34;)[0]</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.computer.Computer.update_passwd"><code class="name flex">
-<span>def <span class="ident">update_passwd</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<dt id="client.blackhat.computer.Computer.update_passwd_and_shadow"><code class="name flex">
+<span>def <span class="ident">update_passwd_and_shadow</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Makes sure that /etc/passwd matches our internal user map</p>
+<div class="desc"><p>Makes sure that /etc/passwd matches our internal user map
+Also makes sure that /etc/shadow matches our internal user map</p>
 <h2 id="returns">Returns</h2>
 <p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def update_passwd(self) -&gt; SysCallStatus:
+<pre><code class="python">def update_passwd_and_shadow(self) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Makes sure that /etc/passwd matches our internal user map
+    Also makes sure that /etc/shadow matches our internal user map
 
     Returns:
         None
@@ -2972,18 +3018,40 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+    shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+
+    # TODO: Allow modification of home directory from here
+    # passwd format: USERNAME:x:UID:PRIMARY_GID
+    # shadow format: USERNAME:MD5_PASSWORD
 
     passwd_content = &#34;&#34;
+    shadow_content = &#34;&#34;
 
     for user in self.get_all_users().data:
         # Find the &#34;primary&#34; group
-        passwd_content += f&#34;{user.username}:{user.password}:{user.uid}\n&#34;
+        primary_group = self.find_user_primary_group(user.uid)
+        if primary_group.success:
+            if len(primary_group.data) &gt; 0:
+                primary_group = primary_group.data[0]
+            else:
+                primary_group = &#34;?&#34;
+        else:
+            primary_group = &#34;?&#34;
+
+        passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+        shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
     if not passwd_file:
         # Create the /etc/passwd
         etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
     else:
         passwd_file.content = passwd_content
+
+    if not shadow_file:
+        # Create the /etc/shadow
+        etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+    else:
+        shadow_file.content = shadow_content
 
     return SysCallStatus(success=True)</code></pre>
 </details>
@@ -3413,7 +3481,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
 </ul>
 </li>
 </ul>
@@ -4040,7 +4108,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
 </ul>
 </li>
 </ul>
@@ -4092,7 +4160,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_passwd" href="#client.blackhat.computer.Computer.update_passwd">update_passwd</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
 </ul>
 </li>
 <li>
