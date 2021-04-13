@@ -179,7 +179,7 @@ if not load_save_success:
         comp.sessions.append(session)
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
-            computer.update_passwd()
+            computer.update_passwd_and_shadow()
             computer.update_groups()
 
         comp.run_current_user_shellrc()

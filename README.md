@@ -69,7 +69,7 @@ compiling without standard libraries and using custom replacements that interact
 actual machine they're running on. However, due to my lack of knowledge of C++ (and probably many other reasons), I hit
 a dead-end and put the project on pause for a while. I decided to re-start the project in python (without some features
 I originally wanted) because I am much more knowledgeable when it comes to python. Note that this software is still in
-very early stages and is subject to change.
+very early stages, and many parts are subject to change.
 <br />
 
 **Note**: Some of the games "implementations" are only loosely based on their real world counterpart for one or more of
@@ -145,6 +145,8 @@ If you have an issue with overwriting, you can add the `--force` tag, which will
 
 - [ ] Tests (As of now, any code, working or not working, gets pushed to main (that's not good lol))
 
+- [ ] System logging (Real linux systems log stuff like auth attempts, network connections, etc)
+
 ### Far 🔭
 
 - [ ] Multiplayer (This may be unlikely due to the fact that the "game" has many vulnerabilities that may allow the
@@ -162,19 +164,18 @@ If you have an issue with overwriting, you can add the `--force` tag, which will
 Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any
 contributions you make are **greatly appreciated**.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. **READ [CONTRIBUTING.md](CONTRIBUTING.md)**
+2. Fork the Project
+3. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+4. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+5. Push to the Branch (`git push origin feature/AmazingFeature`)
+6. Open a Pull Request
 
 <!-- LICENSE -->
 
 ## License
 
 Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
-
-
 
 <!-- ACKNOWLEDGEMENTS -->
 

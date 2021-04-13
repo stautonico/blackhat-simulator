@@ -3,10 +3,13 @@ import os
 import sys
 from random import choice
 from string import ascii_uppercase, digits
-from typing import Optional, Dict, List, Literal, Union
+from typing import Optional, Dict, List, Literal, Union, Callable
+
 from colorama import Style
 
 from .helpers import SysCallStatus, SysCallMessages
+
+event_types = Literal["read", "write", "move", "perm", "delete"]
 
 
 class FSBaseObject:
@@ -35,7 +38,8 @@ class FSBaseObject:
         self.mtime: int  # Last modified time (unix time stamp)
         """int: Modified time; when the file"s content was last modified"""
         self.ctime: int  # Last file status change (unix time stamp)
-        """imt: Changed time; when the file"s metadata was last changed (ex. perms)"""
+        """int: Changed time; when the file"s metadata was last changed (ex. perms)"""
+        self.events: Dict[event_types, Callable] = {}
 
     def is_directory(self) -> bool:
         """
@@ -187,6 +191,63 @@ class FSBaseObject:
             else:
                 return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
+    def add_event_listener(self, event: event_types, function: Callable):
+        """
+        Bind a function to run whenever a given event fires.
+        A `FSBaseObject` can only have one function per event type.
+        If a function is already bound to the given event type, it will be overwritten.
+
+        Args:
+            event: The given event type to bind the given `function` to.
+            Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+            <ul>
+                <li>read - When a file is read from</li>
+                <li>write - When a file is written to</li>
+                <li>move - When a file is moved to a different location AKA: When a file's parent folder changes</li>
+                <li>perm - When a file's owner, group owner, or permissions changes</li>
+                <li>delete - Before a file is deleted</li>
+            </ul>
+            function: The function/method to be called when the given `event` is fired
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        """
+        self.events[event] = function
+        return SysCallStatus(success=True)
+
+    def remove_event_listener(self, event: event_types):
+        """
+        Unbinds the current function from the given `event` type
+
+        Args:
+            event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        """
+        try:
+            self.events.pop(event)
+        except Exception:
+            pass
+
+        return SysCallStatus(success=True)
+
+    def handle_event(self, event: event_types):
+        """
+        Handles executing the function bound to the given `event`
+
+        Args:
+            event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
+
+        Returns:
+             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        """
+        if event in self.events.keys():
+            self.events[event](self)
+
+        return SysCallStatus(success=True)
+
+
 
 class File(FSBaseObject):
     def __init__(self, name: str, content: str, parent: "Directory", owner: int, group_owner: int) -> None:
@@ -211,9 +272,10 @@ class File(FSBaseObject):
         Args:
             computer: The current `Computer` instance
 
-        Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the file's content if permitted
+        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file's content if permitted
         """
+        # TODO: Decide if this should fire only if permissions are successful
+        self.handle_event("read")
         if self.check_perm("read", computer).success:
             return SysCallStatus(success=True, data=self.content)
         else:
@@ -230,6 +292,7 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         """
+        self.handle_event("write")
         if self.check_perm("write", computer).success:
             self.content = data
             self.update_size()
@@ -248,6 +311,7 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         """
+        self.handle_event("write")
         # NOTE: This may be unnecessary, we"ll find out later
         if self.check_perm("write", computer).success:
             self.content += data
@@ -431,6 +495,7 @@ class StandardFS:
         Sets up:
         <ul>
             <li>/etc/passwd - Contains the username, hashed password, and UID of all the users in the system</li>
+            <li>/etc/shadow - Contains the username, and hashed password of all users in the system</li>
             <li>/etc/groups - Contains the list of groups in the systems (name, GID)</li>
             <li>/etc/hostname - The hostname of the given `Computer`</li>
             <li>/etc/skel -  A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)</li>
@@ -444,10 +509,24 @@ class StandardFS:
         # TODO: Separate /etc/passwd and /etc/shadow
         etc_dir: Directory = self.files.find("etc")
         # Create the /etc/passwd file
-        # The passwd file should have roots creds (bc root is created before the file)
-        # passwd_file: File = File("passwd", f"root:{self.computer.users[0].password}\n", etc_dir, 0, 0)
         passwd_file: File = File("passwd", f"", etc_dir, 0, 0)
+
+        # TODO: Make this actually update users instead of just printing
+        def update_passwd(file):
+            content = file.content.split("\n")
+
+            for item in content:
+                subitems = item.split(":")
+                if len(subitems) != 1:
+                    print(f"Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}")
+
+        passwd_file.add_event_listener("write", update_passwd)
+
         etc_dir.add_file(passwd_file)
+        # Create the /etc/shadow file and change its perms (rw-------)
+        shadow_file: File = File("shadow", f"", etc_dir, 0, 0)
+        shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
+        etc_dir.add_file(shadow_file)
 
         # Create the /etc/groups file
         groups_file: File = File("group", f"root:x:0", etc_dir, 0, 0)
@@ -524,7 +603,8 @@ class StandardFS:
         for binary in self.files.find("bin").files.keys():
             try:
                 module = importlib.import_module(f"blackhat.bin.{binary}")
-                manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/", Style.RESET_ALL)
+                manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/",
+                                                                                                   Style.RESET_ALL)
                 manpage = manpage.removeprefix("\n").removesuffix("\n")
                 current_manpage = File(binary, manpage, man_dir, 0, 0)
                 man_dir.add_file(current_manpage)

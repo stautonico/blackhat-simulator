@@ -19,7 +19,7 @@ use [Github Flow](https://guides.github.com/introduction/flow/index.html)). We a
 
 1. Fork the repo and create your branch from `master`.
 2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
+3. If you've changed any code that has docstrings, update the documentation.
 4. Ensure the test suite passes.
 5. Issue that pull request!
 
@@ -55,6 +55,10 @@ People *love* thorough bug reports. I'm not even kidding.
 * Python's [PEP 8](https://www.python.org/dev/peps/pep-0008/) style guide should be followed (loosely enforced because
   everyone's interpretation is different)
 * 4 spaces are used rather than tabs (most editors give you the option) (I hit tab and pycharm inserts 4 spaces for me)
+* Make sure you sufficiently comment your code
+    * Comment anything that might require **ANY** explication
+    * If you're not sure if you should comment something, just do it. It's significantly easier to remove unnecessary
+      comments than it is to try to figure out how some uncommented code works after the fact.
 
 ## License
 

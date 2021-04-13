@@ -86,7 +86,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         else:
             computer.change_user_password(user_to_change.uid, password)
 
-        computer.update_passwd()
+        computer.update_passwd_and_shadow()
 
         return output("", pipe)
 

@@ -252,3 +252,5 @@ pip-selfcheck.json
 client/blackhat.db
 
 systems.db
+
+writeup.md

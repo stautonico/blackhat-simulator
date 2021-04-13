@@ -3,10 +3,10 @@ import ipaddress
 import os
 import pickle
 import sqlite3
-from hashlib import md5
-from random import choice, randint
-from secrets import token_hex
 from datetime import datetime
+from hashlib import md5
+from random import choice
+from secrets import token_hex
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
@@ -70,7 +70,7 @@ class Computer:
             None
         """
         self.update_hostname()
-        self.update_passwd()
+        self.update_passwd_and_shadow()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
@@ -104,7 +104,6 @@ class Computer:
             else:
                 bin_dirs = []
 
-
         if len(bin_dirs) == 0:
             print(f"{command}: command not found")
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
@@ -137,7 +136,6 @@ class Computer:
             except ImportError as e:
                 print(f"There was an error when running command: {command}")
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
-
 
     def set_hostname(self, hostname: str) -> SysCallStatus:
         """
@@ -394,8 +392,9 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
-            result = self.database.execute("SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;",
-                                           (self.id, uid, "primary")).fetchone()
+            result = self.database.execute(
+                "SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;",
+                (self.id, uid, "primary")).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
     def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
@@ -517,9 +516,10 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type="primary")
 
-    def update_passwd(self) -> SysCallStatus:
+    def update_passwd_and_shadow(self) -> SysCallStatus:
         """
         Makes sure that /etc/passwd matches our internal user map
+        Also makes sure that /etc/shadow matches our internal user map
 
         Returns:
             None
@@ -530,18 +530,40 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         passwd_file: File = etc_dir.find("passwd")
+        shadow_file: File = etc_dir.find("shadow")
+
+        # TODO: Allow modification of home directory from here
+        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = ""
+        shadow_content = ""
 
         for user in self.get_all_users().data:
             # Find the "primary" group
-            passwd_content += f"{user.username}:{user.password}:{user.uid}\n"
+            primary_group = self.find_user_primary_group(user.uid)
+            if primary_group.success:
+                if len(primary_group.data) > 0:
+                    primary_group = primary_group.data[0]
+                else:
+                    primary_group = "?"
+            else:
+                primary_group = "?"
+
+            passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
+            shadow_content += f"{user.username}:{user.password}\n"
 
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
         else:
             passwd_file.content = passwd_content
+
+        if not shadow_file:
+            # Create the /etc/shadow
+            etc_dir.add_file(File("shadow", shadow_content, etc_dir, 0, 0))
+        else:
+            shadow_file.content = shadow_content
 
         return SysCallStatus(success=True)
 

@@ -77,7 +77,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         # Find the user object and its its group to the new group
         computer.add_user_to_group(user_result.data, group_result.data, membership_type="primary")
 
-        update_passwd_result = computer.update_passwd()
+        update_passwd_result = computer.update_passwd_and_shadow()
         update_group_result = computer.update_groups()
 
         if not update_passwd_result.success:
