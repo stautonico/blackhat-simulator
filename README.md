@@ -58,7 +58,7 @@
 
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+<!--[![Product Name Screen Shot][product-screenshot]](https://example.com)-->
 
 This game was inspired by the games [Grey Hack](https://store.steampowered.com/app/605230/Grey_Hack/)
 , [Hacknet](https://store.steampowered.com/app/365450/Hacknet/),

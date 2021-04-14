@@ -341,6 +341,7 @@ class Directory(FSBaseObject):
     def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int):
         """
         The class object representing a directory within the file system
+        Contains files
 
         Args:
             name (str): The name of the `File`/`Directory`

@@ -27,9 +27,12 @@
 *.sql linguist-detectable=true
 
 
+# Languages to ignore
 *.css linguist-detectable=false
 *.html linguist-detectable=false
+*.js linguist-detectable=false
 *.css linguist-vendored=false
 *.html linguist-vendored=false
+*.ks linguist-vendored=false
 
 website/* linguist-documentation
