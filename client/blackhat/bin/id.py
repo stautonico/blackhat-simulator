@@ -89,18 +89,34 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group = computer.find_user_primary_group(uid).data[0]
-            secondary_groups = computer.find_user_groups(uid)
-            secondary_groups = secondary_groups.data if secondary_groups.success else []
-            secondary_groups.remove(primary_group)
+            primary_group_gid = computer.find_user_primary_group(uid).data[0]
+            secondary_groups_gids = computer.find_user_groups(uid)
+            secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
+            secondary_groups_gids.remove(primary_group_gid)
+
+            primary_group_name = computer.find_group(gid=primary_group_gid)
+
+            if not primary_group_name.success:
+                primary_group_name = "?"
+            else:
+                primary_group_name = primary_group_name.data.name
+
+            secondary_group_names = []
+
+            for item in secondary_groups_gids:
+                find_secondary_group = computer.find_group(gid=item)
+                if not find_secondary_group.success:
+                    secondary_group_names.append("?")
+                else:
+                    secondary_group_names.append(find_secondary_group.data.name)
 
             if args.group:
-                return output(f"{primary_group}", pipe)
+                return output(f"{primary_group_gid}", pipe)
 
             if args.groups:
                 if args.zero:
-                    return output(f"{''.join(str(x) for x in [primary_group] + secondary_groups)}", pipe)
-                return output(f"{' '.join(str(x) for x in [primary_group] + secondary_groups)}", pipe)
+                    return output(f"{''.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}", pipe)
+                return output(f"{' '.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}", pipe)
 
             if args.name:
                 return output(user.username, pipe)
@@ -111,15 +127,15 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             if args.zero:
                 return output(f"{__COMMAND__}: option --zero not permitted in default format", pipe, success=False)
 
-            output_text = f"uid={uid}({user.username}) gid={primary_group}({user.username}) "
+            output_text = f"uid={uid}({user.username}) gid={primary_group_gid}({primary_group_name}) "
 
-            if len(secondary_groups) > 0:
+            if len(secondary_groups_gids) > 0:
                 output_text += "groups="
 
-            for group in secondary_groups:
+            for group in secondary_groups_gids:
                 group_lookup = computer.find_group(gid=group)
                 if group_lookup.success:
-                    output_text += f"{group}({group.data.name}),"
+                    output_text += f"{group}({group_lookup.data.name}),"
                 else:
                     output_text += f"{group}(?),"
 

@@ -25,5 +25,7 @@
 
 *.py linguist-language=Python
 *.sql linguist-detectable=true
+*.css linguist-detectable=false
+*.html linguist-detectable=false
 
 website/* linguist-documentation

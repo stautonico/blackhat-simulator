@@ -70,7 +70,7 @@ class Computer:
             None
         """
         self.update_hostname()
-        self.update_passwd_and_shadow()
+        self.update_user_and_group_files()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
@@ -185,7 +185,7 @@ class Computer:
             else:
                 self.hostname = hostname_file.content.split("\n")[0]
 
-    def add_user(self, username: str, password: str, uid: Optional[int] = None) -> SysCallStatus:
+    def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -> SysCallStatus:
         """
         Add a new user to the system.
         This function also generates the UID for the new user (unless manually specified)
@@ -194,6 +194,7 @@ class Computer:
             username (str): The username for the new user
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
+                        plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
@@ -226,7 +227,7 @@ class Computer:
                     next_uid = last_uid + 1
 
         # Hash the password before saving to the database
-        hashed_password = md5(password.encode()).hexdigest()
+        hashed_password = md5(password.encode()).hexdigest() if plaintext else password
 
         # Create the new user
         self.database.execute("INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)",
@@ -252,13 +253,14 @@ class Computer:
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def change_user_password(self, uid: int, new_password: str) -> SysCallStatus:
+    def change_user_password(self, uid: int, new_password: str, plaintext=True) -> SysCallStatus:
         """
         Change the password of the user by uid
 
         Args:
             uid (int): The UID of the `User` to change the password of
             new_password (str): The MD5 hash of the password
+            plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
@@ -269,12 +271,52 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         # Hash the plain text password
-        password_hash = md5(new_password.encode()).hexdigest()
+        password_hash = md5(new_password.encode()).hexdigest() if plaintext else new_password
 
         # Update the password in the database
         result = self.database.execute("UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?",
                                        (password_hash, uid, self.id))
         self.connection.commit()
+        return SysCallStatus(success=True)
+
+    def change_user_uid(self, uid: int, new_uid: int) -> SysCallStatus:
+        """
+        Change the uid of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the uid of
+            new_uid (int): The new uid of the given user
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        """
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Make sure that no other user has the given `new_uid`
+        lookup_user = self.find_user(uid=new_uid)
+        if lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+        # Update the uid in the database
+        result = self.database.execute("UPDATE blackhat_user SET uid=? WHERE uid=? AND computer_id=?",
+                                       (new_uid, uid, self.id))
+        self.connection.commit()
+
+        # We need to update the UID of all sessions that this user has
+        for session in self.sessions:
+            if session.real_uid == uid:
+                session.real_uid = new_uid
+
+            if session.effective_uid == uid:
+                session.effective_uid = new_uid
+
+        # We also need to update the UID in the group membership records
+        self.database.execute("UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?",
+                              (new_uid, uid, self.id))
+
         return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -> SysCallStatus:
@@ -410,7 +452,7 @@ class Computer:
         """
         # Confirm that both user and group exists
         if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
-            self.database.execute("DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?",
+            self.database.execute("DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?",
                                   (self.id, uid, gid))
             self.connection.commit()
             return SysCallStatus(success=True)
@@ -516,10 +558,12 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type="primary")
 
-    def update_passwd_and_shadow(self) -> SysCallStatus:
+    def update_user_and_group_files(self) -> SysCallStatus:
         """
-        Makes sure that /etc/passwd matches our internal user map
-        Also makes sure that /etc/shadow matches our internal user map
+        Makes sure that:
+        /etc/passwd matches our internal user map
+        /etc/shadow matches our internal user map
+        /etc/group matches our internal group map
 
         Returns:
             None
@@ -531,13 +575,15 @@ class Computer:
 
         passwd_file: File = etc_dir.find("passwd")
         shadow_file: File = etc_dir.find("shadow")
+        group_file: File = etc_dir.find("group")
 
         # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = ""
         shadow_content = ""
+        group_content = ""
 
         for user in self.get_all_users().data:
             # Find the "primary" group
@@ -553,6 +599,9 @@ class Computer:
             passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
             shadow_content += f"{user.username}:{user.password}\n"
 
+        for group in self.get_all_groups().data:
+            group_content += f"{group.name}:{group.gid}\n"
+
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
@@ -560,10 +609,19 @@ class Computer:
             passwd_file.content = passwd_content
 
         if not shadow_file:
-            # Create the /etc/shadow
-            etc_dir.add_file(File("shadow", shadow_content, etc_dir, 0, 0))
+            # Create the /etc/shadow file and change its perms (rw-------)
+            shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
+            shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
+            etc_dir.add_file(shadow_file)
         else:
             shadow_file.content = shadow_content
+
+
+        if not shadow_file:
+            # Create the /etc/group
+            etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
+        else:
+            group_file.content = group_content
 
         return SysCallStatus(success=True)
 

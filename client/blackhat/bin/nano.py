@@ -71,10 +71,12 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
             write_result = file_to_write.write(file_content, computer)
 
-            if not write_result:
+            if not write_result.success:
                 return output(f"{__COMMAND__}: {args.source}: Permission denied", pipe, success=False)
 
             return output("", pipe)
 
         except Exception as e:
+            # import traceback
+            # traceback.print_exc()
             return output(f"{__COMMAND__}: Failed to write file!", pipe, success=False)
