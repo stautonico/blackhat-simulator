@@ -369,6 +369,7 @@ class Directory(FSBaseObject):
     def __init__(self, name: str, parent: Optional[&#34;Directory&#34;], owner: int, group_owner: int):
         &#34;&#34;&#34;
         The class object representing a directory within the file system
+        Contains files
 
         Args:
             name (str): The name of the `File`/`Directory`
@@ -828,7 +829,8 @@ class StandardFS:
 <span>(</span><span>name: str, parent: Optional[ForwardRef('<a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a>')], owner: int, group_owner: int)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>The class object representing a directory within the file system</p>
+<div class="desc"><p>The class object representing a directory within the file system
+Contains files</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>name</code></strong> :&ensp;<code>str</code></dt>
@@ -848,6 +850,7 @@ class StandardFS:
     def __init__(self, name: str, parent: Optional[&#34;Directory&#34;], owner: int, group_owner: int):
         &#34;&#34;&#34;
         The class object representing a directory within the file system
+        Contains files
 
         Args:
             name (str): The name of the `File`/`Directory`
