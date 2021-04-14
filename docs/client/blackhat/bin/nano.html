@@ -99,12 +99,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
             write_result = file_to_write.write(file_content, computer)
 
-            if not write_result:
+            if not write_result.success:
                 return output(f&#34;{__COMMAND__}: {args.source}: Permission denied&#34;, pipe, success=False)
 
             return output(&#34;&#34;, pipe)
 
         except Exception as e:
+            # import traceback
+            # traceback.print_exc()
             return output(f&#34;{__COMMAND__}: Failed to write file!&#34;, pipe, success=False)</code></pre>
 </details>
 </section>
@@ -185,12 +187,14 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
             write_result = file_to_write.write(file_content, computer)
 
-            if not write_result:
+            if not write_result.success:
                 return output(f&#34;{__COMMAND__}: {args.source}: Permission denied&#34;, pipe, success=False)
 
             return output(&#34;&#34;, pipe)
 
         except Exception as e:
+            # import traceback
+            # traceback.print_exc()
             return output(f&#34;{__COMMAND__}: Failed to write file!&#34;, pipe, success=False)</code></pre>
 </details>
 </dd>

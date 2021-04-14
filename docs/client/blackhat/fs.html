@@ -37,7 +37,7 @@ from colorama import Style
 
 from .helpers import SysCallStatus, SysCallMessages
 
-event_types = Literal[&#34;read&#34;, &#34;write&#34;, &#34;move&#34;, &#34;perm&#34;, &#34;delete&#34;]
+event_types = Literal[&#34;read&#34;, &#34;write&#34;, &#34;move&#34;, &#34;change_perm&#34;, &#34;change_owner&#34;, &#34;delete&#34;]
 
 
 class FSBaseObject:
@@ -172,6 +172,7 @@ class FSBaseObject:
                     else:
                         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+                self.handle_event(&#34;change_owner&#34;)
                 return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -214,6 +215,7 @@ class FSBaseObject:
         if self.parent:
             # In unix, we need read+write permissions to delete
             if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
+                self.handle_event(&#34;delete&#34;)
                 del self.parent.files[self.name]
                 return SysCallStatus(success=True)
             else:
@@ -276,7 +278,6 @@ class FSBaseObject:
         return SysCallStatus(success=True)
 
 
-
 class File(FSBaseObject):
     def __init__(self, name: str, content: str, parent: &#34;Directory&#34;, owner: int, group_owner: int) -&gt; None:
         &#34;&#34;&#34;
@@ -302,9 +303,8 @@ class File(FSBaseObject):
 
         Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
-        # TODO: Decide if this should fire only if permissions are successful
-        self.handle_event(&#34;read&#34;)
         if self.check_perm(&#34;read&#34;, computer).success:
+            self.handle_event(&#34;read&#34;)
             return SysCallStatus(success=True, data=self.content)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -320,10 +320,10 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
-        self.handle_event(&#34;write&#34;)
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
+            self.handle_event(&#34;write&#34;)
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -339,11 +339,11 @@ class File(FSBaseObject):
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
-        self.handle_event(&#34;write&#34;)
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
             self.update_size()
+            self.handle_event(&#34;write&#34;)
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -545,8 +545,55 @@ class StandardFS:
 
             for item in content:
                 subitems = item.split(&#34;:&#34;)
-                if len(subitems) != 1:
-                    print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+                # An item in the list with a length of 1 or less are usually blank lines
+                if len(subitems) &gt; 1:
+                    username, password, uid, primary_gid = subitems
+
+                    try:
+                        uid = int(uid)
+                        primary_gid = int(primary_gid)
+                    except Exception:
+                        return
+
+                    # Now we want to get the user by username
+                    user_lookup = self.computer.find_user(username=username)
+
+                    # If we don&#39;t find the user, that means we added a new user
+                    if not user_lookup.success:
+                        # Make sure no user has the uid
+                        if not self.computer.find_user(uid=uid).success:
+                            # Add the user
+                            self.computer.add_user(username, password, uid, plaintext=False)
+                            self.computer.add_group(name=username, gid=primary_gid)
+                            self.computer.add_user_to_group(uid, primary_gid, &#34;primary&#34;)
+                    else:
+                        # We have a user, now lets check if any of the data has changed
+                        user = user_lookup.data
+
+                        # If the password is &#39;x&#39;, that password is in the /etc/shadow file and should be ignored here
+                        if user.password != password and password != &#34;x&#34;:
+                            result = self.computer.change_user_password(user.uid, password, plaintext=False)
+                            if result.success:
+                                user.password = password
+
+                        if user.uid != uid:
+                            result = self.computer.change_user_uid(user.uid, uid)
+                            if result.success:
+                                user.uid = uid
+
+                        # If the GID changed, we want to:
+                        # 1. Make sure the new GID exists
+                        # 2. Remove the user&#39;s old primary gid membership
+                        # 3. Add a the user to the new gid as primary
+                        user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+
+                        if user_primary_gid != primary_gid:
+                            if self.computer.find_group(gid=primary_gid).success:
+                                self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
+                                self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
+
+                    # Will automatically remove incorrect changes
+                    self.computer.update_user_and_group_files()
 
         passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
 
@@ -1191,6 +1238,7 @@ Also updates its size and triggers its parent to update their size</p>
                     else:
                         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+                self.handle_event(&#34;change_owner&#34;)
                 return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -1233,6 +1281,7 @@ Also updates its size and triggers its parent to update their size</p>
         if self.parent:
             # In unix, we need read+write permissions to delete
             if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
+                self.handle_event(&#34;delete&#34;)
                 del self.parent.files[self.name]
                 return SysCallStatus(success=True)
             else:
@@ -1321,7 +1370,7 @@ Also updates its size and triggers its parent to update their size</p>
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.fs.FSBaseObject.add_event_listener"><code class="name flex">
-<span>def <span class="ident">add_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'], function: Callable)</span>
+<span>def <span class="ident">add_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'change_perm', 'change_owner', 'delete'], function: Callable)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Bind a function to run whenever a given event fires.
@@ -1439,6 +1488,7 @@ If a function is already bound to the given event type, it will be overwritten.<
                 else:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
+            self.handle_event(&#34;change_owner&#34;)
             return SysCallStatus(success=True)
     else:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
@@ -1565,6 +1615,7 @@ If a function is already bound to the given event type, it will be overwritten.<
     if self.parent:
         # In unix, we need read+write permissions to delete
         if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
+            self.handle_event(&#34;delete&#34;)
             del self.parent.files[self.name]
             return SysCallStatus(success=True)
         else:
@@ -1572,7 +1623,7 @@ If a function is already bound to the given event type, it will be overwritten.<
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.handle_event"><code class="name flex">
-<span>def <span class="ident">handle_event</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'])</span>
+<span>def <span class="ident">handle_event</span></span>(<span>self, event: Literal['read', 'write', 'move', 'change_perm', 'change_owner', 'delete'])</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Handles executing the function bound to the given <code>event</code></p>
@@ -1695,7 +1746,7 @@ If a function is already bound to the given event type, it will be overwritten.<
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.remove_event_listener"><code class="name flex">
-<span>def <span class="ident">remove_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'perm', 'delete'])</span>
+<span>def <span class="ident">remove_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'change_perm', 'change_owner', 'delete'])</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Unbinds the current function from the given <code>event</code> type</p>
@@ -1781,9 +1832,8 @@ If a function is already bound to the given event type, it will be overwritten.<
 
         Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
-        # TODO: Decide if this should fire only if permissions are successful
-        self.handle_event(&#34;read&#34;)
         if self.check_perm(&#34;read&#34;, computer).success:
+            self.handle_event(&#34;read&#34;)
             return SysCallStatus(success=True, data=self.content)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -1799,10 +1849,10 @@ If a function is already bound to the given event type, it will be overwritten.<
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
-        self.handle_event(&#34;write&#34;)
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
+            self.handle_event(&#34;write&#34;)
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -1818,11 +1868,11 @@ If a function is already bound to the given event type, it will be overwritten.<
         Returns:
             SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
         &#34;&#34;&#34;
-        self.handle_event(&#34;write&#34;)
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
             self.update_size()
+            self.handle_event(&#34;write&#34;)
             return SysCallStatus(success=True)
         else:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
@@ -1881,11 +1931,11 @@ If a function is already bound to the given event type, it will be overwritten.<
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
     &#34;&#34;&#34;
-    self.handle_event(&#34;write&#34;)
     # NOTE: This may be unnecessary, we&#34;ll find out later
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content += data
         self.update_size()
+        self.handle_event(&#34;write&#34;)
         return SysCallStatus(success=True)
     else:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
@@ -1916,9 +1966,8 @@ file's content if permitted</p></div>
 
     Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
     &#34;&#34;&#34;
-    # TODO: Decide if this should fire only if permissions are successful
-    self.handle_event(&#34;read&#34;)
     if self.check_perm(&#34;read&#34;, computer).success:
+        self.handle_event(&#34;read&#34;)
         return SysCallStatus(success=True, data=self.content)
     else:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
@@ -1985,10 +2034,10 @@ Also, recursively tells it's parent to update its size.</p>
     Returns:
         SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
     &#34;&#34;&#34;
-    self.handle_event(&#34;write&#34;)
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content = data
         self.update_size()
+        self.handle_event(&#34;write&#34;)
         return SysCallStatus(success=True)
     else:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
@@ -2129,8 +2178,55 @@ Also, recursively tells it's parent to update its size.</p>
 
             for item in content:
                 subitems = item.split(&#34;:&#34;)
-                if len(subitems) != 1:
-                    print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+                # An item in the list with a length of 1 or less are usually blank lines
+                if len(subitems) &gt; 1:
+                    username, password, uid, primary_gid = subitems
+
+                    try:
+                        uid = int(uid)
+                        primary_gid = int(primary_gid)
+                    except Exception:
+                        return
+
+                    # Now we want to get the user by username
+                    user_lookup = self.computer.find_user(username=username)
+
+                    # If we don&#39;t find the user, that means we added a new user
+                    if not user_lookup.success:
+                        # Make sure no user has the uid
+                        if not self.computer.find_user(uid=uid).success:
+                            # Add the user
+                            self.computer.add_user(username, password, uid, plaintext=False)
+                            self.computer.add_group(name=username, gid=primary_gid)
+                            self.computer.add_user_to_group(uid, primary_gid, &#34;primary&#34;)
+                    else:
+                        # We have a user, now lets check if any of the data has changed
+                        user = user_lookup.data
+
+                        # If the password is &#39;x&#39;, that password is in the /etc/shadow file and should be ignored here
+                        if user.password != password and password != &#34;x&#34;:
+                            result = self.computer.change_user_password(user.uid, password, plaintext=False)
+                            if result.success:
+                                user.password = password
+
+                        if user.uid != uid:
+                            result = self.computer.change_user_uid(user.uid, uid)
+                            if result.success:
+                                user.uid = uid
+
+                        # If the GID changed, we want to:
+                        # 1. Make sure the new GID exists
+                        # 2. Remove the user&#39;s old primary gid membership
+                        # 3. Add a the user to the new gid as primary
+                        user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+
+                        if user_primary_gid != primary_gid:
+                            if self.computer.find_group(gid=primary_gid).success:
+                                self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
+                                self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
+
+                    # Will automatically remove incorrect changes
+                    self.computer.update_user_and_group_files()
 
         passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
 
@@ -2582,8 +2678,55 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
 
         for item in content:
             subitems = item.split(&#34;:&#34;)
-            if len(subitems) != 1:
-                print(f&#34;Username: {subitems[0]}\n\tPassword: {subitems[1]}\n\tUID: {subitems[2]}\n\tPrimary GID: {subitems[3]}&#34;)
+            # An item in the list with a length of 1 or less are usually blank lines
+            if len(subitems) &gt; 1:
+                username, password, uid, primary_gid = subitems
+
+                try:
+                    uid = int(uid)
+                    primary_gid = int(primary_gid)
+                except Exception:
+                    return
+
+                # Now we want to get the user by username
+                user_lookup = self.computer.find_user(username=username)
+
+                # If we don&#39;t find the user, that means we added a new user
+                if not user_lookup.success:
+                    # Make sure no user has the uid
+                    if not self.computer.find_user(uid=uid).success:
+                        # Add the user
+                        self.computer.add_user(username, password, uid, plaintext=False)
+                        self.computer.add_group(name=username, gid=primary_gid)
+                        self.computer.add_user_to_group(uid, primary_gid, &#34;primary&#34;)
+                else:
+                    # We have a user, now lets check if any of the data has changed
+                    user = user_lookup.data
+
+                    # If the password is &#39;x&#39;, that password is in the /etc/shadow file and should be ignored here
+                    if user.password != password and password != &#34;x&#34;:
+                        result = self.computer.change_user_password(user.uid, password, plaintext=False)
+                        if result.success:
+                            user.password = password
+
+                    if user.uid != uid:
+                        result = self.computer.change_user_uid(user.uid, uid)
+                        if result.success:
+                            user.uid = uid
+
+                    # If the GID changed, we want to:
+                    # 1. Make sure the new GID exists
+                    # 2. Remove the user&#39;s old primary gid membership
+                    # 3. Add a the user to the new gid as primary
+                    user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+
+                    if user_primary_gid != primary_gid:
+                        if self.computer.find_group(gid=primary_gid).success:
+                            self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
+                            self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
+
+                # Will automatically remove incorrect changes
+                self.computer.update_user_and_group_files()
 
     passwd_file.add_event_listener(&#34;write&#34;, update_passwd)
 

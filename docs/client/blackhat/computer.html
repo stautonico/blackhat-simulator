@@ -98,7 +98,7 @@ class Computer:
             None
         &#34;&#34;&#34;
         self.update_hostname()
-        self.update_passwd_and_shadow()
+        self.update_user_and_group_files()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
@@ -213,7 +213,7 @@ class Computer:
             else:
                 self.hostname = hostname_file.content.split(&#34;\n&#34;)[0]
 
-    def add_user(self, username: str, password: str, uid: Optional[int] = None) -&gt; SysCallStatus:
+    def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Add a new user to the system.
         This function also generates the UID for the new user (unless manually specified)
@@ -222,6 +222,7 @@ class Computer:
             username (str): The username for the new user
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
+                        plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
@@ -254,7 +255,7 @@ class Computer:
                     next_uid = last_uid + 1
 
         # Hash the password before saving to the database
-        hashed_password = md5(password.encode()).hexdigest()
+        hashed_password = md5(password.encode()).hexdigest() if plaintext else password
 
         # Create the new user
         self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
@@ -280,13 +281,14 @@ class Computer:
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+    def change_user_password(self, uid: int, new_password: str, plaintext=True) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Change the password of the user by uid
 
         Args:
             uid (int): The UID of the `User` to change the password of
             new_password (str): The MD5 hash of the password
+            plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
@@ -297,12 +299,52 @@ class Computer:
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         # Hash the plain text password
-        password_hash = md5(new_password.encode()).hexdigest()
+        password_hash = md5(new_password.encode()).hexdigest() if plaintext else new_password
 
         # Update the password in the database
         result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                        (password_hash, uid, self.id))
         self.connection.commit()
+        return SysCallStatus(success=True)
+
+    def change_user_uid(self, uid: int, new_uid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the uid of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the uid of
+            new_uid (int): The new uid of the given user
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Make sure that no other user has the given `new_uid`
+        lookup_user = self.find_user(uid=new_uid)
+        if lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+        # Update the uid in the database
+        result = self.database.execute(&#34;UPDATE blackhat_user SET uid=? WHERE uid=? AND computer_id=?&#34;,
+                                       (new_uid, uid, self.id))
+        self.connection.commit()
+
+        # We need to update the UID of all sessions that this user has
+        for session in self.sessions:
+            if session.real_uid == uid:
+                session.real_uid = new_uid
+
+            if session.effective_uid == uid:
+                session.effective_uid = new_uid
+
+        # We also need to update the UID in the group membership records
+        self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
+                              (new_uid, uid, self.id))
+
         return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -&gt; SysCallStatus:
@@ -438,7 +480,7 @@ class Computer:
         &#34;&#34;&#34;
         # Confirm that both user and group exists
         if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
-            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?&#34;,
                                   (self.id, uid, gid))
             self.connection.commit()
             return SysCallStatus(success=True)
@@ -544,10 +586,12 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
-    def update_passwd_and_shadow(self) -&gt; SysCallStatus:
+    def update_user_and_group_files(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
-        Makes sure that /etc/passwd matches our internal user map
-        Also makes sure that /etc/shadow matches our internal user map
+        Makes sure that:
+        /etc/passwd matches our internal user map
+        /etc/shadow matches our internal user map
+        /etc/group matches our internal group map
 
         Returns:
             None
@@ -559,13 +603,15 @@ class Computer:
 
         passwd_file: File = etc_dir.find(&#34;passwd&#34;)
         shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+        group_file: File = etc_dir.find(&#34;group&#34;)
 
         # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = &#34;&#34;
         shadow_content = &#34;&#34;
+        group_content = &#34;&#34;
 
         for user in self.get_all_users().data:
             # Find the &#34;primary&#34; group
@@ -581,6 +627,9 @@ class Computer:
             passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
             shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
+        for group in self.get_all_groups().data:
+            group_content += f&#34;{group.name}:{group.gid}\n&#34;
+
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
@@ -588,10 +637,19 @@ class Computer:
             passwd_file.content = passwd_content
 
         if not shadow_file:
-            # Create the /etc/shadow
-            etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+            # Create the /etc/shadow file and change its perms (rw-------)
+            shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+            shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+            etc_dir.add_file(shadow_file)
         else:
             shadow_file.content = shadow_content
+
+
+        if not shadow_file:
+            # Create the /etc/group
+            etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
+        else:
+            group_file.content = group_content
 
         return SysCallStatus(success=True)
 
@@ -1175,7 +1233,7 @@ class ISPRouter(Router):
             None
         &#34;&#34;&#34;
         self.update_hostname()
-        self.update_passwd_and_shadow()
+        self.update_user_and_group_files()
         self.update_groups()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
@@ -1290,7 +1348,7 @@ class ISPRouter(Router):
             else:
                 self.hostname = hostname_file.content.split(&#34;\n&#34;)[0]
 
-    def add_user(self, username: str, password: str, uid: Optional[int] = None) -&gt; SysCallStatus:
+    def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Add a new user to the system.
         This function also generates the UID for the new user (unless manually specified)
@@ -1299,6 +1357,7 @@ class ISPRouter(Router):
             username (str): The username for the new user
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
+                        plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
@@ -1331,7 +1390,7 @@ class ISPRouter(Router):
                     next_uid = last_uid + 1
 
         # Hash the password before saving to the database
-        hashed_password = md5(password.encode()).hexdigest()
+        hashed_password = md5(password.encode()).hexdigest() if plaintext else password
 
         # Create the new user
         self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
@@ -1357,13 +1416,14 @@ class ISPRouter(Router):
 
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-    def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+    def change_user_password(self, uid: int, new_password: str, plaintext=True) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Change the password of the user by uid
 
         Args:
             uid (int): The UID of the `User` to change the password of
             new_password (str): The MD5 hash of the password
+            plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
@@ -1374,12 +1434,52 @@ class ISPRouter(Router):
             return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         # Hash the plain text password
-        password_hash = md5(new_password.encode()).hexdigest()
+        password_hash = md5(new_password.encode()).hexdigest() if plaintext else new_password
 
         # Update the password in the database
         result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                        (password_hash, uid, self.id))
         self.connection.commit()
+        return SysCallStatus(success=True)
+
+    def change_user_uid(self, uid: int, new_uid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Change the uid of the user by uid
+
+        Args:
+            uid (int): The UID of the `User` to change the uid of
+            new_uid (int): The new uid of the given user
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+        &#34;&#34;&#34;
+        # Double check that the user with the given UID exists
+        lookup_user = self.find_user(uid=uid)
+        if not lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Make sure that no other user has the given `new_uid`
+        lookup_user = self.find_user(uid=new_uid)
+        if lookup_user.success:
+            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+        # Update the uid in the database
+        result = self.database.execute(&#34;UPDATE blackhat_user SET uid=? WHERE uid=? AND computer_id=?&#34;,
+                                       (new_uid, uid, self.id))
+        self.connection.commit()
+
+        # We need to update the UID of all sessions that this user has
+        for session in self.sessions:
+            if session.real_uid == uid:
+                session.real_uid = new_uid
+
+            if session.effective_uid == uid:
+                session.effective_uid = new_uid
+
+        # We also need to update the UID in the group membership records
+        self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
+                              (new_uid, uid, self.id))
+
         return SysCallStatus(success=True)
 
     def add_group(self, name: str, gid: Optional[int] = None) -&gt; SysCallStatus:
@@ -1515,7 +1615,7 @@ class ISPRouter(Router):
         &#34;&#34;&#34;
         # Confirm that both user and group exists
         if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
-            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+            self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?&#34;,
                                   (self.id, uid, gid))
             self.connection.commit()
             return SysCallStatus(success=True)
@@ -1621,10 +1721,12 @@ class ISPRouter(Router):
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type=&#34;primary&#34;)
 
-    def update_passwd_and_shadow(self) -&gt; SysCallStatus:
+    def update_user_and_group_files(self) -&gt; SysCallStatus:
         &#34;&#34;&#34;
-        Makes sure that /etc/passwd matches our internal user map
-        Also makes sure that /etc/shadow matches our internal user map
+        Makes sure that:
+        /etc/passwd matches our internal user map
+        /etc/shadow matches our internal user map
+        /etc/group matches our internal group map
 
         Returns:
             None
@@ -1636,13 +1738,15 @@ class ISPRouter(Router):
 
         passwd_file: File = etc_dir.find(&#34;passwd&#34;)
         shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+        group_file: File = etc_dir.find(&#34;group&#34;)
 
         # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:x:UID:PRIMARY_GID
+        # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
 
         passwd_content = &#34;&#34;
         shadow_content = &#34;&#34;
+        group_content = &#34;&#34;
 
         for user in self.get_all_users().data:
             # Find the &#34;primary&#34; group
@@ -1658,6 +1762,9 @@ class ISPRouter(Router):
             passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
             shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
+        for group in self.get_all_groups().data:
+            group_content += f&#34;{group.name}:{group.gid}\n&#34;
+
         if not passwd_file:
             # Create the /etc/passwd
             etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
@@ -1665,10 +1772,19 @@ class ISPRouter(Router):
             passwd_file.content = passwd_content
 
         if not shadow_file:
-            # Create the /etc/shadow
-            etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+            # Create the /etc/shadow file and change its perms (rw-------)
+            shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+            shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+            etc_dir.add_file(shadow_file)
         else:
             shadow_file.content = shadow_content
+
+
+        if not shadow_file:
+            # Create the /etc/group
+            etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
+        else:
+            group_file.content = group_content
 
         return SysCallStatus(success=True)
 
@@ -1901,7 +2017,7 @@ This function also generates the GID for the new group (unless manually specifie
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.add_user"><code class="name flex">
-<span>def <span class="ident">add_user</span></span>(<span>self, username: str, password: str, uid: Optional[int] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">add_user</span></span>(<span>self, username: str, password: str, uid: Optional[int] = None, plaintext=True) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Add a new user to the system.
@@ -1913,7 +2029,8 @@ This function also generates the UID for the new user (unless manually specified
 <dt><strong><code>password</code></strong> :&ensp;<code>str</code></dt>
 <dd>The plaintext password for the new user</dd>
 <dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
-<dd>The UID of the new user</dd>
+<dd>The UID of the new user
+plaintext (bool): If the given <code>new_password</code> is plain text or an MD5 hash</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -1924,7 +2041,7 @@ This function also generates the UID for the new user (unless manually specified
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def add_user(self, username: str, password: str, uid: Optional[int] = None) -&gt; SysCallStatus:
+<pre><code class="python">def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Add a new user to the system.
     This function also generates the UID for the new user (unless manually specified)
@@ -1933,6 +2050,7 @@ This function also generates the UID for the new user (unless manually specified
         username (str): The username for the new user
         password (str): The plaintext password for the new user
         uid (int, optional): The UID of the new user
+                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
     Returns:
         SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
@@ -1965,7 +2083,7 @@ This function also generates the UID for the new user (unless manually specified
                 next_uid = last_uid + 1
 
     # Hash the password before saving to the database
-    hashed_password = md5(password.encode()).hexdigest()
+    hashed_password = md5(password.encode()).hexdigest() if plaintext else password
 
     # Create the new user
     self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
@@ -2023,7 +2141,7 @@ This function also generates the UID for the new user (unless manually specified
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.change_user_password"><code class="name flex">
-<span>def <span class="ident">change_user_password</span></span>(<span>self, uid: int, new_password: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">change_user_password</span></span>(<span>self, uid: int, new_password: str, plaintext=True) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Change the password of the user by uid</p>
@@ -2033,6 +2151,8 @@ This function also generates the UID for the new user (unless manually specified
 <dd>The UID of the <code>User</code> to change the password of</dd>
 <dt><strong><code>new_password</code></strong> :&ensp;<code>str</code></dt>
 <dd>The MD5 hash of the password</dd>
+<dt><strong><code>plaintext</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the given <code>new_password</code> is plain text or an MD5 hash</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -2043,13 +2163,14 @@ This function also generates the UID for the new user (unless manually specified
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def change_user_password(self, uid: int, new_password: str) -&gt; SysCallStatus:
+<pre><code class="python">def change_user_password(self, uid: int, new_password: str, plaintext=True) -&gt; SysCallStatus:
     &#34;&#34;&#34;
     Change the password of the user by uid
 
     Args:
         uid (int): The UID of the `User` to change the password of
         new_password (str): The MD5 hash of the password
+        plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
     Returns:
         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
@@ -2060,12 +2181,74 @@ This function also generates the UID for the new user (unless manually specified
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
     # Hash the plain text password
-    password_hash = md5(new_password.encode()).hexdigest()
+    password_hash = md5(new_password.encode()).hexdigest() if plaintext else new_password
 
     # Update the password in the database
     result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                    (password_hash, uid, self.id))
     self.connection.commit()
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.Computer.change_user_uid"><code class="name flex">
+<span>def <span class="ident">change_user_uid</span></span>(<span>self, uid: int, new_uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Change the uid of the user by uid</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the <code>User</code> to change the uid of</dd>
+<dt><strong><code>new_uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The new uid of the given user</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def change_user_uid(self, uid: int, new_uid: int) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Change the uid of the user by uid
+
+    Args:
+        uid (int): The UID of the `User` to change the uid of
+        new_uid (int): The new uid of the given user
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    # Double check that the user with the given UID exists
+    lookup_user = self.find_user(uid=uid)
+    if not lookup_user.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    # Make sure that no other user has the given `new_uid`
+    lookup_user = self.find_user(uid=new_uid)
+    if lookup_user.success:
+        return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+    # Update the uid in the database
+    result = self.database.execute(&#34;UPDATE blackhat_user SET uid=? WHERE uid=? AND computer_id=?&#34;,
+                                   (new_uid, uid, self.id))
+    self.connection.commit()
+
+    # We need to update the UID of all sessions that this user has
+    for session in self.sessions:
+        if session.real_uid == uid:
+            session.real_uid = new_uid
+
+        if session.effective_uid == uid:
+            session.effective_uid = new_uid
+
+    # We also need to update the UID in the group membership records
+    self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
+                          (new_uid, uid, self.id))
+
     return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
@@ -2620,7 +2803,7 @@ user's current directory</dd>
         None
     &#34;&#34;&#34;
     self.update_hostname()
-    self.update_passwd_and_shadow()
+    self.update_user_and_group_files()
     self.update_groups()</code></pre>
 </details>
 </dd>
@@ -2658,7 +2841,7 @@ user's current directory</dd>
     &#34;&#34;&#34;
     # Confirm that both user and group exists
     if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
-        self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? and group_gid=?&#34;,
+        self.database.execute(&#34;DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?&#34;,
                               (self.id, uid, gid))
         self.connection.commit()
         return SysCallStatus(success=True)
@@ -2992,22 +3175,26 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
             self.hostname = hostname_file.content.split(&#34;\n&#34;)[0]</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.computer.Computer.update_passwd_and_shadow"><code class="name flex">
-<span>def <span class="ident">update_passwd_and_shadow</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<dt id="client.blackhat.computer.Computer.update_user_and_group_files"><code class="name flex">
+<span>def <span class="ident">update_user_and_group_files</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Makes sure that /etc/passwd matches our internal user map
-Also makes sure that /etc/shadow matches our internal user map</p>
+<div class="desc"><p>Makes sure that:
+/etc/passwd matches our internal user map
+/etc/shadow matches our internal user map
+/etc/group matches our internal group map</p>
 <h2 id="returns">Returns</h2>
 <p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def update_passwd_and_shadow(self) -&gt; SysCallStatus:
+<pre><code class="python">def update_user_and_group_files(self) -&gt; SysCallStatus:
     &#34;&#34;&#34;
-    Makes sure that /etc/passwd matches our internal user map
-    Also makes sure that /etc/shadow matches our internal user map
+    Makes sure that:
+    /etc/passwd matches our internal user map
+    /etc/shadow matches our internal user map
+    /etc/group matches our internal group map
 
     Returns:
         None
@@ -3019,13 +3206,15 @@ Also makes sure that /etc/shadow matches our internal user map</p>
 
     passwd_file: File = etc_dir.find(&#34;passwd&#34;)
     shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+    group_file: File = etc_dir.find(&#34;group&#34;)
 
     # TODO: Allow modification of home directory from here
-    # passwd format: USERNAME:x:UID:PRIMARY_GID
+    # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
     # shadow format: USERNAME:MD5_PASSWORD
 
     passwd_content = &#34;&#34;
     shadow_content = &#34;&#34;
+    group_content = &#34;&#34;
 
     for user in self.get_all_users().data:
         # Find the &#34;primary&#34; group
@@ -3041,6 +3230,9 @@ Also makes sure that /etc/shadow matches our internal user map</p>
         passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
         shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
+    for group in self.get_all_groups().data:
+        group_content += f&#34;{group.name}:{group.gid}\n&#34;
+
     if not passwd_file:
         # Create the /etc/passwd
         etc_dir.add_file(File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0))
@@ -3048,10 +3240,19 @@ Also makes sure that /etc/shadow matches our internal user map</p>
         passwd_file.content = passwd_content
 
     if not shadow_file:
-        # Create the /etc/shadow
-        etc_dir.add_file(File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0))
+        # Create the /etc/shadow file and change its perms (rw-------)
+        shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+        shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+        etc_dir.add_file(shadow_file)
     else:
         shadow_file.content = shadow_content
+
+
+    if not shadow_file:
+        # Create the /etc/group
+        etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
+    else:
+        group_file.content = group_content
 
     return SysCallStatus(success=True)</code></pre>
 </details>
@@ -3455,6 +3656,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.change_user_uid" href="#client.blackhat.computer.Computer.change_user_uid">change_user_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
@@ -3481,7 +3683,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
 </li>
 </ul>
@@ -4085,6 +4287,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.change_user_uid" href="#client.blackhat.computer.Computer.change_user_uid">change_user_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
@@ -4108,7 +4311,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
 </li>
 </ul>
@@ -4136,6 +4339,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.add_user" href="#client.blackhat.computer.Computer.add_user">add_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.add_user_to_group" href="#client.blackhat.computer.Computer.add_user_to_group">add_user_to_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.change_user_password" href="#client.blackhat.computer.Computer.change_user_password">change_user_password</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.change_user_uid" href="#client.blackhat.computer.Computer.change_user_uid">change_user_uid</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.create_root_user" href="#client.blackhat.computer.Computer.create_root_user">create_root_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_group" href="#client.blackhat.computer.Computer.delete_group">delete_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.delete_user" href="#client.blackhat.computer.Computer.delete_user">delete_user</a></code></li>
@@ -4160,7 +4364,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_passwd_and_shadow" href="#client.blackhat.computer.Computer.update_passwd_and_shadow">update_passwd_and_shadow</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
 </li>
 <li>

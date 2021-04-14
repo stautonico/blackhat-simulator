@@ -117,18 +117,34 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group = computer.find_user_primary_group(uid).data[0]
-            secondary_groups = computer.find_user_groups(uid)
-            secondary_groups = secondary_groups.data if secondary_groups.success else []
-            secondary_groups.remove(primary_group)
+            primary_group_gid = computer.find_user_primary_group(uid).data[0]
+            secondary_groups_gids = computer.find_user_groups(uid)
+            secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
+            secondary_groups_gids.remove(primary_group_gid)
+
+            primary_group_name = computer.find_group(gid=primary_group_gid)
+
+            if not primary_group_name.success:
+                primary_group_name = &#34;?&#34;
+            else:
+                primary_group_name = primary_group_name.data.name
+
+            secondary_group_names = []
+
+            for item in secondary_groups_gids:
+                find_secondary_group = computer.find_group(gid=item)
+                if not find_secondary_group.success:
+                    secondary_group_names.append(&#34;?&#34;)
+                else:
+                    secondary_group_names.append(find_secondary_group.data.name)
 
             if args.group:
-                return output(f&#34;{primary_group}&#34;, pipe)
+                return output(f&#34;{primary_group_gid}&#34;, pipe)
 
             if args.groups:
                 if args.zero:
-                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
-                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}&#34;, pipe)
+                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}&#34;, pipe)
 
             if args.name:
                 return output(user.username, pipe)
@@ -139,15 +155,15 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if args.zero:
                 return output(f&#34;{__COMMAND__}: option --zero not permitted in default format&#34;, pipe, success=False)
 
-            output_text = f&#34;uid={uid}({user.username}) gid={primary_group}({user.username}) &#34;
+            output_text = f&#34;uid={uid}({user.username}) gid={primary_group_gid}({primary_group_name}) &#34;
 
-            if len(secondary_groups) &gt; 0:
+            if len(secondary_groups_gids) &gt; 0:
                 output_text += &#34;groups=&#34;
 
-            for group in secondary_groups:
+            for group in secondary_groups_gids:
                 group_lookup = computer.find_group(gid=group)
                 if group_lookup.success:
-                    output_text += f&#34;{group}({group.data.name}),&#34;
+                    output_text += f&#34;{group}({group_lookup.data.name}),&#34;
                 else:
                     output_text += f&#34;{group}(?),&#34;
 
@@ -203,18 +219,34 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group = computer.find_user_primary_group(uid).data[0]
-            secondary_groups = computer.find_user_groups(uid)
-            secondary_groups = secondary_groups.data if secondary_groups.success else []
-            secondary_groups.remove(primary_group)
+            primary_group_gid = computer.find_user_primary_group(uid).data[0]
+            secondary_groups_gids = computer.find_user_groups(uid)
+            secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
+            secondary_groups_gids.remove(primary_group_gid)
+
+            primary_group_name = computer.find_group(gid=primary_group_gid)
+
+            if not primary_group_name.success:
+                primary_group_name = &#34;?&#34;
+            else:
+                primary_group_name = primary_group_name.data.name
+
+            secondary_group_names = []
+
+            for item in secondary_groups_gids:
+                find_secondary_group = computer.find_group(gid=item)
+                if not find_secondary_group.success:
+                    secondary_group_names.append(&#34;?&#34;)
+                else:
+                    secondary_group_names.append(find_secondary_group.data.name)
 
             if args.group:
-                return output(f&#34;{primary_group}&#34;, pipe)
+                return output(f&#34;{primary_group_gid}&#34;, pipe)
 
             if args.groups:
                 if args.zero:
-                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
-                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group] + secondary_groups)}&#34;, pipe)
+                    return output(f&#34;{&#39;&#39;.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}&#34;, pipe)
+                return output(f&#34;{&#39; &#39;.join(str(x) for x in [primary_group_gid] + secondary_groups_gids)}&#34;, pipe)
 
             if args.name:
                 return output(user.username, pipe)
@@ -225,15 +257,15 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if args.zero:
                 return output(f&#34;{__COMMAND__}: option --zero not permitted in default format&#34;, pipe, success=False)
 
-            output_text = f&#34;uid={uid}({user.username}) gid={primary_group}({user.username}) &#34;
+            output_text = f&#34;uid={uid}({user.username}) gid={primary_group_gid}({primary_group_name}) &#34;
 
-            if len(secondary_groups) &gt; 0:
+            if len(secondary_groups_gids) &gt; 0:
                 output_text += &#34;groups=&#34;
 
-            for group in secondary_groups:
+            for group in secondary_groups_gids:
                 group_lookup = computer.find_group(gid=group)
                 if group_lookup.success:
-                    output_text += f&#34;{group}({group.data.name}),&#34;
+                    output_text += f&#34;{group}({group_lookup.data.name}),&#34;
                 else:
                     output_text += f&#34;{group}(?),&#34;
 
