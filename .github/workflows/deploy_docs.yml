@@ -25,6 +25,7 @@ jobs:
           cp docs/ website/ -r
           cd website
           find . -type f -name "*.html" -exec sh inject.sh $1 {} \;
+          rm inject.sh
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@4.1.0
         with:
