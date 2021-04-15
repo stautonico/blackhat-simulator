@@ -60,6 +60,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_text = &#34;&#34;
 
+        at_least_one_failed = False
+
         for filename in args.files:
             new_filename = None
             dir_to_write_to = None
@@ -72,6 +74,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     result = computer.fs.find(&#34;/&#34;.join(filename.split(&#34;/&#34;)[:-1]))
                     # If this fails, we can assume that the directory the user entered is bad
                     if not result.success:
+                        at_least_one_failed = True
                         output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: No such file or directory\n&#34;
                     # Success!
                     new_filename = filename.split(&#34;/&#34;)[-1]
@@ -88,9 +91,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
                 dir_to_write_to.add_file(newfile)
             else:
+                at_least_one_failed = True
                 output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: Permission denied\n&#34;
 
-        return output(output_text, pipe)</code></pre>
+        return output(output_text, pipe, success=not at_least_one_failed)</code></pre>
 </details>
 </section>
 <section>
@@ -133,6 +137,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_text = &#34;&#34;
 
+        at_least_one_failed = False
+
         for filename in args.files:
             new_filename = None
             dir_to_write_to = None
@@ -145,6 +151,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     result = computer.fs.find(&#34;/&#34;.join(filename.split(&#34;/&#34;)[:-1]))
                     # If this fails, we can assume that the directory the user entered is bad
                     if not result.success:
+                        at_least_one_failed = True
                         output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: No such file or directory\n&#34;
                     # Success!
                     new_filename = filename.split(&#34;/&#34;)[-1]
@@ -161,9 +168,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 newfile = File(new_filename, &#34;&#34;, dir_to_write_to, computer.get_uid(), computer.get_gid())
                 dir_to_write_to.add_file(newfile)
             else:
+                at_least_one_failed = True
                 output_text += f&#34;{__COMMAND__}: cannot touch &#39;{filename}&#39;: Permission denied\n&#34;
 
-        return output(output_text, pipe)</code></pre>
+        return output(output_text, pipe, success=not at_least_one_failed)</code></pre>
 </details>
 </dd>
 </dl>

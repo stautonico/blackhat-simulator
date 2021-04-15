@@ -99,7 +99,7 @@ class Computer:
         &#34;&#34;&#34;
         self.update_hostname()
         self.update_user_and_group_files()
-        self.update_groups()
+        self.update_user_and_group_files()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -467,6 +467,26 @@ class Computer:
                 (self.id, uid, &#34;primary&#34;)).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
+    def find_users_in_group(self, gid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get a list of user UIDs that are part of the given groups GID
+
+        Args:
+            gid (int): The GID of the group to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of UIDs
+        &#34;&#34;&#34;
+        # Double check if the group exists
+        if not self.find_group(gid=gid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # Ask the database for the UIDs
+        result = self.database.execute(
+            &#34;SELECT uid FROM blackhat_user WHERE computer_id=? AND uid in (SELECT user_uid FROM group_membership WHERE computer_id=? AND group_gid=?)&#34;,
+            (self.id, self.id, gid)).fetchall()
+
+        return SysCallStatus(success=True, data=[x for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Remove a user from a group (by uid and gid)
@@ -608,6 +628,7 @@ class Computer:
         # TODO: Allow modification of home directory from here
         # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
+        # group format: GROUP_NAME:x:GID:GROUP_USERS
 
         passwd_content = &#34;&#34;
         shadow_content = &#34;&#34;
@@ -628,7 +649,16 @@ class Computer:
             shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
         for group in self.get_all_groups().data:
-            group_content += f&#34;{group.name}:{group.gid}\n&#34;
+            uids = self.find_users_in_group(group.gid).data
+            usernames = &#34;&#34;
+            for uid in uids:
+                user_lookup = self.find_user(uid=uid[0])
+                usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+            usernames = usernames[:-1]
+
+            group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+            # print(group_content, end=&#34;&#34;)
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -644,36 +674,8 @@ class Computer:
         else:
             shadow_file.content = shadow_content
 
-
-        if not shadow_file:
-            # Create the /etc/group
-            etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
-        else:
-            group_file.content = group_content
-
-        return SysCallStatus(success=True)
-
-    def update_groups(self) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Makes sure that /etc/group matches our internal groups map
-
-        Returns:
-            None
-        &#34;&#34;&#34;
-        etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
-
-        if not etc_dir:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        group_file: File = etc_dir.find(&#34;group&#34;)
-
-        group_content = &#34;&#34;
-
-        for group in self.get_all_groups().data:
-            group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
-
         if not group_file:
-            # Create the /etc/groups
+            # Create the /etc/group
             etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
         else:
             group_file.content = group_content
@@ -1234,7 +1236,7 @@ class ISPRouter(Router):
         &#34;&#34;&#34;
         self.update_hostname()
         self.update_user_and_group_files()
-        self.update_groups()
+        self.update_user_and_group_files()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1602,6 +1604,26 @@ class ISPRouter(Router):
                 (self.id, uid, &#34;primary&#34;)).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
+    def find_users_in_group(self, gid: int) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get a list of user UIDs that are part of the given groups GID
+
+        Args:
+            gid (int): The GID of the group to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of UIDs
+        &#34;&#34;&#34;
+        # Double check if the group exists
+        if not self.find_group(gid=gid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # Ask the database for the UIDs
+        result = self.database.execute(
+            &#34;SELECT uid FROM blackhat_user WHERE computer_id=? AND uid in (SELECT user_uid FROM group_membership WHERE computer_id=? AND group_gid=?)&#34;,
+            (self.id, self.id, gid)).fetchall()
+
+        return SysCallStatus(success=True, data=[x for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -&gt; SysCallStatus:
         &#34;&#34;&#34;
         Remove a user from a group (by uid and gid)
@@ -1743,6 +1765,7 @@ class ISPRouter(Router):
         # TODO: Allow modification of home directory from here
         # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
+        # group format: GROUP_NAME:x:GID:GROUP_USERS
 
         passwd_content = &#34;&#34;
         shadow_content = &#34;&#34;
@@ -1763,7 +1786,16 @@ class ISPRouter(Router):
             shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
         for group in self.get_all_groups().data:
-            group_content += f&#34;{group.name}:{group.gid}\n&#34;
+            uids = self.find_users_in_group(group.gid).data
+            usernames = &#34;&#34;
+            for uid in uids:
+                user_lookup = self.find_user(uid=uid[0])
+                usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+            usernames = usernames[:-1]
+
+            group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+            # print(group_content, end=&#34;&#34;)
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -1779,36 +1811,8 @@ class ISPRouter(Router):
         else:
             shadow_file.content = shadow_content
 
-
-        if not shadow_file:
-            # Create the /etc/group
-            etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
-        else:
-            group_file.content = group_content
-
-        return SysCallStatus(success=True)
-
-    def update_groups(self) -&gt; SysCallStatus:
-        &#34;&#34;&#34;
-        Makes sure that /etc/group matches our internal groups map
-
-        Returns:
-            None
-        &#34;&#34;&#34;
-        etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
-
-        if not etc_dir:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        group_file: File = etc_dir.find(&#34;group&#34;)
-
-        group_content = &#34;&#34;
-
-        for group in self.get_all_groups().data:
-            group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
-
         if not group_file:
-            # Create the /etc/groups
+            # Create the /etc/group
             etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
         else:
             group_file.content = group_content
@@ -2527,6 +2531,46 @@ created when the <code><a title="client.blackhat.computer.Computer" href="#clien
         return SysCallStatus(success=True, data=[x for x in result])</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.computer.Computer.find_users_in_group"><code class="name flex">
+<span>def <span class="ident">find_users_in_group</span></span>(<span>self, gid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get a list of user UIDs that are part of the given groups GID</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the group to search</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> with the <code>data</code> flag containing a list of UIDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def find_users_in_group(self, gid: int) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get a list of user UIDs that are part of the given groups GID
+
+    Args:
+        gid (int): The GID of the group to search
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of UIDs
+    &#34;&#34;&#34;
+    # Double check if the group exists
+    if not self.find_group(gid=gid).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    # Ask the database for the UIDs
+    result = self.database.execute(
+        &#34;SELECT uid FROM blackhat_user WHERE computer_id=? AND uid in (SELECT user_uid FROM group_membership WHERE computer_id=? AND group_gid=?)&#34;,
+        (self.id, self.id, gid)).fetchall()
+
+    return SysCallStatus(success=True, data=[x for x in result])</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.computer.Computer.get_all_groups"><code class="name flex">
 <span>def <span class="ident">get_all_groups</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -2804,7 +2848,7 @@ user's current directory</dd>
     &#34;&#34;&#34;
     self.update_hostname()
     self.update_user_and_group_files()
-    self.update_groups()</code></pre>
+    self.update_user_and_group_files()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.Computer.remove_user_from_group"><code class="name flex">
@@ -3102,45 +3146,6 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.computer.Computer.update_groups"><code class="name flex">
-<span>def <span class="ident">update_groups</span></span>(<span>self) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
-</code></dt>
-<dd>
-<div class="desc"><p>Makes sure that /etc/group matches our internal groups map</p>
-<h2 id="returns">Returns</h2>
-<p>None</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def update_groups(self) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    Makes sure that /etc/group matches our internal groups map
-
-    Returns:
-        None
-    &#34;&#34;&#34;
-    etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
-
-    if not etc_dir:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    group_file: File = etc_dir.find(&#34;group&#34;)
-
-    group_content = &#34;&#34;
-
-    for group in self.get_all_groups().data:
-        group_content += f&#34;{group.name}:x:{group.gid}\n&#34;
-
-    if not group_file:
-        # Create the /etc/groups
-        etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
-    else:
-        group_file.content = group_content
-
-    return SysCallStatus(success=True)</code></pre>
-</details>
-</dd>
 <dt id="client.blackhat.computer.Computer.update_hostname"><code class="name flex">
 <span>def <span class="ident">update_hostname</span></span>(<span>self) ‑> NoneType</span>
 </code></dt>
@@ -3211,6 +3216,7 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
     # TODO: Allow modification of home directory from here
     # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
     # shadow format: USERNAME:MD5_PASSWORD
+    # group format: GROUP_NAME:x:GID:GROUP_USERS
 
     passwd_content = &#34;&#34;
     shadow_content = &#34;&#34;
@@ -3231,7 +3237,16 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
         shadow_content += f&#34;{user.username}:{user.password}\n&#34;
 
     for group in self.get_all_groups().data:
-        group_content += f&#34;{group.name}:{group.gid}\n&#34;
+        uids = self.find_users_in_group(group.gid).data
+        usernames = &#34;&#34;
+        for uid in uids:
+            user_lookup = self.find_user(uid=uid[0])
+            usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+        usernames = usernames[:-1]
+
+        group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+        # print(group_content, end=&#34;&#34;)
 
     if not passwd_file:
         # Create the /etc/passwd
@@ -3247,8 +3262,7 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
     else:
         shadow_file.content = shadow_content
 
-
-    if not shadow_file:
+    if not group_file:
         # Create the /etc/group
         etc_dir.add_file(File(&#34;group&#34;, group_content, etc_dir, 0, 0))
     else:
@@ -3666,6 +3680,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.find_user_primary_group" href="#client.blackhat.computer.Computer.find_user_primary_group">find_user_primary_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Router.find_users_in_group" href="#client.blackhat.computer.Computer.find_users_in_group">find_users_in_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
@@ -3681,7 +3696,6 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="client.blackhat.computer.Router.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Router.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Router.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
@@ -4295,6 +4309,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user_primary_group" href="#client.blackhat.computer.Computer.find_user_primary_group">find_user_primary_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_users_in_group" href="#client.blackhat.computer.Computer.find_users_in_group">find_users_in_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
@@ -4309,7 +4324,6 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
@@ -4347,6 +4361,7 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.find_user" href="#client.blackhat.computer.Computer.find_user">find_user</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user_groups" href="#client.blackhat.computer.Computer.find_user_groups">find_user_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.find_user_primary_group" href="#client.blackhat.computer.Computer.find_user_primary_group">find_user_primary_group</a></code></li>
+<li><code><a title="client.blackhat.computer.Computer.find_users_in_group" href="#client.blackhat.computer.Computer.find_users_in_group">find_users_in_group</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_groups" href="#client.blackhat.computer.Computer.get_all_groups">get_all_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_all_users" href="#client.blackhat.computer.Computer.get_all_users">get_all_users</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.get_env" href="#client.blackhat.computer.Computer.get_env">get_env</a></code></li>
@@ -4362,7 +4377,6 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <li><code><a title="client.blackhat.computer.Computer.save" href="#client.blackhat.computer.Computer.save">save</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.send_tcp" href="#client.blackhat.computer.Computer.send_tcp">send_tcp</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.set_hostname" href="#client.blackhat.computer.Computer.set_hostname">set_hostname</a></code></li>
-<li><code><a title="client.blackhat.computer.Computer.update_groups" href="#client.blackhat.computer.Computer.update_groups">update_groups</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_hostname" href="#client.blackhat.computer.Computer.update_hostname">update_hostname</a></code></li>
 <li><code><a title="client.blackhat.computer.Computer.update_user_and_group_files" href="#client.blackhat.computer.Computer.update_user_and_group_files">update_user_and_group_files</a></code></li>
 </ul>
