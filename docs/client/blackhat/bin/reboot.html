@@ -269,6 +269,15 @@ code {
     background-color: #1a1a1a !important;
 }
 
+pre {
+    background-color: #242424 !important;
+    border-top: #242424 !important;
+    border-bottom: #242424 !important;
+    overflow-x: hidden !important;
+}
+
+
+/* Modify color syntax highlighting */
 .hljs {
     display: block;
     overflow-x: auto;
@@ -361,4 +370,37 @@ code {
 
 .hljs-strong {
     font-weight: 700
+}
+
+/* Custom scrollbar */
+/* width */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+    box-shadow: inset 0 0 2.5px grey;
+    border-radius: 5px;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: gray;
+    border-radius: 5px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: #6b6b6b;
+}
+
+@media only screen and (max-width: 600px) {
+    pre {
+        overflow: scroll !important;
+    }
+
+    pre::-webkit-scrollbar {
+        display: none !important;
+    }
 }</style>
