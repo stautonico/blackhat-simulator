@@ -71,7 +71,7 @@ class Computer:
         """
         self.update_hostname()
         self.update_user_and_group_files()
-        self.update_groups()
+        self.update_user_and_group_files()
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
         """
@@ -439,6 +439,26 @@ class Computer:
                 (self.id, uid, "primary")).fetchone()
             return SysCallStatus(success=True, data=[x for x in result])
 
+    def find_users_in_group(self, gid: int) -> SysCallStatus:
+        """
+        Get a list of user UIDs that are part of the given groups GID
+
+        Args:
+            gid (int): The GID of the group to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of UIDs
+        """
+        # Double check if the group exists
+        if not self.find_group(gid=gid).success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        # Ask the database for the UIDs
+        result = self.database.execute(
+            "SELECT uid FROM blackhat_user WHERE computer_id=? AND uid in (SELECT user_uid FROM group_membership WHERE computer_id=? AND group_gid=?)",
+            (self.id, self.id, gid)).fetchall()
+
+        return SysCallStatus(success=True, data=[x for x in result])
+
     def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
         """
         Remove a user from a group (by uid and gid)
@@ -580,6 +600,7 @@ class Computer:
         # TODO: Allow modification of home directory from here
         # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
         # shadow format: USERNAME:MD5_PASSWORD
+        # group format: GROUP_NAME:x:GID:GROUP_USERS
 
         passwd_content = ""
         shadow_content = ""
@@ -600,7 +621,16 @@ class Computer:
             shadow_content += f"{user.username}:{user.password}\n"
 
         for group in self.get_all_groups().data:
-            group_content += f"{group.name}:{group.gid}\n"
+            uids = self.find_users_in_group(group.gid).data
+            usernames = ""
+            for uid in uids:
+                user_lookup = self.find_user(uid=uid[0])
+                usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
+
+            usernames = usernames[:-1]
+
+            group_content += f"{group.name}:x:{group.gid}:{usernames}\n"
+            # print(group_content, end="")
 
         if not passwd_file:
             # Create the /etc/passwd
@@ -616,36 +646,8 @@ class Computer:
         else:
             shadow_file.content = shadow_content
 
-
-        if not shadow_file:
-            # Create the /etc/group
-            etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
-        else:
-            group_file.content = group_content
-
-        return SysCallStatus(success=True)
-
-    def update_groups(self) -> SysCallStatus:
-        """
-        Makes sure that /etc/group matches our internal groups map
-
-        Returns:
-            None
-        """
-        etc_dir: Directory = self.fs.files.find("etc")
-
-        if not etc_dir:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        group_file: File = etc_dir.find("group")
-
-        group_content = ""
-
-        for group in self.get_all_groups().data:
-            group_content += f"{group.name}:x:{group.gid}\n"
-
         if not group_file:
-            # Create the /etc/groups
+            # Create the /etc/group
             etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
         else:
             group_file.content = group_content

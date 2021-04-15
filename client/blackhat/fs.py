@@ -336,12 +336,14 @@ class File(FSBaseObject):
         if self.parent:
             self.parent.update_size()
 
+    def __str__(self):
+        return f"{self.name} - {self.owner}"
+
 
 class Directory(FSBaseObject):
     def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int):
         """
         The class object representing a directory within the file system
-        Contains files
 
         Args:
             name (str): The name of the `File`/`Directory`
@@ -507,12 +509,8 @@ class StandardFS:
         Returns:
             None
         """
-        # TODO: Separate /etc/passwd and /etc/shadow
-        etc_dir: Directory = self.files.find("etc")
-        # Create the /etc/passwd file
-        passwd_file: File = File("passwd", f"", etc_dir, 0, 0)
 
-        # TODO: Make this actually update users instead of just printing
+        # EventHandler functions for /etc/passwd, /etc/shadow, and /etc/group
         def update_passwd(file):
             content = file.content.split("\n")
 
@@ -568,17 +566,79 @@ class StandardFS:
                     # Will automatically remove incorrect changes
                     self.computer.update_user_and_group_files()
 
+        def update_shadow(file):
+            content = file.content.split("\n")
+
+            for item in content:
+                subitems = item.split(":")
+                # An item in the list with a length of 1 or less are usually blank lines
+                if len(subitems) > 1:
+                    username, password = subitems
+
+                    # Now we want to get the user by username
+                    user_lookup = self.computer.find_user(username=username)
+
+                    # We have a user, now lets check if any of the data has changed
+                    user = user_lookup.data
+
+                    # If the password is 'x', that password is in the /etc/shadow file and should be ignored here
+                    if user.password != password and password != "x":
+                        result = self.computer.change_user_password(user.uid, password, plaintext=False)
+                        if result.success:
+                            user.password = password
+
+                # Will automatically remove incorrect changes
+                self.computer.update_user_and_group_files()
+
+        def update_group(file):
+            content = file.content.split("\n")
+
+            for item in content:
+                subitems = item.split(":")
+                # An item in the list with a length of 1 or less are usually blank lines
+                if len(subitems) > 1:
+                    group_name, password, gid, group_users = subitems
+
+                    try:
+                        uid = int(gid)
+                    except Exception:
+                        return
+
+                    # Now we want to get the group by group name
+                    group_lookup = self.computer.find_group(name=group_name)
+
+                    # If we don't find the user, that means we added a new user
+                    if not group_lookup.success:
+                        # Make sure no group has the gid
+                        if not self.computer.find_group(gid=gid).success:
+                            # Add the group
+                            self.computer.add_group(group_name, gid)
+                            # TODO: Add users to the group by last param
+                    else:
+                        # We have a group, now lets check if any of the data has changed
+                        group = group_lookup.data
+                        # TODO: Add changes here
+
+                    # Will automatically remove incorrect changes
+                    self.computer.update_user_and_group_files()
+
+        etc_dir: Directory = self.files.find("etc")
+        # Create the /etc/passwd file
+        passwd_file: File = File("passwd", f"", etc_dir, 0, 0)
+
         passwd_file.add_event_listener("write", update_passwd)
 
         etc_dir.add_file(passwd_file)
         # Create the /etc/shadow file and change its perms (rw-------)
         shadow_file: File = File("shadow", f"", etc_dir, 0, 0)
         shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
+        shadow_file.add_event_listener("write", update_shadow)
         etc_dir.add_file(shadow_file)
 
         # Create the /etc/groups file
-        groups_file: File = File("group", f"root:x:0", etc_dir, 0, 0)
-        etc_dir.add_file(groups_file)
+        group_file: File = File("group", f"root:x:0", etc_dir, 0, 0)
+        group_file.add_event_listener("write", update_group)
+        etc_dir.add_file(group_file)
 
         # /etc/skel (home dir template)
         skel_dir: Directory = Directory("skel", etc_dir, 0, 0)

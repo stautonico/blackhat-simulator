@@ -63,6 +63,7 @@ def parse_characters(chars, current_perms):
     # FIXME: Holy fuck This needs SERIOUS work
     # DATE: 3/15/2021
     # DATE: 3/19/2021
+    # DATE: 4/14/2021
     # Now lets apply the new permissions
     if mode == "remove":
         for mode in ["read", "write", "execute"]:
@@ -124,6 +125,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
             if not new_perms:
                 return output(f"{__COMMAND__}: invalid mode: '{args.umask}'", pipe, success=False)
+
+            # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
+            file_to_update.handle_event("change_perm")
             return output("", pipe)
         else:
             return output(f"{__COMMAND__}: changing permissions of '{args.file}': Operation not permitted",

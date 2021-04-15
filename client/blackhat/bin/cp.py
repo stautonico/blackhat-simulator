@@ -62,6 +62,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                 else:
                     new_filename = new_file_name
                     new_file = File(new_filename, src.content, to_write, computer.get_uid(), computer.get_gid())
+                    new_file.events = src.events
                     to_write.add_file(new_file)
                     # We have to do this so the permissions work no matter if we're overwriting or not
                     to_write = new_file
@@ -69,6 +70,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
         if preserve_permissions:
             to_write.permissions = src.permissions
 
+        to_write.handle_event("move")
         return SysCallStatus(success=True)
     # Handle directory copying
     else:
@@ -102,6 +104,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_dir = Directory(new_file_name, to_write, computer.get_uid(), computer.get_gid())
+                    new_dir.events = to_write.events
                     to_write.add_file(new_dir)
                     # Set a temporary write permission no matter what the new dir's permissions were so we can add its children
                     new_dir.permissions["write"] = ["owner"]
@@ -120,6 +123,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
         if preserve_permissions:
             new_dir.permissions = src.permissions
 
+        new_dir.handle_event("move")
         return SysCallStatus(success=True)
 
 

@@ -78,7 +78,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         computer.add_user_to_group(user_result.data, group_result.data, membership_type="primary")
 
         update_passwd_result = computer.update_user_and_group_files()
-        update_group_result = computer.update_groups()
+        update_group_result = computer.update_user_and_group_files()
 
         if not update_passwd_result.success:
             return output("passwd: Failed to update password", pipe, success=False)
