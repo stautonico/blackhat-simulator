@@ -1,13 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Blackhat Simulator</title>
-</head>
-<body>
-
-</body>
-</html><style>body {
+body {
     background-color: #121212;
     color: white;
 }
@@ -125,4 +116,4 @@ code {
 
 .hljs-strong {
     font-weight: 700
-}</style>
+}
