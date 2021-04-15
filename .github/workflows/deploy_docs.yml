@@ -23,6 +23,8 @@ jobs:
           pip install -r requirements.txt
           pdoc --html --output-dir docs -c show_source_code=True -c show_type_annotations=True client.blackhat --force
           cp docs/ website/ -r
+          cd website
+          find . -type f -name "*.html" -exec sh -c 'echo "<style>$(cat dark_theme_inject.css)</style>" >> "$1"' -- {} \;
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@4.1.0
         with:
