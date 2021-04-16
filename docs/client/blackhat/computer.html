@@ -163,6 +163,7 @@ class Computer:
                 return response
             except ImportError as e:
                 print(f&#34;There was an error when running command: {command}&#34;)
+                print(e)
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
     def set_hostname(self, hostname: str) -&gt; SysCallStatus:
@@ -1040,6 +1041,7 @@ class ISPRouter(Router):
         # We&#39;re 1.1.1.1
         self.used_ips = [&#34;1.1.1.1&#34;]
         self.dns_records = {}
+        self.whois_records = {}
 
     def dhcp(self, **kwargs) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -1160,7 +1162,27 @@ class ISPRouter(Router):
             return SysCallStatus(success=True, data=dns_record)
 
         # Failed to find
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_whois(self, domain_name: str) -&gt; None:
+        self.whois_records[domain_name] = {&#34;domain_name&#34;: domain_name.upper()}
+
+    def get_whois(self, domain_name: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get a whois record (by domain name)
+
+        Args:
+            domain_name (str): The domain name to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag appropriately and the `data` flag containing the fields if successful
+        &#34;&#34;&#34;
+        record = self.whois_records.get(domain_name)
+
+        if not record:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=record)</code></pre>
 </details>
 </section>
 <section>
@@ -1300,6 +1322,7 @@ class ISPRouter(Router):
                 return response
             except ImportError as e:
                 print(f&#34;There was an error when running command: {command}&#34;)
+                print(e)
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
     def set_hostname(self, hostname: str) -&gt; SysCallStatus:
@@ -2978,6 +3001,7 @@ user's current directory</dd>
             return response
         except ImportError as e:
             print(f&#34;There was an error when running command: {command}&#34;)
+            print(e)
             return SysCallStatus(success=False, message=SysCallMessages.GENERIC)</code></pre>
 </details>
 </dd>
@@ -3291,6 +3315,7 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
         # We&#39;re 1.1.1.1
         self.used_ips = [&#34;1.1.1.1&#34;]
         self.dns_records = {}
+        self.whois_records = {}
 
     def dhcp(self, **kwargs) -&gt; SysCallStatus:
         &#34;&#34;&#34;
@@ -3411,7 +3436,27 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
             return SysCallStatus(success=True, data=dns_record)
 
         # Failed to find
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_whois(self, domain_name: str) -&gt; None:
+        self.whois_records[domain_name] = {&#34;domain_name&#34;: domain_name.upper()}
+
+    def get_whois(self, domain_name: str) -&gt; SysCallStatus:
+        &#34;&#34;&#34;
+        Get a whois record (by domain name)
+
+        Args:
+            domain_name (str): The domain name to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag appropriately and the `data` flag containing the fields if successful
+        &#34;&#34;&#34;
+        record = self.whois_records.get(domain_name)
+
+        if not record:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=record)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -3501,6 +3546,19 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
         return dhcp_result</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.computer.ISPRouter.add_whois"><code class="name flex">
+<span>def <span class="ident">add_whois</span></span>(<span>self, domain_name: str) ‑> NoneType</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_whois(self, domain_name: str) -&gt; None:
+    self.whois_records[domain_name] = {&#34;domain_name&#34;: domain_name.upper()}</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.computer.ISPRouter.dhcp"><code class="name flex">
 <span>def <span class="ident">dhcp</span></span>(<span>self, **kwargs) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -3586,6 +3644,43 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 
     # Client not found
     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.computer.ISPRouter.get_whois"><code class="name flex">
+<span>def <span class="ident">get_whois</span></span>(<span>self, domain_name: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get a whois record (by domain name)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>domain_name</code></strong> :&ensp;<code>str</code></dt>
+<dd>The domain name to search</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>SysCallStatus</code></dt>
+<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag appropriately and the <code>data</code> flag containing the fields if successful</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_whois(self, domain_name: str) -&gt; SysCallStatus:
+    &#34;&#34;&#34;
+    Get a whois record (by domain name)
+
+    Args:
+        domain_name (str): The domain name to search
+
+    Returns:
+        SysCallStatus: A `SysCallStatus` object with the `success` flag appropriately and the `data` flag containing the fields if successful
+    &#34;&#34;&#34;
+    record = self.whois_records.get(domain_name)
+
+    if not record:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    return SysCallStatus(success=True, data=record)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.computer.ISPRouter.remove_dns_record"><code class="name flex">
@@ -4386,8 +4481,10 @@ Primarily used for finding the <code><a title="client.blackhat.computer.Computer
 <ul class="two-column">
 <li><code><a title="client.blackhat.computer.ISPRouter.add_dns_record" href="#client.blackhat.computer.ISPRouter.add_dns_record">add_dns_record</a></code></li>
 <li><code><a title="client.blackhat.computer.ISPRouter.add_new_client" href="#client.blackhat.computer.ISPRouter.add_new_client">add_new_client</a></code></li>
+<li><code><a title="client.blackhat.computer.ISPRouter.add_whois" href="#client.blackhat.computer.ISPRouter.add_whois">add_whois</a></code></li>
 <li><code><a title="client.blackhat.computer.ISPRouter.dhcp" href="#client.blackhat.computer.ISPRouter.dhcp">dhcp</a></code></li>
 <li><code><a title="client.blackhat.computer.ISPRouter.find_client" href="#client.blackhat.computer.ISPRouter.find_client">find_client</a></code></li>
+<li><code><a title="client.blackhat.computer.ISPRouter.get_whois" href="#client.blackhat.computer.ISPRouter.get_whois">get_whois</a></code></li>
 <li><code><a title="client.blackhat.computer.ISPRouter.remove_dns_record" href="#client.blackhat.computer.ISPRouter.remove_dns_record">remove_dns_record</a></code></li>
 <li><code><a title="client.blackhat.computer.ISPRouter.resolve_dns" href="#client.blackhat.computer.ISPRouter.resolve_dns">resolve_dns</a></code></li>
 </ul>

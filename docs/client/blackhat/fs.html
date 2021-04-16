@@ -735,17 +735,7 @@ class StandardFS:
         man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
-        for binary in self.files.find(&#34;bin&#34;).files.keys():
-            try:
-                module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
-                                                                                                   Style.RESET_ALL)
-                manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
-                current_manpage = File(binary, manpage, man_dir, 0, 0)
-                man_dir.add_file(current_manpage)
-            except AttributeError as e:
-                pass
+        self.generate_manpages()
 
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
         usr_dir.add_file(bin_dir)
@@ -872,7 +862,43 @@ class StandardFS:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         # This only runs when we successfully found
-        return SysCallStatus(success=True, data=current_dir)</code></pre>
+        return SysCallStatus(success=True, data=current_dir)
+
+    def generate_manpages(self):
+        find_man_dir = self.find(&#34;/usr/share/man&#34;)
+
+        if not find_man_dir.success:
+            return
+
+        man_dir = find_man_dir.data
+
+        find_usr_bin = self.find(&#34;/usr/bin&#34;)
+
+        if not find_usr_bin.success:
+            usr_bin = []
+        else:
+            usr_bin = list(find_usr_bin.data.files.keys())
+
+        # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
+        for binary in list(self.files.find(&#34;bin&#34;).files.keys()) + usr_bin:
+            # Check if an manpage exist
+            if not self.find(f&#34;/usr/share/man/{binary}&#34;).success:
+                try:
+                    module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
+                except ImportError:
+                    try:
+                        module = importlib.import_module(f&#34;blackhat.bin.installable.{binary}&#34;)
+                    except ImportError:
+                        continue
+
+                try:
+                    manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                                       Style.RESET_ALL)
+                    manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+                    current_manpage = File(binary, manpage, man_dir, 0, 0)
+                    man_dir.add_file(current_manpage)
+                except AttributeError:
+                    continue</code></pre>
 </details>
 </section>
 <section>
@@ -2429,17 +2455,7 @@ Also, recursively tells it's parent to update its size.</p>
         man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
-        for binary in self.files.find(&#34;bin&#34;).files.keys():
-            try:
-                module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
-                                                                                                   Style.RESET_ALL)
-                manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
-                current_manpage = File(binary, manpage, man_dir, 0, 0)
-                man_dir.add_file(current_manpage)
-            except AttributeError as e:
-                pass
+        self.generate_manpages()
 
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
         usr_dir.add_file(bin_dir)
@@ -2566,7 +2582,43 @@ Also, recursively tells it's parent to update its size.</p>
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
         # This only runs when we successfully found
-        return SysCallStatus(success=True, data=current_dir)</code></pre>
+        return SysCallStatus(success=True, data=current_dir)
+
+    def generate_manpages(self):
+        find_man_dir = self.find(&#34;/usr/share/man&#34;)
+
+        if not find_man_dir.success:
+            return
+
+        man_dir = find_man_dir.data
+
+        find_usr_bin = self.find(&#34;/usr/bin&#34;)
+
+        if not find_usr_bin.success:
+            usr_bin = []
+        else:
+            usr_bin = list(find_usr_bin.data.files.keys())
+
+        # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
+        for binary in list(self.files.find(&#34;bin&#34;).files.keys()) + usr_bin:
+            # Check if an manpage exist
+            if not self.find(f&#34;/usr/share/man/{binary}&#34;).success:
+                try:
+                    module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
+                except ImportError:
+                    try:
+                        module = importlib.import_module(f&#34;blackhat.bin.installable.{binary}&#34;)
+                    except ImportError:
+                        continue
+
+                try:
+                    manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                                       Style.RESET_ALL)
+                    manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+                    current_manpage = File(binary, manpage, man_dir, 0, 0)
+                    man_dir.add_file(current_manpage)
+                except AttributeError:
+                    continue</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -2670,6 +2722,52 @@ Also, recursively tells it's parent to update its size.</p>
 
     # This only runs when we successfully found
     return SysCallStatus(success=True, data=current_dir)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.fs.StandardFS.generate_manpages"><code class="name flex">
+<span>def <span class="ident">generate_manpages</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def generate_manpages(self):
+    find_man_dir = self.find(&#34;/usr/share/man&#34;)
+
+    if not find_man_dir.success:
+        return
+
+    man_dir = find_man_dir.data
+
+    find_usr_bin = self.find(&#34;/usr/bin&#34;)
+
+    if not find_usr_bin.success:
+        usr_bin = []
+    else:
+        usr_bin = list(find_usr_bin.data.files.keys())
+
+    # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
+    for binary in list(self.files.find(&#34;bin&#34;).files.keys()) + usr_bin:
+        # Check if an manpage exist
+        if not self.find(f&#34;/usr/share/man/{binary}&#34;).success:
+            try:
+                module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
+            except ImportError:
+                try:
+                    module = importlib.import_module(f&#34;blackhat.bin.installable.{binary}&#34;)
+                except ImportError:
+                    continue
+
+            try:
+                manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
+                                                                                                   Style.RESET_ALL)
+                manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
+                current_manpage = File(binary, manpage, man_dir, 0, 0)
+                man_dir.add_file(current_manpage)
+            except AttributeError:
+                continue</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.StandardFS.init"><code class="name flex">
@@ -3016,17 +3114,7 @@ Otherwise, the format of root's home folder is the same as any other user</p>
     man_dir: Directory = Directory(&#34;man&#34;, share_dir, 0, 0)
     share_dir.add_file(man_dir)
 
-    # Loop through all the files in /bin and run &#34;parse_args()&#34; with the `doc` set to `True`
-    for binary in self.files.find(&#34;bin&#34;).files.keys():
-        try:
-            module = importlib.import_module(f&#34;blackhat.bin.{binary}&#34;)
-            manpage = module.parse_args(args=[], doc=True).replace(&#34;**&#34;, Style.BRIGHT).replace(&#34;*/&#34;,
-                                                                                               Style.RESET_ALL)
-            manpage = manpage.removeprefix(&#34;\n&#34;).removesuffix(&#34;\n&#34;)
-            current_manpage = File(binary, manpage, man_dir, 0, 0)
-            man_dir.add_file(current_manpage)
-        except AttributeError as e:
-            pass
+    self.generate_manpages()
 
     bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
     usr_dir.add_file(bin_dir)</code></pre>
@@ -3152,6 +3240,7 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 <h4><code><a title="client.blackhat.fs.StandardFS" href="#client.blackhat.fs.StandardFS">StandardFS</a></code></h4>
 <ul class="two-column">
 <li><code><a title="client.blackhat.fs.StandardFS.find" href="#client.blackhat.fs.StandardFS.find">find</a></code></li>
+<li><code><a title="client.blackhat.fs.StandardFS.generate_manpages" href="#client.blackhat.fs.StandardFS.generate_manpages">generate_manpages</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.init" href="#client.blackhat.fs.StandardFS.init">init</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_bin" href="#client.blackhat.fs.StandardFS.setup_bin">setup_bin</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_etc" href="#client.blackhat.fs.StandardFS.setup_etc">setup_etc</a></code></li>

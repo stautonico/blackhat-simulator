@@ -121,7 +121,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         arg_packages[&#34;other&#34;] = [pkg]
 
             # Check if the package we&#39;re trying to install exists
-            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
+            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if
+                      file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
 
             # We want to install only the packages that we found (not outstanding)
             for pkg_group, packages in arg_packages.items():
@@ -157,6 +158,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         status_file.append(pkg_group + &#34;\n&#34;, computer)
                         print(f&#34;Successfully installed package {pkg_group}&#34;)
 
+            computer.fs.generate_manpages()
             return output(&#34;&#34;, pipe)
 
         elif args.command == &#34;remove&#34;:
@@ -187,6 +189,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
                 else:
                     computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
                 installed_packages.remove(to_remove)
 
             # Update the content of /var/lib/dpkg/status
@@ -297,7 +300,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         arg_packages[&#34;other&#34;] = [pkg]
 
             # Check if the package we&#39;re trying to install exists
-            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
+            exists = [file.replace(&#34;.py&#34;, &#34;&#34;) for file in os.listdir(&#34;./blackhat/bin/installable&#34;) if
+                      file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;]]
 
             # We want to install only the packages that we found (not outstanding)
             for pkg_group, packages in arg_packages.items():
@@ -333,6 +337,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         status_file.append(pkg_group + &#34;\n&#34;, computer)
                         print(f&#34;Successfully installed package {pkg_group}&#34;)
 
+            computer.fs.generate_manpages()
             return output(&#34;&#34;, pipe)
 
         elif args.command == &#34;remove&#34;:
@@ -363,6 +368,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                         computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
                 else:
                     computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
                 installed_packages.remove(to_remove)
 
             # Update the content of /var/lib/dpkg/status
