@@ -171,8 +171,13 @@ class Shell:
         Returns:
 
         """
+        # TODO: When using >> or >, file owner is the read uid not effective uid
         # Technically, the first element in our command should be the command name
         # And we can keep going through the
+        prev_item = readline.get_history_item(readline.get_current_history_length()-1)
+        if prev_item:
+            command = command.replace("!!", prev_item)
+
         command = command.split()
         # Filter!
         while "" in command:

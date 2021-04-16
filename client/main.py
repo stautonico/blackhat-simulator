@@ -156,20 +156,27 @@ if not load_save_success:
         lan2_client2.run_command("mkdir", ["/var/www/html/repo"], pipe=True)
         lan2_client2.run_command("cd", ["/var/www/html/repo"], pipe=True)
         for file in os.listdir("./blackhat/bin/installable"):
-            if file not in ["__init__.py", "__pycache__"]:
-
+            if file not in ["__init__.py", "__pycache__", "ping.py", "curl.py", "dig.py", "ifconfig.py", "john.py",
+                            "unshadow.py"]:
                 file = file.replace(".py", "")
                 lan2_client2.run_command("touch", [file], pipe=True)
 
         lan2_client2.run_command("mkdir", ["netutils"], True)
         lan2_client2.run_command("cd", ["netutils"], True)
         lan2_client2.run_command("touch", ["ping", "curl", "dig", "ifconfig"], True)
+        lan2_client2.run_command("cd", [".."], True)
+
+        lan2_client2.run_command("mkdir", ["john"], True)
+        lan2_client2.run_command("cd", ["john"], True)
+        lan2_client2.run_command("touch", ["john", "unshadow"], True)
+        lan2_client2.run_command("cd", [".."], True)
 
         # During our temporary root session, we want to install the current "installable" tool that's being developed
         # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it
         # This has to happen after we add our apt server to /etc/apt/sources.list and after the network is fully inited
         # but before we remove our temporary root session
         comp.run_command("apt", ["install", "nmap"], False)
+        comp.run_command("apt", ["install", "john"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user

@@ -707,17 +707,7 @@ class StandardFS:
         man_dir: Directory = Directory("man", share_dir, 0, 0)
         share_dir.add_file(man_dir)
 
-        # Loop through all the files in /bin and run "parse_args()" with the `doc` set to `True`
-        for binary in self.files.find("bin").files.keys():
-            try:
-                module = importlib.import_module(f"blackhat.bin.{binary}")
-                manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/",
-                                                                                                   Style.RESET_ALL)
-                manpage = manpage.removeprefix("\n").removesuffix("\n")
-                current_manpage = File(binary, manpage, man_dir, 0, 0)
-                man_dir.add_file(current_manpage)
-            except AttributeError as e:
-                pass
+        self.generate_manpages()
 
         bin_dir: Directory = Directory("bin", usr_dir, 0, 0)
         usr_dir.add_file(bin_dir)
@@ -845,3 +835,39 @@ class StandardFS:
 
         # This only runs when we successfully found
         return SysCallStatus(success=True, data=current_dir)
+
+    def generate_manpages(self):
+        find_man_dir = self.find("/usr/share/man")
+
+        if not find_man_dir.success:
+            return
+
+        man_dir = find_man_dir.data
+
+        find_usr_bin = self.find("/usr/bin")
+
+        if not find_usr_bin.success:
+            usr_bin = []
+        else:
+            usr_bin = list(find_usr_bin.data.files.keys())
+
+        # Loop through all the files in /bin and run "parse_args()" with the `doc` set to `True`
+        for binary in list(self.files.find("bin").files.keys()) + usr_bin:
+            # Check if an manpage exist
+            if not self.find(f"/usr/share/man/{binary}").success:
+                try:
+                    module = importlib.import_module(f"blackhat.bin.{binary}")
+                except ImportError:
+                    try:
+                        module = importlib.import_module(f"blackhat.bin.installable.{binary}")
+                    except ImportError:
+                        continue
+
+                try:
+                    manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/",
+                                                                                                       Style.RESET_ALL)
+                    manpage = manpage.removeprefix("\n").removesuffix("\n")
+                    current_manpage = File(binary, manpage, man_dir, 0, 0)
+                    man_dir.add_file(current_manpage)
+                except AttributeError:
+                    continue

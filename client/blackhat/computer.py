@@ -135,6 +135,7 @@ class Computer:
                 return response
             except ImportError as e:
                 print(f"There was an error when running command: {command}")
+                print(e)
                 return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
 
     def set_hostname(self, hostname: str) -> SysCallStatus:
@@ -1012,6 +1013,7 @@ class ISPRouter(Router):
         # We're 1.1.1.1
         self.used_ips = ["1.1.1.1"]
         self.dns_records = {}
+        self.whois_records = {}
 
     def dhcp(self, **kwargs) -> SysCallStatus:
         """
@@ -1133,3 +1135,23 @@ class ISPRouter(Router):
 
         # Failed to find
         return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    def add_whois(self, domain_name: str) -> None:
+        self.whois_records[domain_name] = {"domain_name": domain_name.upper()}
+
+    def get_whois(self, domain_name: str) -> SysCallStatus:
+        """
+        Get a whois record (by domain name)
+
+        Args:
+            domain_name (str): The domain name to search
+
+        Returns:
+            SysCallStatus: A `SysCallStatus` object with the `success` flag appropriately and the `data` flag containing the fields if successful
+        """
+        record = self.whois_records.get(domain_name)
+
+        if not record:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        return SysCallStatus(success=True, data=record)

@@ -64,8 +64,13 @@
   "sysutils": [
     "uptime"
   ],
+  "john": [
+    "john",
+    "unshadow"
+  ],
   "misc": [
     "BlackhatSSH",
-    "nmap"
+    "nmap",
+    "whois"
   ]
 }
