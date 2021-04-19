@@ -26,7 +26,9 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
+<pre><code class="python">import codecs
+
+from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
@@ -42,6 +44,7 @@ def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;string&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;-n&#34;, dest=&#34;nonewline&#34;, action=&#34;store_true&#34;, help=&#34;do not output the trailing newline&#34;)
+    parser.add_argument(&#34;-e&#34;, dest=&#34;escape&#34;, action=&#34;store_true&#34;, help=&#34;enable interpretation of backslash escapes&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
@@ -114,6 +117,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if output_text.endswith(&#34;\n&#34;):
                 output_text = output_text[:-1]
 
+        if args.escape:
+            output_text = codecs.decode(output_text, &#34;unicode_escape&#34;)
+
         return output(output_text, pipe)</code></pre>
 </details>
 </section>
@@ -165,6 +171,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if output_text.endswith(&#34;\n&#34;):
                 output_text = output_text[:-1]
 
+        if args.escape:
+            output_text = codecs.decode(output_text, &#34;unicode_escape&#34;)
+
         return output(output_text, pipe)</code></pre>
 </details>
 </dd>
@@ -181,6 +190,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;string&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;-n&#34;, dest=&#34;nonewline&#34;, action=&#34;store_true&#34;, help=&#34;do not output the trailing newline&#34;)
+    parser.add_argument(&#34;-e&#34;, dest=&#34;escape&#34;, action=&#34;store_true&#34;, help=&#34;enable interpretation of backslash escapes&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
@@ -284,6 +294,10 @@ pre {
     overflow-x: hidden !important;
 }
 
+
+h1:target, h2:target, h3:target, h4:target, h5:target, h6:target{
+    background: #8c00f7
+}
 
 /* Modify color syntax highlighting */
 .hljs {

@@ -26,7 +26,9 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ...computer import Computer
+<pre><code class="python">from hashlib import md5
+
+from ...computer import Computer
 from ...helpers import SysCallStatus
 from ...lib.input import ArgParser
 from ...lib.output import output
@@ -39,6 +41,9 @@ __VERSION__ = &#34;1.0&#34;
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;password&#34;, help=&#34;The unshadowed file to crack&#34;)
+    parser.add_argument(&#34;--wordlist&#34;, help=&#34;The wordlist to use when brute-forcing the passwords&#34;, required=True)
+    parser.add_argument(&#34;-o&#34;, &#34;--output&#34;, help=&#34;Output the result to a file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
@@ -81,6 +86,7 @@ def parse_args(args=[], doc=False):
 
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    # TODO: Add ability for john to crack more than just user passwords
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -93,6 +99,91 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        find_password_file = computer.fs.find(args.password)
+        find_wordlist_file = computer.fs.find(args.wordlist)
+
+        if not find_password_file.success:
+            return output(f&#34;{__COMMAND__}: {args.password}: No such file or directory&#34;, pipe, success=False)
+
+        if not find_wordlist_file.success:
+            return output(f&#34;{__COMMAND__}: {args.wordlist}: No such file or directory&#34;, pipe, success=False)
+
+        try_read_password_file = find_password_file.data.read(computer)
+        try_read_wordlist_file = find_wordlist_file.data.read(computer)
+
+        if not try_read_password_file.success:
+            return output(f&#34;{__COMMAND__}: {args.password}: Permission denied&#34;, pipe, success=False)
+
+        if not try_read_wordlist_file.success:
+            return output(f&#34;{__COMMAND__}: {args.wordlist}: Permission denied&#34;, pipe, success=False)
+
+        password_content = try_read_password_file.data
+        wordlist_content = try_read_wordlist_file.data.split(&#34;\n&#34;)
+
+        user_password_split = [x.split(&#34;:&#34;) for x in password_content.split(&#34;\n&#34;) if x != &#34;&#34;]
+
+        clean_user_password = []
+        to_crack = {}
+
+        # Now we want to validate the data in each element
+        # Each sub-element in the array should have 2 elements
+        # The second (index 1) should have a length of exactly 32 (MD5 hash)
+        for item in user_password_split:
+            if len(item) == 2:
+                if len(item[1]) == 32:
+                    clean_user_password.append(item)
+
+        for item in clean_user_password:
+            if item[1] in to_crack.keys():
+                to_crack[item[1]].append(item[0])
+            else:
+                to_crack[item[1]] = [item[0]]
+
+        if len(clean_user_password) == 0:
+            return output(f&#34;{__COMMAND__}: No valid username-password combinations!&#34;, pipe, success=False)
+
+        # Used for -o (write to file)
+        output_text = &#34;&#34;
+
+        # Loop through all items in the password list and check if the hash matches any of our users
+        for password in wordlist_content:
+            hashed_password = md5(password.encode()).hexdigest()
+            if hashed_password in to_crack.keys():
+                for item in to_crack[hashed_password]:
+                    response = f&#34;{password}\t({item})&#34;
+                    output_text += response + &#34;\n&#34;
+                    print(response)
+
+                del to_crack[hashed_password]
+
+            if len(to_crack) == 0:
+                break
+
+        if len(to_crack) &gt; 0:
+            print(f&#34;{__COMMAND__}: Wordlist exhausted&#34;)
+
+        # If we&#39;re outputting, we should try to find the file to write to.
+        if args.output:
+            find_output_file = computer.fs.find(args.output)
+            if find_output_file.success:
+                write_result = find_output_file.data.write(output_text, computer)
+            else:
+                # Create the file
+                touch_output = computer.run_command(&#34;touch&#34;, [args.output], pipe)
+                if not touch_output.success:
+                    return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                                  success=False)
+                find_output_file = computer.fs.find(args.output)
+                if find_output_file.success:
+                    write_result = find_output_file.data.write(output_text, computer)
+                else:
+                    return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                                  success=False)
+
+            if not write_result.success:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                              success=False)
 
         return output(&#34;&#34;, pipe)</code></pre>
 </details>
@@ -114,6 +205,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+    # TODO: Add ability for john to crack more than just user passwords
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -126,6 +218,91 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        find_password_file = computer.fs.find(args.password)
+        find_wordlist_file = computer.fs.find(args.wordlist)
+
+        if not find_password_file.success:
+            return output(f&#34;{__COMMAND__}: {args.password}: No such file or directory&#34;, pipe, success=False)
+
+        if not find_wordlist_file.success:
+            return output(f&#34;{__COMMAND__}: {args.wordlist}: No such file or directory&#34;, pipe, success=False)
+
+        try_read_password_file = find_password_file.data.read(computer)
+        try_read_wordlist_file = find_wordlist_file.data.read(computer)
+
+        if not try_read_password_file.success:
+            return output(f&#34;{__COMMAND__}: {args.password}: Permission denied&#34;, pipe, success=False)
+
+        if not try_read_wordlist_file.success:
+            return output(f&#34;{__COMMAND__}: {args.wordlist}: Permission denied&#34;, pipe, success=False)
+
+        password_content = try_read_password_file.data
+        wordlist_content = try_read_wordlist_file.data.split(&#34;\n&#34;)
+
+        user_password_split = [x.split(&#34;:&#34;) for x in password_content.split(&#34;\n&#34;) if x != &#34;&#34;]
+
+        clean_user_password = []
+        to_crack = {}
+
+        # Now we want to validate the data in each element
+        # Each sub-element in the array should have 2 elements
+        # The second (index 1) should have a length of exactly 32 (MD5 hash)
+        for item in user_password_split:
+            if len(item) == 2:
+                if len(item[1]) == 32:
+                    clean_user_password.append(item)
+
+        for item in clean_user_password:
+            if item[1] in to_crack.keys():
+                to_crack[item[1]].append(item[0])
+            else:
+                to_crack[item[1]] = [item[0]]
+
+        if len(clean_user_password) == 0:
+            return output(f&#34;{__COMMAND__}: No valid username-password combinations!&#34;, pipe, success=False)
+
+        # Used for -o (write to file)
+        output_text = &#34;&#34;
+
+        # Loop through all items in the password list and check if the hash matches any of our users
+        for password in wordlist_content:
+            hashed_password = md5(password.encode()).hexdigest()
+            if hashed_password in to_crack.keys():
+                for item in to_crack[hashed_password]:
+                    response = f&#34;{password}\t({item})&#34;
+                    output_text += response + &#34;\n&#34;
+                    print(response)
+
+                del to_crack[hashed_password]
+
+            if len(to_crack) == 0:
+                break
+
+        if len(to_crack) &gt; 0:
+            print(f&#34;{__COMMAND__}: Wordlist exhausted&#34;)
+
+        # If we&#39;re outputting, we should try to find the file to write to.
+        if args.output:
+            find_output_file = computer.fs.find(args.output)
+            if find_output_file.success:
+                write_result = find_output_file.data.write(output_text, computer)
+            else:
+                # Create the file
+                touch_output = computer.run_command(&#34;touch&#34;, [args.output], pipe)
+                if not touch_output.success:
+                    return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                                  success=False)
+                find_output_file = computer.fs.find(args.output)
+                if find_output_file.success:
+                    write_result = find_output_file.data.write(output_text, computer)
+                else:
+                    return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                                  success=False)
+
+            if not write_result.success:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
+                              success=False)
 
         return output(&#34;&#34;, pipe)</code></pre>
 </details>
@@ -141,6 +318,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;password&#34;, help=&#34;The unshadowed file to crack&#34;)
+    parser.add_argument(&#34;--wordlist&#34;, help=&#34;The wordlist to use when brute-forcing the passwords&#34;, required=True)
+    parser.add_argument(&#34;-o&#34;, &#34;--output&#34;, help=&#34;Output the result to a file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
@@ -244,6 +424,10 @@ pre {
     overflow-x: hidden !important;
 }
 
+
+h1:target, h2:target, h3:target, h4:target, h5:target, h6:target{
+    background: #8c00f7
+}
 
 /* Modify color syntax highlighting */
 .hljs {
