@@ -1,3 +1,5 @@
+import codecs
+
 from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
@@ -14,6 +16,7 @@ def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("string", nargs="+")
     parser.add_argument("-n", dest="nonewline", action="store_true", help="do not output the trailing newline")
+    parser.add_argument("-e", dest="escape", action="store_true", help="enable interpretation of backslash escapes")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
@@ -85,5 +88,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if args.nonewline:
             if output_text.endswith("\n"):
                 output_text = output_text[:-1]
+
+        if args.escape:
+            output_text = codecs.decode(output_text, "unicode_escape")
 
         return output(output_text, pipe)

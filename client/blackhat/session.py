@@ -17,5 +17,5 @@ class Session:
         self.current_dir = current_dir
         """The current directory that the user is interacting with"""
 
-        self.env = {}
+        self.env = {"PATH": "/bin:/usr/bin"}
         """The map of environment variables in the current session"""
