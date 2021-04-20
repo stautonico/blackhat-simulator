@@ -187,7 +187,6 @@ if not load_save_success:
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
             computer.update_user_and_group_files()
-            computer.update_user_and_group_files()
 
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)

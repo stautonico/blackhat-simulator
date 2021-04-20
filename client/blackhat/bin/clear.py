@@ -61,13 +61,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     if parser.error_message:
         return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         if system() == "Windows":
             syscall("cls")
         else:

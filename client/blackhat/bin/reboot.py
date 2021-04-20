@@ -69,7 +69,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
         # TODO: Add ability to power off/reboot external machines via SSH
         # Only root can reboot/power off
-        if computer.get_uid() == 0:
+        if getuid() == 0:
 
             if args.poweroff:
                 exit(0)

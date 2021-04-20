@@ -34,7 +34,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         to_delete = []
 
         if args.source == "*":
-            for file in computer.get_pwd().files:
+            for file in getcwd().files:
                 to_delete.append(file)
         elif "*" in args.source:
             if args.source[-1] != "*":

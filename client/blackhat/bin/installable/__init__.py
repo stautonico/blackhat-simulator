@@ -1,1 +1,1 @@
-from . import curl, dig, ifconfig, nmap, ping, whois
+from . import curl, dig, ifconfig, john, nmap, ping, unshadow, whois

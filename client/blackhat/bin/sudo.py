@@ -30,12 +30,12 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = computer.find_user(uid=computer.get_uid())
+    user_lookup = computer.find_user(uid=getuid())
 
     if user_lookup.success:
         username = user_lookup.data.username
     else:
-        return output(f"{__COMMAND__}: cannot find user with UID {computer.get_uid()}", pipe, success=False)
+        return output(f"{__COMMAND__}: cannot find user with UID {getuid()}", pipe, success=False)
 
     # We want to look for the -u before the command we're running
     # For example, if we use sudo with adduser -u, we get an invalid user error
@@ -67,7 +67,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         # Encode the password
         password = md5(password.encode()).hexdigest()
 
-        current_user = computer.find_user(uid=computer.get_uid()).data
+        current_user = computer.find_user(uid=getuid()).data
         if password == current_user.password:
 
             # Now lets isolate the record regarding this `username`

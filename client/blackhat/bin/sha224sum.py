@@ -16,6 +16,7 @@ def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("files", nargs="+")
     parser.add_argument("--tag", action="store_true", help="create a BSD-style checksum")
+    parser.add_argument("-z", "--zero", action="store_true", help="Remove newline from the end of the file")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
@@ -64,13 +65,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         output_text = ""
 
         for filename in args.files:
@@ -86,9 +87,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     if not file.check_perm("read", computer).success:
                         output_text += f"{filename}: Permission denied\n"
                     else:
-                        hash = sha224(file.content.encode()).hexdigest()
+                        to_hash = file.content[:-1] if file.content.endswith("\n") and args.zero else file.content
+                        hash = sha224(to_hash.encode()).hexdigest()
                         if args.tag:
-                            output_text += f"MD5 ({filename}) = {hash}\n"
+                            output_text += f"SHA224 ({filename}) = {hash}\n"
                         else:
                             output_text += f"{hash}  {filename}\n"
 

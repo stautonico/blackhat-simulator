@@ -254,3 +254,5 @@ client/blackhat.db
 systems.db
 
 writeup.md
+
+client/blackhat/blackhat.db

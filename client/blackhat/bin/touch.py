@@ -3,6 +3,7 @@ from ..fs import File
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid, getgid, getcwd
 
 __COMMAND__ = "touch"
 __VERSION__ = "1.1"
@@ -52,15 +53,15 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     new_filename = filename.split("/")[-1]
                     dir_to_write_to = result.data
             else:
-                if filename not in computer.get_pwd().files:
+                if filename not in getcwd().files:
                     new_filename = filename
-                    dir_to_write_to = computer.get_pwd()
+                    dir_to_write_to = getcwd()
                 else:
                     return output("", pipe, success=False)
 
             # Make sure that we have write permissions of the dir
             if dir_to_write_to.check_perm("write", computer).success:
-                newfile = File(new_filename, "", dir_to_write_to, computer.get_uid(), computer.get_gid())
+                newfile = File(new_filename, "", dir_to_write_to, getuid(), getgid())
                 dir_to_write_to.add_file(newfile)
             else:
                 at_least_one_failed = True

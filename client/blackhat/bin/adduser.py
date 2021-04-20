@@ -1,9 +1,10 @@
+from getpass import getpass
+
 from ..computer import Computer
-from ..helpers import SysCallStatus
 from ..fs import Directory
+from ..helpers import SysCallStatus, SysCallMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
-from getpass import getpass
 
 __COMMAND__ = "adduser"
 __VERSION__ = "1.1"
@@ -34,7 +35,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
 
         if computer.find_user(username=args.username).success:
-            return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False)
+            return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False,
+                          success_message=SysCallMessages.ALREADY_EXISTS)
 
         prev_uid = computer.get_all_users().data[-1].uid
 
@@ -95,7 +97,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             return output(f"{__COMMAND__}: /home is missing, unable to create user's home folder", pipe, success=False)
 
         if not skel_dir_find.success:
-            return output(f"{__COMMAND__}: /etc/skel is missing, unable to create user's home folder", pipe, success=False)
+            return output(f"{__COMMAND__}: /etc/skel is missing, unable to create user's home folder", pipe,
+                          success=False)
 
         home_folder: Directory = home_folder_find.data
         skel_dir: Directory = skel_dir_find.data
@@ -117,7 +120,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 computer.run_command("chmod", ["u+rwx", new_file_find.data.pwd()], pipe=False)
 
                 # Change the file's owner (user and group)
-                computer.run_command("chown", [f"{args.username}:{args.username}", f"/home/{args.username}/{file.name}"], pipe)
+                computer.run_command("chown",
+                                     [f"{args.username}:{args.username}", f"/home/{args.username}/{file.name}"], pipe)
 
         # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
         new_shellrc_result = computer.fs.find(f"/home/{args.username}/.shellrc")
@@ -151,4 +155,3 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 return output(f"{__COMMAND__}: /etc/passwd file missing! Cannot add new user", pipe, success=False)
 
         return output("", pipe)
-

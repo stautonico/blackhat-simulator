@@ -26,6 +26,10 @@ def output(text: str, pipe: bool, success: bool = True,
                 text = text[:-1]
             print(text)
     else:
-        text = text + "\n"
+        if text != "":
+            text = text + "\n"
+
+    if text == "":
+        text = None
 
     return SysCallStatus(success=success, message=success_message, data=text)

@@ -643,7 +643,7 @@ class StandardFS:
         # /etc/skel (home dir template)
         skel_dir: Directory = Directory("skel", etc_dir, 0, 0)
 
-        for dir in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "public", "Templates", "Videos"]:
+        for dir in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Public", "Templates", "Videos"]:
             current_dir = Directory(dir, skel_dir, 0, 0)
             current_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                        "execute": []}

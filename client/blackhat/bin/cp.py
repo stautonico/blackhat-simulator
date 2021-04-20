@@ -5,6 +5,7 @@ from ..fs import File, Directory
 from ..helpers import SysCallStatus, SysCallMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid, getgid
 
 __COMMAND__ = "cp"
 __VERSION__ = "1.1.1"
@@ -50,8 +51,8 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     to_write.write(src.content, computer)
-                    to_write.owner = computer.get_uid()
-                    to_write.group_owner = computer.get_gid()
+                    to_write.owner = getuid()
+                    to_write.group_owner = getgid()
         else:
             # If we have the parent dir, we need to create a new file
             if not src.check_perm("read", computer).success:
@@ -61,7 +62,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_filename = new_file_name
-                    new_file = File(new_filename, src.content, to_write, computer.get_uid(), computer.get_gid())
+                    new_file = File(new_filename, src.content, to_write, getuid(), getgid())
                     new_file.events = src.events
                     to_write.add_file(new_file)
                     # We have to do this so the permissions work no matter if we're overwriting or not
@@ -103,7 +104,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                 if not to_write.check_perm("write", computer).success:
                     return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
                 else:
-                    new_dir = Directory(new_file_name, to_write, computer.get_uid(), computer.get_gid())
+                    new_dir = Directory(new_file_name, to_write, getuid(), getgid())
                     new_dir.events = to_write.events
                     to_write.add_file(new_dir)
                     # Set a temporary write permission no matter what the new dir's permissions were so we can add its children

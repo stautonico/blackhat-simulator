@@ -2,6 +2,7 @@ from ..computer import Computer
 from ..helpers import SysCallStatus, SysCallMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = "whoami"
 __DESCRIPTION__ = "print effective userid"
@@ -59,17 +60,17 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         # TODO: Implement "extra operand" error
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
-        lookup_result: SysCallStatus = computer.find_user(computer.get_uid())
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
+        lookup_result: SysCallStatus = computer.find_user(getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)
         else:
-            return output(f"{__COMMAND__}: failed to find username for uid {computer.get_uid()}", pipe, success=False,
+            return output(f"{__COMMAND__}: failed to find username for uid {getuid()}", pipe, success=False,
                           success_message=SysCallMessages.NOT_FOUND)

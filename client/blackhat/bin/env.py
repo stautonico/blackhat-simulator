@@ -20,13 +20,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         output_text = ""
 
         for key, value in computer.sessions[-1].env.items():

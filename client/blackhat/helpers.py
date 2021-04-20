@@ -50,3 +50,9 @@ class SysCallStatus:
 
     def __str__(self):
         return f"SysCallStatus(success={self.success}, message={self.message}, data={self.data})"
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, SysCallStatus):
+            return self.success == other.success and self.message == other.message and self.data == other.data
+        return False

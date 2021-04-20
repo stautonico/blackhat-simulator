@@ -5,6 +5,7 @@ from ..computer import Computer
 from ..helpers import SysCallStatus, SysCallMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = "su"
 __VERSION__ = "1.1"
@@ -52,11 +53,11 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         input_password = None
 
         # Authenticate
-        if computer.get_uid() != 0:
+        if getuid() != 0:
             password = getpass()
             input_password = md5(password.encode()).hexdigest()
 
-        if input_password == user.password or computer.get_uid() == 0:
+        if input_password == user.password or getuid() == 0:
             current_session: Session = computer.sessions[-1]
             # Create a new session
             new_session = Session(user.uid, current_session.current_dir, current_session.id + 1)

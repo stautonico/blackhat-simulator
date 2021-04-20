@@ -1,1 +1,1 @@
-from . import computer, fs, helpers, session, shell, user, services
+from . import bin, lib, services, computer, fs, helpers, session, shell, user, tests

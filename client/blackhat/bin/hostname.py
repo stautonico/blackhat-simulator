@@ -2,10 +2,12 @@ from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = "hostname"
 __DESCRIPTION__ = "show or set system hostname"
 __VERSION__ = "1.2"
+
 
 
 def parse_args(args=[], doc=False):
@@ -77,7 +79,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         # Change hostname by file
         if args.file:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f"{__COMMAND__}: you must be root to change the host name", pipe, success=False)
 
             find_file = computer.fs.find(args.file)
@@ -101,9 +103,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         if args.name:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f"{__COMMAND__}: you must be root to change the host name", pipe, success=False)
 
-            computer.set_hostname(args.name[0])
+            computer.set_hostname(args.name)
 
         return output(computer.hostname, pipe)

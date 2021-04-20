@@ -22,13 +22,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime('%a %b %d %I:%M:%S %p')
         time_second = datetime.datetime.now().strftime('%Y')

@@ -14,6 +14,8 @@ from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
 from .user import User, Group
+from .lib import unistd
+
 
 
 class Computer:
@@ -41,6 +43,7 @@ class Computer:
         self.services: dict[int, Service] = {}
         self.post_fs_init()
 
+
     def init(self) -> None:
         """
         Functions ran when a computer is booted (pre file-system setup/pre root user creation)
@@ -50,7 +53,8 @@ class Computer:
         """
         self.boot_time = datetime.now()
         # Try to setup the user, group, and group membership tables
-        init_tables = open("blackhat/database/init_tables.sql").read()
+        init_tables_file = open("blackhat/database/init_tables.sql")
+        init_tables = init_tables_file.read()
         self.database.executescript(init_tables)
 
         # Check if the computer we're initializing already exists in the database (we're loading an existing save)
@@ -62,6 +66,8 @@ class Computer:
             self.create_root_user()
             self.connection.commit()
 
+        init_tables_file.close()
+
     def post_fs_init(self) -> None:
         """
         Function ran after the file system and root user were initialized
@@ -72,6 +78,12 @@ class Computer:
         self.update_hostname()
         self.update_user_and_group_files()
         self.update_user_and_group_files()
+
+    def update_libs(self):
+        libs = [unistd]
+
+        for lib in libs:
+            lib.update(self)
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
         """
@@ -89,6 +101,7 @@ class Computer:
         # The one that matches first in the path gets run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/bin:/etc, the one in bin will run
         # For example, if ls is in /etc/ and in /bin/ and the path is PATH=/home:/etc:/bin, the one in etc will run
+        self.update_libs()
         try:
             bin_dirs_text = self.sessions[-1].env.get("PATH").split(":")
             bin_dirs = []
@@ -126,6 +139,7 @@ class Computer:
 
             return response
         except ImportError as e:
+            print(e)
             try:
                 module = importlib.import_module(f"blackhat.bin.installable.{command}")
                 response = module.main(self, args, pipe)

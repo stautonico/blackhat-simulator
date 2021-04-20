@@ -37,7 +37,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         if not args.user:
             # User just typed `passwd` (change current user password)
-            user_to_change = computer.find_user(uid=computer.get_uid()).data
+            user_to_change = computer.find_user(uid=getuid()).data
         else:
             user_to_change = computer.find_user(username=args.user)
             if not user_to_change.success:

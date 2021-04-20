@@ -2,6 +2,7 @@ from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getcwd
 
 __COMMAND__ = "pwd"
 __DESCRIPTION__ = "print name of current/working directory"
@@ -63,4 +64,4 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-        return output(computer.get_pwd().pwd(), pipe)
+        return output(getcwd().pwd(), pipe)

@@ -2,6 +2,7 @@ from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = "id"
 __DESCRIPTION__ = "print real and effective user and group IDs"
@@ -66,13 +67,13 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-        if args.version:
-            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         if args.user:
             # Check if a UID was entered
             try:
@@ -82,7 +83,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 # That means we entered a username
                 user_to_lookup_result = computer.find_user(username=args.user)
         else:
-            user_to_lookup_result = computer.find_user(uid=computer.get_uid())
+            user_to_lookup_result = computer.find_user(uid=getuid())
 
         if not user_to_lookup_result.success:
             return output(f"{__COMMAND__}: '{args.user}': no such user", pipe, success=False)

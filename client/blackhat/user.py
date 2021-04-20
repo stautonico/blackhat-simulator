@@ -37,6 +37,15 @@ class User:
         self.home_phone: Optional[str] = home_phone
         self.other: Optional[str] = other
 
+    def __str__(self):
+        return f"{self.uid}:{self.username}"
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, User):
+            return self.uid == other.uid and self.username == other.username and self.password == other.password and self.full_name == other.full_name and self.room_number == other.room_number and self.work_phone == other.work_phone and self.home_phone == other.home_phone and self.other == other.other
+        return False
+
 
 class Group:
     def __init__(self, gid: Optional[int] = None, name: Optional[str] = None) -> None:

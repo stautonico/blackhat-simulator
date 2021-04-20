@@ -58,7 +58,7 @@ def calculate_permission_string(fileobj):
 
     return "".join(permissions)
 
-def calculate_output(directory, computer, all=False, long=False):
+def calculate_output(directory, computer, all=False, long=False, nocolor=False):
     output_text = ""
     # Output a file (only show that one thing)
     if directory.is_file():
@@ -72,7 +72,10 @@ def calculate_output(directory, computer, all=False, long=False):
 
                 username = username_lookup.data.username if username_lookup.success else "?"
                 group_name = group_lookup.data.name if group_lookup.success else "?"
-                output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
+                if nocolor:
+                    output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n'
+                else:
+                    output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
             else:
                 output_text += directory.name
     else:
@@ -91,12 +94,18 @@ def calculate_output(directory, computer, all=False, long=False):
                     if file.is_file():
                         output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n'
                     else:
-                        output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n'
+                        if nocolor:
+                            output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n'
+                        else:
+                            output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n'
                 else:
                     if file.is_file():
                         output_text += f"{file.name} "
                     else:
-                        output_text += f"{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} "
+                        if nocolor:
+                            output_text += f"{file.name} "
+                        else:
+                            output_text += f"{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} "
     return output_text
 
 def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
@@ -108,6 +117,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     parser.add_argument("files", nargs="+", default=".")
     parser.add_argument("-a", dest="all", action="store_true")
     parser.add_argument("-l", dest="long", action="store_true")
+    parser.add_argument("--no-color", dest="nocolor", action="store_true")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
@@ -131,7 +141,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     if len(args.files) > 1:
                         if response.data.is_directory():
                             output_text += f"{file}: \n"
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long) + "\n\n"
+                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + "\n\n"
                 else:
                     output_text += f"cannot access '{file}': No such file or directory\n\n"
 
@@ -140,7 +150,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             response = computer.fs.find(".")
 
             if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long)
+                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
             else:
                 return output("Error", pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
 
