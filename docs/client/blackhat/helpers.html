@@ -77,7 +77,13 @@ class SysCallStatus:
         self.data = data
 
     def __str__(self):
-        return f&#34;SysCallStatus(success={self.success}, message={self.message}, data={self.data})&#34;</code></pre>
+        return f&#34;SysCallStatus(success={self.success}, message={self.message}, data={self.data})&#34;
+
+    def __eq__(self, other):
+        &#34;&#34;&#34;Overrides the default implementation&#34;&#34;&#34;
+        if isinstance(other, SysCallStatus):
+            return self.success == other.success and self.message == other.message and self.data == other.data
+        return False</code></pre>
 </details>
 </section>
 <section>
@@ -220,7 +226,13 @@ class SysCallStatus:
         self.data = data
 
     def __str__(self):
-        return f&#34;SysCallStatus(success={self.success}, message={self.message}, data={self.data})&#34;</code></pre>
+        return f&#34;SysCallStatus(success={self.success}, message={self.message}, data={self.data})&#34;
+
+    def __eq__(self, other):
+        &#34;&#34;&#34;Overrides the default implementation&#34;&#34;&#34;
+        if isinstance(other, SysCallStatus):
+            return self.success == other.success and self.message == other.message and self.data == other.data
+        return False</code></pre>
 </details>
 </dd>
 </dl>

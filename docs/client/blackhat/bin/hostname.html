@@ -30,10 +30,12 @@
 from ..helpers import SysCallStatus
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = &#34;hostname&#34;
 __DESCRIPTION__ = &#34;show or set system hostname&#34;
 __VERSION__ = &#34;1.2&#34;
+
 
 
 def parse_args(args=[], doc=False):
@@ -105,7 +107,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Change hostname by file
         if args.file:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
             find_file = computer.fs.find(args.file)
@@ -129,10 +131,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         if args.name:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            computer.set_hostname(args.name[0])
+            computer.set_hostname(args.name)
 
         return output(computer.hostname, pipe)</code></pre>
 </details>
@@ -173,7 +175,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Change hostname by file
         if args.file:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
             find_file = computer.fs.find(args.file)
@@ -197,10 +199,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         if args.name:
             # Only root can change the system hostname
-            if computer.get_uid() != 0:
+            if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            computer.set_hostname(args.name[0])
+            computer.set_hostname(args.name)
 
         return output(computer.hostname, pipe)</code></pre>
 </details>

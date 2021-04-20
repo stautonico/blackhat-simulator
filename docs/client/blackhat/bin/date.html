@@ -50,13 +50,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
         time_second = datetime.datetime.now().strftime(&#39;%Y&#39;)
@@ -93,13 +93,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
         time_second = datetime.datetime.now().strftime(&#39;%Y&#39;)

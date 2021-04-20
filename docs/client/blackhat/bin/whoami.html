@@ -30,6 +30,7 @@
 from ..helpers import SysCallStatus, SysCallMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
 
 __COMMAND__ = &#34;whoami&#34;
 __DESCRIPTION__ = &#34;print effective userid&#34;
@@ -87,19 +88,19 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # TODO: Implement &#34;extra operand&#34; error
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        lookup_result: SysCallStatus = computer.find_user(computer.get_uid())
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        lookup_result: SysCallStatus = computer.find_user(getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)
         else:
-            return output(f&#34;{__COMMAND__}: failed to find username for uid {computer.get_uid()}&#34;, pipe, success=False,
+            return output(f&#34;{__COMMAND__}: failed to find username for uid {getuid()}&#34;, pipe, success=False,
                           success_message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
 </section>
@@ -128,19 +129,19 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # TODO: Implement &#34;extra operand&#34; error
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        lookup_result: SysCallStatus = computer.find_user(computer.get_uid())
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        lookup_result: SysCallStatus = computer.find_user(getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)
         else:
-            return output(f&#34;{__COMMAND__}: failed to find username for uid {computer.get_uid()}&#34;, pipe, success=False,
+            return output(f&#34;{__COMMAND__}: failed to find username for uid {getuid()}&#34;, pipe, success=False,
                           success_message=SysCallMessages.NOT_FOUND)</code></pre>
 </details>
 </dd>

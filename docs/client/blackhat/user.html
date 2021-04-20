@@ -65,6 +65,15 @@ class User:
         self.home_phone: Optional[str] = home_phone
         self.other: Optional[str] = other
 
+    def __str__(self):
+        return f&#34;{self.uid}:{self.username}&#34;
+
+    def __eq__(self, other):
+        &#34;&#34;&#34;Overrides the default implementation&#34;&#34;&#34;
+        if isinstance(other, User):
+            return self.uid == other.uid and self.username == other.username and self.password == other.password and self.full_name == other.full_name and self.room_number == other.room_number and self.work_phone == other.work_phone and self.home_phone == other.home_phone and self.other == other.other
+        return False
+
 
 class Group:
     def __init__(self, gid: Optional[int] = None, name: Optional[str] = None) -&gt; None:
@@ -189,7 +198,16 @@ considered cryptography weak</li>
         self.room_number: Optional[str] = room_number
         self.work_phone: Optional[str] = work_phone
         self.home_phone: Optional[str] = home_phone
-        self.other: Optional[str] = other</code></pre>
+        self.other: Optional[str] = other
+
+    def __str__(self):
+        return f&#34;{self.uid}:{self.username}&#34;
+
+    def __eq__(self, other):
+        &#34;&#34;&#34;Overrides the default implementation&#34;&#34;&#34;
+        if isinstance(other, User):
+            return self.uid == other.uid and self.username == other.username and self.password == other.password and self.full_name == other.full_name and self.room_number == other.room_number and self.work_phone == other.work_phone and self.home_phone == other.home_phone and self.other == other.other
+        return False</code></pre>
 </details>
 <h3>Instance variables</h3>
 <dl>

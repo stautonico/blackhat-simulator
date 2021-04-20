@@ -86,7 +86,7 @@ def calculate_permission_string(fileobj):
 
     return &#34;&#34;.join(permissions)
 
-def calculate_output(directory, computer, all=False, long=False):
+def calculate_output(directory, computer, all=False, long=False, nocolor=False):
     output_text = &#34;&#34;
     # Output a file (only show that one thing)
     if directory.is_file():
@@ -100,7 +100,10 @@ def calculate_output(directory, computer, all=False, long=False):
 
                 username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
                 group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-                output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
+                if nocolor:
+                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n&#39;
+                else:
+                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
             else:
                 output_text += directory.name
     else:
@@ -119,12 +122,18 @@ def calculate_output(directory, computer, all=False, long=False):
                     if file.is_file():
                         output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
                     else:
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
+                        if nocolor:
+                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
+                        else:
+                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
                 else:
                     if file.is_file():
                         output_text += f&#34;{file.name} &#34;
                     else:
-                        output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
+                        if nocolor:
+                            output_text += f&#34;{file.name} &#34;
+                        else:
+                            output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
     return output_text
 
 def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
@@ -136,6 +145,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;, default=&#34;.&#34;)
     parser.add_argument(&#34;-a&#34;, dest=&#34;all&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;-l&#34;, dest=&#34;long&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--no-color&#34;, dest=&#34;nocolor&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
@@ -159,7 +169,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     if len(args.files) &gt; 1:
                         if response.data.is_directory():
                             output_text += f&#34;{file}: \n&#34;
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long) + &#34;\n\n&#34;
+                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + &#34;\n\n&#34;
                 else:
                     output_text += f&#34;cannot access &#39;{file}&#39;: No such file or directory\n\n&#34;
 
@@ -168,7 +178,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             response = computer.fs.find(&#34;.&#34;)
 
             if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long)
+                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
             else:
                 return output(&#34;Error&#34;, pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
 
@@ -187,7 +197,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.ls.calculate_output"><code class="name flex">
-<span>def <span class="ident">calculate_output</span></span>(<span>directory, computer, all=False, long=False)</span>
+<span>def <span class="ident">calculate_output</span></span>(<span>directory, computer, all=False, long=False, nocolor=False)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -195,7 +205,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_output(directory, computer, all=False, long=False):
+<pre><code class="python">def calculate_output(directory, computer, all=False, long=False, nocolor=False):
     output_text = &#34;&#34;
     # Output a file (only show that one thing)
     if directory.is_file():
@@ -209,7 +219,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
                 username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
                 group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-                output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
+                if nocolor:
+                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n&#39;
+                else:
+                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
             else:
                 output_text += directory.name
     else:
@@ -228,12 +241,18 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     if file.is_file():
                         output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
                     else:
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
+                        if nocolor:
+                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
+                        else:
+                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
                 else:
                     if file.is_file():
                         output_text += f&#34;{file.name} &#34;
                     else:
-                        output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
+                        if nocolor:
+                            output_text += f&#34;{file.name} &#34;
+                        else:
+                            output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
     return output_text</code></pre>
 </details>
 </dd>
@@ -315,6 +334,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;, default=&#34;.&#34;)
     parser.add_argument(&#34;-a&#34;, dest=&#34;all&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;-l&#34;, dest=&#34;long&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--no-color&#34;, dest=&#34;nocolor&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
@@ -338,7 +358,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     if len(args.files) &gt; 1:
                         if response.data.is_directory():
                             output_text += f&#34;{file}: \n&#34;
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long) + &#34;\n\n&#34;
+                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + &#34;\n\n&#34;
                 else:
                     output_text += f&#34;cannot access &#39;{file}&#39;: No such file or directory\n\n&#34;
 
@@ -347,7 +367,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             response = computer.fs.find(&#34;.&#34;)
 
             if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long)
+                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
             else:
                 return output(&#34;Error&#34;, pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
 

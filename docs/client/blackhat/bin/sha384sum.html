@@ -44,6 +44,7 @@ def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;--tag&#34;, action=&#34;store_true&#34;, help=&#34;create a BSD-style checksum&#34;)
+    parser.add_argument(&#34;-z&#34;, &#34;--zero&#34;, action=&#34;store_true&#34;, help=&#34;Remove newline from the end of the file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
@@ -92,13 +93,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         output_text = &#34;&#34;
 
         for filename in args.files:
@@ -114,9 +115,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     if not file.check_perm(&#34;read&#34;, computer).success:
                         output_text += f&#34;{filename}: Permission denied\n&#34;
                     else:
-                        hash = sha384(file.content.encode()).hexdigest()
+                        to_hash = file.content[:-1] if file.content.endswith(&#34;\n&#34;) and args.zero else file.content
+                        hash = sha384(to_hash.encode()).hexdigest()
                         if args.tag:
-                            output_text += f&#34;MD5 ({filename}) = {hash}\n&#34;
+                            output_text += f&#34;SHA384 ({filename}) = {hash}\n&#34;
                         else:
                             output_text += f&#34;{hash}  {filename}\n&#34;
 
@@ -146,13 +148,13 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         output_text = &#34;&#34;
 
         for filename in args.files:
@@ -168,9 +170,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     if not file.check_perm(&#34;read&#34;, computer).success:
                         output_text += f&#34;{filename}: Permission denied\n&#34;
                     else:
-                        hash = sha384(file.content.encode()).hexdigest()
+                        to_hash = file.content[:-1] if file.content.endswith(&#34;\n&#34;) and args.zero else file.content
+                        hash = sha384(to_hash.encode()).hexdigest()
                         if args.tag:
-                            output_text += f&#34;MD5 ({filename}) = {hash}\n&#34;
+                            output_text += f&#34;SHA384 ({filename}) = {hash}\n&#34;
                         else:
                             output_text += f&#34;{hash}  {filename}\n&#34;
 
@@ -190,6 +193,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;--tag&#34;, action=&#34;store_true&#34;, help=&#34;create a BSD-style checksum&#34;)
+    parser.add_argument(&#34;-z&#34;, &#34;--zero&#34;, action=&#34;store_true&#34;, help=&#34;Remove newline from the end of the file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)

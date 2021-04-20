@@ -62,7 +62,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         to_delete = []
 
         if args.source == &#34;*&#34;:
-            for file in computer.get_pwd().files:
+            for file in getcwd().files:
                 to_delete.append(file)
         elif &#34;*&#34; in args.source:
             if args.source[-1] != &#34;*&#34;:
@@ -146,7 +146,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         to_delete = []
 
         if args.source == &#34;*&#34;:
-            for file in computer.get_pwd().files:
+            for file in getcwd().files:
                 to_delete.append(file)
         elif &#34;*&#34; in args.source:
             if args.source[-1] != &#34;*&#34;:
