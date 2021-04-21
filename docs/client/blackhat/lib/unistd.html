@@ -29,11 +29,12 @@
 <pre><code class="python">from typing import Optional
 
 from ..fs import FSBaseObject
+from ..helpers import SysCallStatus, SysCallMessages
 
 computer: Optional[&#34;Computer&#34;] = None
 
 
-def update(comp):
+def update(comp: &#34;Computer&#34;):
     global computer
     computer = comp
 
@@ -76,7 +77,70 @@ def getcwd() -&gt; FSBaseObject:
     if len(computer.sessions) == 0:
         return computer.fs.files
     else:
-        return computer.sessions[-1].current_dir</code></pre>
+        return computer.sessions[-1].current_dir
+
+
+def setuid(uid: int) -&gt; SysCallStatus:
+    # TODO: Implement a PROPER setuid
+    # The way setuid should work:
+    # If the &#34;caller&#34; uid is root, change the uid to whatever is given
+    # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+    # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+    if computer.get_uid() == 0:
+        computer.sessions[-1].effective_uid = uid
+        return SysCallStatus(success=True)
+    else:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+
+def gethostname() -&gt; str:
+    return &#34;localhost&#34; if not computer.hostname else computer.hostname
+
+
+def sethostname(hostname: str) -&gt; SysCallStatus:
+    # Only root can change the system hostname
+    if computer.get_uid() == 0:
+        computer.hostname = hostname
+        return SysCallStatus(success=True)
+
+    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+
+def read(filepath: str) -&gt; SysCallStatus:
+    # Try to find the file
+    find_file = computer.fs.find(filepath)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if find_file.data.is_directory():
+        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
+
+    try_read_file = find_file.data.read(computer)
+
+    if not try_read_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+
+    return SysCallStatus(success=True, data=try_read_file.data)
+
+
+def write(filepath: str, data: str) -&gt; SysCallStatus:
+    # Try to find the file
+    find_file = computer.fs.find(filepath)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if find_file.data.is_directory():
+        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
+
+    try_write_file = find_file.data.write(data, computer)
+
+    if not try_write_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </section>
 <section>
@@ -147,6 +211,19 @@ user's current directory</dd>
         return 0</code></pre>
 </details>
 </dd>
+<dt id="client.blackhat.lib.unistd.gethostname"><code class="name flex">
+<span>def <span class="ident">gethostname</span></span>(<span>) ‑> str</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def gethostname() -&gt; str:
+    return &#34;localhost&#34; if not computer.hostname else computer.hostname</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.lib.unistd.getuid"><code class="name flex">
 <span>def <span class="ident">getuid</span></span>(<span>) ‑> int</span>
 </code></dt>
@@ -170,8 +247,8 @@ user's current directory</dd>
     return computer.sessions[-1].effective_uid</code></pre>
 </details>
 </dd>
-<dt id="client.blackhat.lib.unistd.update"><code class="name flex">
-<span>def <span class="ident">update</span></span>(<span>comp)</span>
+<dt id="client.blackhat.lib.unistd.read"><code class="name flex">
+<span>def <span class="ident">read</span></span>(<span>filepath: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -179,9 +256,104 @@ user's current directory</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def update(comp):
+<pre><code class="python">def read(filepath: str) -&gt; SysCallStatus:
+    # Try to find the file
+    find_file = computer.fs.find(filepath)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if find_file.data.is_directory():
+        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
+
+    try_read_file = find_file.data.read(computer)
+
+    if not try_read_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+
+    return SysCallStatus(success=True, data=try_read_file.data)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.sethostname"><code class="name flex">
+<span>def <span class="ident">sethostname</span></span>(<span>hostname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def sethostname(hostname: str) -&gt; SysCallStatus:
+    # Only root can change the system hostname
+    if computer.get_uid() == 0:
+        computer.hostname = hostname
+        return SysCallStatus(success=True)
+
+    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.setuid"><code class="name flex">
+<span>def <span class="ident">setuid</span></span>(<span>uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def setuid(uid: int) -&gt; SysCallStatus:
+    # TODO: Implement a PROPER setuid
+    # The way setuid should work:
+    # If the &#34;caller&#34; uid is root, change the uid to whatever is given
+    # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+    # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+    if computer.get_uid() == 0:
+        computer.sessions[-1].effective_uid = uid
+        return SysCallStatus(success=True)
+    else:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.update"><code class="name flex">
+<span>def <span class="ident">update</span></span>(<span>comp: Computer)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update(comp: &#34;Computer&#34;):
     global computer
     computer = comp</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.write"><code class="name flex">
+<span>def <span class="ident">write</span></span>(<span>filepath: str, data: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write(filepath: str, data: str) -&gt; SysCallStatus:
+    # Try to find the file
+    find_file = computer.fs.find(filepath)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if find_file.data.is_directory():
+        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
+
+    try_write_file = find_file.data.write(data, computer)
+
+    if not try_write_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
 </dl>
@@ -201,11 +373,16 @@ user's current directory</dd>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="client.blackhat.lib.unistd.getcwd" href="#client.blackhat.lib.unistd.getcwd">getcwd</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getgid" href="#client.blackhat.lib.unistd.getgid">getgid</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.gethostname" href="#client.blackhat.lib.unistd.gethostname">gethostname</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getuid" href="#client.blackhat.lib.unistd.getuid">getuid</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.read" href="#client.blackhat.lib.unistd.read">read</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.sethostname" href="#client.blackhat.lib.unistd.sethostname">sethostname</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.setuid" href="#client.blackhat.lib.unistd.setuid">setuid</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.update" href="#client.blackhat.lib.unistd.update">update</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.write" href="#client.blackhat.lib.unistd.write">write</a></code></li>
 </ul>
 </li>
 </ul>
