@@ -14,7 +14,8 @@ from .helpers import SysCallStatus, SysCallMessages
 from .services.service import Service
 from .session import Session
 from .user import User, Group
-from .lib import unistd
+from .lib import unistd, stdlib
+from .lib.sys import time, stat
 
 
 
@@ -80,7 +81,7 @@ class Computer:
         self.update_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd]
+        libs = [unistd, time, stat, stdlib]
 
         for lib in libs:
             lib.update(self)
@@ -143,6 +144,8 @@ class Computer:
             try:
                 module = importlib.import_module(f"blackhat.bin.installable.{command}")
                 response = module.main(self, args, pipe)
+                # After ending a process, we need to reset the uid and gid
+                self.sessions[-1].effective_uid = self.sessions[-1].real_uid
                 if os.getenv("DEBUGMODE") == "false":
                     self.save()
 

@@ -29,7 +29,7 @@ class SysCallMessages(Enum):
     EMPTY = 11
     """We're trying to use a space that is completely full"""
     GENERIC_NETWORK = 12
-    """Something went wrong with the service or the connection on another machine. Similar to error 500 (generic server error)"""
+    """Something went wrong with the service or the connection on another machine. Similar to error http 500"""
 
 
 class SysCallStatus:

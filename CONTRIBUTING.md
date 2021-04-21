@@ -59,6 +59,9 @@ People *love* thorough bug reports. I'm not even kidding.
     * Comment anything that might require **ANY** explication
     * If you're not sure if you should comment something, just do it. It's significantly easier to remove unnecessary
       comments than it is to try to figure out how some uncommented code works after the fact.
+* Note: Some pieces of code (specifically the `lib` folder in blackhat contains code that intentionally tries to
+  replicate the functionality of their c++ equivalents. These modules don't follow the coding guidelines that well, but
+  this is intentional to maintain realism.)
 
 ## License
 

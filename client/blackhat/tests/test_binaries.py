@@ -519,3 +519,4 @@ class TestInstallableBinaries(unittest.TestCase):
 
     def setUp(self) -> None:
         self.computer = init()
+        
