@@ -26,12 +26,21 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from typing import Optional
+<pre><code class="python">from enum import IntFlag
+from typing import Optional
 
 from ..fs import FSBaseObject
 from ..helpers import SysCallStatus, SysCallMessages
 
 computer: Optional[&#34;Computer&#34;] = None
+
+
+# Modes for access()
+class AccessMode(IntFlag):
+    F_OK = 1 &lt;&lt; 0  # Check for existence
+    R_OK = 1 &lt;&lt; 1  # Check read bit
+    W_OK = 1 &lt;&lt; 2  # Check write bit
+    X_OK = 1 &lt;&lt; 3  # Check execute bit
 
 
 def update(comp: &#34;Computer&#34;):
@@ -140,6 +149,62 @@ def write(filepath: str, data: str) -&gt; SysCallStatus:
     if not try_write_file.success:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
 
+    return SysCallStatus(success=True)
+
+
+def access(pathname: str, mode: int) -&gt; SysCallStatus:
+    # We need to find the file no matter what we do, so lets just find it now
+    find_file = computer.fs.find(pathname)
+
+    success = True
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    if AccessMode.R_OK in mode:
+        if not file.check_perm(&#34;read&#34;, computer).success:
+            success = False
+
+    if AccessMode.W_OK in mode:
+        if not file.check_perm(&#34;write&#34;, computer).success:
+            success = False
+
+    if AccessMode.X_OK in mode:
+        if not file.check_perm(&#34;execute&#34;, computer).success:
+            success = False
+
+    return SysCallStatus(success=success)
+
+
+def chown(pathname: str, owner: int, group: int) -&gt; SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    change_perms = file.change_owner(computer, owner, group)
+
+    if not change_perms.success:
+        return SysCallStatus(success=False, message=change_perms.message)
+
+    return SysCallStatus(success=True)
+
+def chdir(pathname: str) -&gt; SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False)
+
+    # We need executable permissions to cd (???)
+    check_perm = find_file.data.check_perm(&#34;execute&#34;, computer)
+    if not check_perm.success or getuid() != 0:
+        return SysCallStatus(success=False)
+
+    computer.sessions[-1].current_dir = find_file.data
     return SysCallStatus(success=True)</code></pre>
 </details>
 </section>
@@ -150,6 +215,90 @@ def write(filepath: str, data: str) -&gt; SysCallStatus:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
+<dt id="client.blackhat.lib.unistd.access"><code class="name flex">
+<span>def <span class="ident">access</span></span>(<span>pathname: str, mode: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def access(pathname: str, mode: int) -&gt; SysCallStatus:
+    # We need to find the file no matter what we do, so lets just find it now
+    find_file = computer.fs.find(pathname)
+
+    success = True
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    if AccessMode.R_OK in mode:
+        if not file.check_perm(&#34;read&#34;, computer).success:
+            success = False
+
+    if AccessMode.W_OK in mode:
+        if not file.check_perm(&#34;write&#34;, computer).success:
+            success = False
+
+    if AccessMode.X_OK in mode:
+        if not file.check_perm(&#34;execute&#34;, computer).success:
+            success = False
+
+    return SysCallStatus(success=success)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.chdir"><code class="name flex">
+<span>def <span class="ident">chdir</span></span>(<span>pathname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def chdir(pathname: str) -&gt; SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False)
+
+    # We need executable permissions to cd (???)
+    check_perm = find_file.data.check_perm(&#34;execute&#34;, computer)
+    if not check_perm.success or getuid() != 0:
+        return SysCallStatus(success=False)
+
+    computer.sessions[-1].current_dir = find_file.data
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.chown"><code class="name flex">
+<span>def <span class="ident">chown</span></span>(<span>pathname: str, owner: int, group: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def chown(pathname: str, owner: int, group: int) -&gt; SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    change_perms = file.change_owner(computer, owner, group)
+
+    if not change_perms.success:
+        return SysCallStatus(success=False, message=change_perms.message)
+
+    return SysCallStatus(success=True)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.lib.unistd.getcwd"><code class="name flex">
 <span>def <span class="ident">getcwd</span></span>(<span>) ‑> <a title="client.blackhat.fs.FSBaseObject" href="../fs.html#client.blackhat.fs.FSBaseObject">FSBaseObject</a></span>
 </code></dt>
@@ -359,6 +508,52 @@ user's current directory</dd>
 </dl>
 </section>
 <section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="client.blackhat.lib.unistd.AccessMode"><code class="flex name class">
+<span>class <span class="ident">AccessMode</span></span>
+<span>(</span><span>value, names=None, *, module=None, qualname=None, type=None, start=1)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An enumeration.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class AccessMode(IntFlag):
+    F_OK = 1 &lt;&lt; 0  # Check for existence
+    R_OK = 1 &lt;&lt; 1  # Check read bit
+    W_OK = 1 &lt;&lt; 2  # Check write bit
+    X_OK = 1 &lt;&lt; 3  # Check execute bit</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>enum.IntFlag</li>
+<li>builtins.int</li>
+<li>enum.Flag</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="client.blackhat.lib.unistd.AccessMode.F_OK"><code class="name">var <span class="ident">F_OK</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="client.blackhat.lib.unistd.AccessMode.R_OK"><code class="name">var <span class="ident">R_OK</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="client.blackhat.lib.unistd.AccessMode.W_OK"><code class="name">var <span class="ident">W_OK</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="client.blackhat.lib.unistd.AccessMode.X_OK"><code class="name">var <span class="ident">X_OK</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -374,6 +569,9 @@ user's current directory</dd>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="two-column">
+<li><code><a title="client.blackhat.lib.unistd.access" href="#client.blackhat.lib.unistd.access">access</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.chdir" href="#client.blackhat.lib.unistd.chdir">chdir</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.chown" href="#client.blackhat.lib.unistd.chown">chown</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getcwd" href="#client.blackhat.lib.unistd.getcwd">getcwd</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getgid" href="#client.blackhat.lib.unistd.getgid">getgid</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.gethostname" href="#client.blackhat.lib.unistd.gethostname">gethostname</a></code></li>
@@ -383,6 +581,19 @@ user's current directory</dd>
 <li><code><a title="client.blackhat.lib.unistd.setuid" href="#client.blackhat.lib.unistd.setuid">setuid</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.update" href="#client.blackhat.lib.unistd.update">update</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.write" href="#client.blackhat.lib.unistd.write">write</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="client.blackhat.lib.unistd.AccessMode" href="#client.blackhat.lib.unistd.AccessMode">AccessMode</a></code></h4>
+<ul class="">
+<li><code><a title="client.blackhat.lib.unistd.AccessMode.F_OK" href="#client.blackhat.lib.unistd.AccessMode.F_OK">F_OK</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.AccessMode.R_OK" href="#client.blackhat.lib.unistd.AccessMode.R_OK">R_OK</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.AccessMode.W_OK" href="#client.blackhat.lib.unistd.AccessMode.W_OK">W_OK</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.AccessMode.X_OK" href="#client.blackhat.lib.unistd.AccessMode.X_OK">X_OK</a></code></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

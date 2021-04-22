@@ -28,10 +28,9 @@
 </summary>
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib import unistd, stdlib
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.sys import time, stat
-from ..lib import unistd, stdlib
 
 __COMMAND__ = &#34;testbinary&#34;
 __DESCRIPTION__ = &#34;&#34;
@@ -96,6 +95,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
+        unistd.chdir(&#34;/etc/&#34;)
+
         return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
@@ -128,6 +129,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        unistd.chdir(&#34;/etc/&#34;)
 
         return output(&#34;&#34;, pipe)</code></pre>
 </details>
