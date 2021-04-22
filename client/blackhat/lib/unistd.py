@@ -1,9 +1,18 @@
+from enum import IntFlag
 from typing import Optional
 
 from ..fs import FSBaseObject
 from ..helpers import SysCallStatus, SysCallMessages
 
 computer: Optional["Computer"] = None
+
+
+# Modes for access()
+class AccessMode(IntFlag):
+    F_OK = 1 << 0  # Check for existence
+    R_OK = 1 << 1  # Check read bit
+    W_OK = 1 << 2  # Check write bit
+    X_OK = 1 << 3  # Check execute bit
 
 
 def update(comp: "Computer"):
@@ -112,4 +121,60 @@ def write(filepath: str, data: str) -> SysCallStatus:
     if not try_write_file.success:
         return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
 
+    return SysCallStatus(success=True)
+
+
+def access(pathname: str, mode: int) -> SysCallStatus:
+    # We need to find the file no matter what we do, so lets just find it now
+    find_file = computer.fs.find(pathname)
+
+    success = True
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    if AccessMode.R_OK in mode:
+        if not file.check_perm("read", computer).success:
+            success = False
+
+    if AccessMode.W_OK in mode:
+        if not file.check_perm("write", computer).success:
+            success = False
+
+    if AccessMode.X_OK in mode:
+        if not file.check_perm("execute", computer).success:
+            success = False
+
+    return SysCallStatus(success=success)
+
+
+def chown(pathname: str, owner: int, group: int) -> SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    file = find_file.data
+
+    change_perms = file.change_owner(computer, owner, group)
+
+    if not change_perms.success:
+        return SysCallStatus(success=False, message=change_perms.message)
+
+    return SysCallStatus(success=True)
+
+def chdir(pathname: str) -> SysCallStatus:
+    find_file = computer.fs.find(pathname)
+
+    if not find_file.success:
+        return SysCallStatus(success=False)
+
+    # We need executable permissions to cd (???)
+    check_perm = find_file.data.check_perm("execute", computer)
+    if not check_perm.success or getuid() != 0:
+        return SysCallStatus(success=False)
+
+    computer.sessions[-1].current_dir = find_file.data
     return SysCallStatus(success=True)

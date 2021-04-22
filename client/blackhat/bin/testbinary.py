@@ -1,9 +1,8 @@
 from ..computer import Computer
 from ..helpers import SysCallStatus
+from ..lib import unistd, stdlib
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.sys import time, stat
-from ..lib import unistd, stdlib
 
 __COMMAND__ = "testbinary"
 __DESCRIPTION__ = ""
@@ -67,5 +66,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
+        unistd.chdir("/etc/")
 
         return output("", pipe)
