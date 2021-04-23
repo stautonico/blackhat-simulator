@@ -29,6 +29,7 @@
 <pre><code class="python">from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib import unistd, stdlib
+from ..lib.sys import stat
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -95,7 +96,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        unistd.chdir(&#34;/etc/&#34;)
+        print(stat.chmod(&#34;/etc/passwd&#34;, 0o707))
+        print(stat.mkdir(&#34;/etc/oofer&#34;, 0o707))
+        stdlib.system(&#34;ls /etc/ -l&#34;)
 
         return output(&#34;&#34;, pipe)</code></pre>
 </details>
@@ -130,7 +133,9 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        unistd.chdir(&#34;/etc/&#34;)
+        print(stat.chmod(&#34;/etc/passwd&#34;, 0o707))
+        print(stat.mkdir(&#34;/etc/oofer&#34;, 0o707))
+        stdlib.system(&#34;ls /etc/ -l&#34;)
 
         return output(&#34;&#34;, pipe)</code></pre>
 </details>

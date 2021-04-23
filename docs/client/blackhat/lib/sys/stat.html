@@ -28,6 +28,7 @@
 </summary>
 <pre><code class="python">from typing import Optional
 
+from ...fs import Directory
 from ...helpers import SysCallStatus, SysCallMessages
 
 computer: Optional[&#34;Computer&#34;] = None
@@ -104,7 +105,79 @@ def stat(path: str) -&gt; SysCallStatus:
 
     stat_result = stat_struct(is_file, mode, nlink, uid, gid, size, atime, mtime, ctime, path)
 
-    return SysCallStatus(success=True, data=stat_result)</code></pre>
+    return SysCallStatus(success=True, data=stat_result)
+
+
+def mkdir(pathame: str, mode=0o755) -&gt; SysCallStatus:
+    # Make sure it doesn&#39;t already exist
+    find_dir = computer.fs.find(pathame)
+
+    if find_dir.success:
+        return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+    # Make sure we have write permissions on the parent dir
+    parent_path = &#34;/&#34;.join(pathame.split(&#34;/&#34;)[:-1])
+
+    # Just in case
+    find_parent = computer.fs.find(parent_path)
+
+    if not find_parent.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if not find_parent.data.check_perm(&#34;write&#34;, computer).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+
+    new_dir = Directory(pathame.split(&#34;/&#34;)[-1], find_parent.data, owner=computer.get_uid(),
+                        group_owner=computer.get_gid())
+    if not chmod(pathame, mode).success:
+        # rwxr-xr-x
+        new_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                               &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+    add_file = find_parent.data.add_file(new_dir)
+
+    if not add_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+    return SysCallStatus(success=True, data=new_dir)
+
+
+def chmod(pathname: str, mode: int) -&gt; SysCallStatus:
+    try:
+        find_file = computer.fs.find(pathname)
+
+        if not find_file.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Only the owner can change chmod permissions
+        if computer.get_uid() not in [find_file.data.owner, 0]:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+        raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
+        raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
+
+        chmod_bits = []
+        for x in range(0, len(raw_mode), 3):
+            chmod_bits.append(raw_mode[x: x + 3])
+
+        perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
+
+        for x in range(3):
+            bits = chmod_bits[x]
+            scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
+
+            for y in range(3):
+                bit = bits[y]
+                perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
+
+                if bit == &#34;1&#34;:
+                    perms[perm_scope].append(scope)
+
+        find_file.data.permissions = perms
+        return SysCallStatus(success=True)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return SysCallStatus(success=False)</code></pre>
 </details>
 </section>
 <section>
@@ -114,6 +187,96 @@ def stat(path: str) -&gt; SysCallStatus:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
+<dt id="client.blackhat.lib.sys.stat.chmod"><code class="name flex">
+<span>def <span class="ident">chmod</span></span>(<span>pathname: str, mode: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def chmod(pathname: str, mode: int) -&gt; SysCallStatus:
+    try:
+        find_file = computer.fs.find(pathname)
+
+        if not find_file.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Only the owner can change chmod permissions
+        if computer.get_uid() not in [find_file.data.owner, 0]:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+        raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
+        raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
+
+        chmod_bits = []
+        for x in range(0, len(raw_mode), 3):
+            chmod_bits.append(raw_mode[x: x + 3])
+
+        perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
+
+        for x in range(3):
+            bits = chmod_bits[x]
+            scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
+
+            for y in range(3):
+                bit = bits[y]
+                perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
+
+                if bit == &#34;1&#34;:
+                    perms[perm_scope].append(scope)
+
+        find_file.data.permissions = perms
+        return SysCallStatus(success=True)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return SysCallStatus(success=False)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.sys.stat.mkdir"><code class="name flex">
+<span>def <span class="ident">mkdir</span></span>(<span>pathame: str, mode=493) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def mkdir(pathame: str, mode=0o755) -&gt; SysCallStatus:
+    # Make sure it doesn&#39;t already exist
+    find_dir = computer.fs.find(pathame)
+
+    if find_dir.success:
+        return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+    # Make sure we have write permissions on the parent dir
+    parent_path = &#34;/&#34;.join(pathame.split(&#34;/&#34;)[:-1])
+
+    # Just in case
+    find_parent = computer.fs.find(parent_path)
+
+    if not find_parent.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if not find_parent.data.check_perm(&#34;write&#34;, computer).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+
+    new_dir = Directory(pathame.split(&#34;/&#34;)[-1], find_parent.data, owner=computer.get_uid(),
+                        group_owner=computer.get_gid())
+    if not chmod(pathame, mode).success:
+        # rwxr-xr-x
+        new_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                               &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+    add_file = find_parent.data.add_file(new_dir)
+
+    if not add_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+    return SysCallStatus(success=True, data=new_dir)</code></pre>
+</details>
+</dd>
 <dt id="client.blackhat.lib.sys.stat.stat"><code class="name flex">
 <span>def <span class="ident">stat</span></span>(<span>path: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
 </code></dt>
@@ -237,6 +400,8 @@ def stat(path: str) -&gt; SysCallStatus:
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
+<li><code><a title="client.blackhat.lib.sys.stat.chmod" href="#client.blackhat.lib.sys.stat.chmod">chmod</a></code></li>
+<li><code><a title="client.blackhat.lib.sys.stat.mkdir" href="#client.blackhat.lib.sys.stat.mkdir">mkdir</a></code></li>
 <li><code><a title="client.blackhat.lib.sys.stat.stat" href="#client.blackhat.lib.sys.stat.stat">stat</a></code></li>
 <li><code><a title="client.blackhat.lib.sys.stat.update" href="#client.blackhat.lib.sys.stat.update">update</a></code></li>
 </ul>
