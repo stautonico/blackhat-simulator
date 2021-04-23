@@ -30,6 +30,8 @@ class SysCallMessages(Enum):
     """We're trying to use a space that is completely full"""
     GENERIC_NETWORK = 12
     """Something went wrong with the service or the connection on another machine. Similar to error http 500"""
+    INVALID_ARGUMENT = 13
+    """The argument given to the command was invalid for one reason or another"""
 
 
 class SysCallStatus:

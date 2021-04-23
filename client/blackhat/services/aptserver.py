@@ -8,6 +8,7 @@ class AptServer(Service):
     Apt repository server that handles requests for installing packages
 
     NOTE: I have no clue how apt repos work, so this is my best guess from what I read in a medium article 🤷‍♂️
+    # TODO: Create ability to install specific version of a package with apt install nmap=1.1
     """
 
     def __init__(self, computer):

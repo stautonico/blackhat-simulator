@@ -1,6 +1,7 @@
 from ..computer import Computer
 from ..helpers import SysCallStatus
 from ..lib import unistd, stdlib
+from ..lib.sys import stat
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -67,6 +68,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        unistd.chdir("/etc/")
+        print(stat.chmod("/etc/passwd", 0o707))
+        print(stat.mkdir("/etc/oofer", 0o707))
+        stdlib.system("ls /etc/ -l")
 
         return output("", pipe)

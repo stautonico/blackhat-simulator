@@ -1,5 +1,6 @@
 from typing import Optional
 
+from ...fs import Directory
 from ...helpers import SysCallStatus, SysCallMessages
 
 computer: Optional["Computer"] = None
@@ -77,3 +78,75 @@ def stat(path: str) -> SysCallStatus:
     stat_result = stat_struct(is_file, mode, nlink, uid, gid, size, atime, mtime, ctime, path)
 
     return SysCallStatus(success=True, data=stat_result)
+
+
+def mkdir(pathame: str, mode=0o755) -> SysCallStatus:
+    # Make sure it doesn't already exist
+    find_dir = computer.fs.find(pathame)
+
+    if find_dir.success:
+        return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+
+    # Make sure we have write permissions on the parent dir
+    parent_path = "/".join(pathame.split("/")[:-1])
+
+    # Just in case
+    find_parent = computer.fs.find(parent_path)
+
+    if not find_parent.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+    if not find_parent.data.check_perm("write", computer).success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+
+    new_dir = Directory(pathame.split("/")[-1], find_parent.data, owner=computer.get_uid(),
+                        group_owner=computer.get_gid())
+    if not chmod(pathame, mode).success:
+        # rwxr-xr-x
+        new_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                               "execute": ["owner", "group", "public"]}
+    add_file = find_parent.data.add_file(new_dir)
+
+    if not add_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+
+    return SysCallStatus(success=True, data=new_dir)
+
+
+def chmod(pathname: str, mode: int) -> SysCallStatus:
+    try:
+        find_file = computer.fs.find(pathname)
+
+        if not find_file.success:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+
+        # Only the owner can change chmod permissions
+        if computer.get_uid() not in [find_file.data.owner, 0]:
+            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+
+        raw_mode = str(bin(mode)).replace("0b", "")
+        raw_mode = "0" * (9 - len(raw_mode)) + raw_mode
+
+        chmod_bits = []
+        for x in range(0, len(raw_mode), 3):
+            chmod_bits.append(raw_mode[x: x + 3])
+
+        perms = {"read": [], "write": [], "execute": []}
+
+        for x in range(3):
+            bits = chmod_bits[x]
+            scope = ["owner", "group", "public"][x]
+
+            for y in range(3):
+                bit = bits[y]
+                perm_scope = ["read", "write", "execute"][y]
+
+                if bit == "1":
+                    perms[perm_scope].append(scope)
+
+        find_file.data.permissions = perms
+        return SysCallStatus(success=True)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return SysCallStatus(success=False)
