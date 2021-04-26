@@ -114,39 +114,34 @@ def mkdir(pathame: str, mode=0o755) -> SysCallStatus:
 
 
 def chmod(pathname: str, mode: int) -> SysCallStatus:
-    try:
-        find_file = computer.fs.find(pathname)
+    find_file = computer.fs.find(pathname)
 
-        if not find_file.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
-        if computer.get_uid() not in [find_file.data.owner, 0]:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+    # Only the owner can change chmod permissions
+    if computer.get_uid() not in [find_file.data.owner, 0]:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-        raw_mode = str(bin(mode)).replace("0b", "")
-        raw_mode = "0" * (9 - len(raw_mode)) + raw_mode
+    raw_mode = str(bin(mode)).replace("0b", "")
+    raw_mode = "0" * (9 - len(raw_mode)) + raw_mode
 
-        chmod_bits = []
-        for x in range(0, len(raw_mode), 3):
-            chmod_bits.append(raw_mode[x: x + 3])
+    chmod_bits = []
+    for x in range(0, len(raw_mode), 3):
+        chmod_bits.append(raw_mode[x: x + 3])
 
-        perms = {"read": [], "write": [], "execute": []}
+    perms = {"read": [], "write": [], "execute": []}
 
-        for x in range(3):
-            bits = chmod_bits[x]
-            scope = ["owner", "group", "public"][x]
+    for x in range(3):
+        bits = chmod_bits[x]
+        scope = ["owner", "group", "public"][x]
 
-            for y in range(3):
-                bit = bits[y]
-                perm_scope = ["read", "write", "execute"][y]
+        for y in range(3):
+            bit = bits[y]
+            perm_scope = ["read", "write", "execute"][y]
 
-                if bit == "1":
-                    perms[perm_scope].append(scope)
+            if bit == "1":
+                perms[perm_scope].append(scope)
 
-        find_file.data.permissions = perms
-        return SysCallStatus(success=True)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return SysCallStatus(success=False)
+    find_file.data.permissions = perms
+    return SysCallStatus(success=True)
