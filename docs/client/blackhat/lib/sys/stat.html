@@ -142,42 +142,37 @@ def mkdir(pathame: str, mode=0o755) -&gt; SysCallStatus:
 
 
 def chmod(pathname: str, mode: int) -&gt; SysCallStatus:
-    try:
-        find_file = computer.fs.find(pathname)
+    find_file = computer.fs.find(pathname)
 
-        if not find_file.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
-        if computer.get_uid() not in [find_file.data.owner, 0]:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+    # Only the owner can change chmod permissions
+    if computer.get_uid() not in [find_file.data.owner, 0]:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-        raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
-        raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
+    raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
+    raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
 
-        chmod_bits = []
-        for x in range(0, len(raw_mode), 3):
-            chmod_bits.append(raw_mode[x: x + 3])
+    chmod_bits = []
+    for x in range(0, len(raw_mode), 3):
+        chmod_bits.append(raw_mode[x: x + 3])
 
-        perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
+    perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
 
-        for x in range(3):
-            bits = chmod_bits[x]
-            scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
+    for x in range(3):
+        bits = chmod_bits[x]
+        scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
 
-            for y in range(3):
-                bit = bits[y]
-                perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
+        for y in range(3):
+            bit = bits[y]
+            perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
 
-                if bit == &#34;1&#34;:
-                    perms[perm_scope].append(scope)
+            if bit == &#34;1&#34;:
+                perms[perm_scope].append(scope)
 
-        find_file.data.permissions = perms
-        return SysCallStatus(success=True)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return SysCallStatus(success=False)</code></pre>
+    find_file.data.permissions = perms
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </section>
 <section>
@@ -197,42 +192,37 @@ def chmod(pathname: str, mode: int) -&gt; SysCallStatus:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def chmod(pathname: str, mode: int) -&gt; SysCallStatus:
-    try:
-        find_file = computer.fs.find(pathname)
+    find_file = computer.fs.find(pathname)
 
-        if not find_file.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    if not find_file.success:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
-        if computer.get_uid() not in [find_file.data.owner, 0]:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+    # Only the owner can change chmod permissions
+    if computer.get_uid() not in [find_file.data.owner, 0]:
+        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
 
-        raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
-        raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
+    raw_mode = str(bin(mode)).replace(&#34;0b&#34;, &#34;&#34;)
+    raw_mode = &#34;0&#34; * (9 - len(raw_mode)) + raw_mode
 
-        chmod_bits = []
-        for x in range(0, len(raw_mode), 3):
-            chmod_bits.append(raw_mode[x: x + 3])
+    chmod_bits = []
+    for x in range(0, len(raw_mode), 3):
+        chmod_bits.append(raw_mode[x: x + 3])
 
-        perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
+    perms = {&#34;read&#34;: [], &#34;write&#34;: [], &#34;execute&#34;: []}
 
-        for x in range(3):
-            bits = chmod_bits[x]
-            scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
+    for x in range(3):
+        bits = chmod_bits[x]
+        scope = [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;][x]
 
-            for y in range(3):
-                bit = bits[y]
-                perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
+        for y in range(3):
+            bit = bits[y]
+            perm_scope = [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;][y]
 
-                if bit == &#34;1&#34;:
-                    perms[perm_scope].append(scope)
+            if bit == &#34;1&#34;:
+                perms[perm_scope].append(scope)
 
-        find_file.data.permissions = perms
-        return SysCallStatus(success=True)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return SysCallStatus(success=False)</code></pre>
+    find_file.data.permissions = perms
+    return SysCallStatus(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.sys.stat.mkdir"><code class="name flex">
