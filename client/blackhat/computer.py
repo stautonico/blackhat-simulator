@@ -79,9 +79,8 @@ class Computer:
         Returns:
             None
         """
-        self.update_hostname()
-        self.update_user_and_group_files()
-        self.update_user_and_group_files()
+        self.sync_hostname()
+        self.sync_user_and_group_files()
 
     def update_libs(self):
         libs = [unistd, time, stat, stdlib]
@@ -89,11 +88,11 @@ class Computer:
         for lib in libs:
             lib.update(self)
 
-    ################
-    # Update files #
-    ################
+    ##############
+    # Sync files #
+    ##############
 
-    def update_hostname(self) -> None:
+    def sync_hostname(self) -> None:
         """
         Reads /etc/hostname and sets the system hostname accordingly
         If /etc/hostname doesn't exist, the hostname is set to "localhost"
@@ -114,6 +113,82 @@ class Computer:
                 self.hostname = "localhost"
             else:
                 self.hostname = hostname_file.content.split("\n")[0]
+
+    def sync_user_and_group_files(self) -> Result:
+        """
+        Makes sure that:
+        /etc/passwd matches our internal user map
+        /etc/shadow matches our internal user map
+        /etc/group matches our internal group map
+
+        Returns:
+            None
+        """
+        etc_dir: Directory = self.fs.files.find("etc")
+
+        if not etc_dir:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        passwd_file: File = etc_dir.find("passwd")
+        shadow_file: File = etc_dir.find("shadow")
+        group_file: File = etc_dir.find("group")
+
+        # TODO: Allow modification of home directory from here
+        # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
+        # shadow format: USERNAME:MD5_PASSWORD
+        # group format: GROUP_NAME:x:GID:GROUP_USERS
+
+        passwd_content = ""
+        shadow_content = ""
+        group_content = ""
+
+        for user in self.get_all_users().data:
+            # Find the "primary" group
+            primary_group = self.find_user_primary_group(user.uid)
+            if primary_group.success:
+                if len(primary_group.data) > 0:
+                    primary_group = primary_group.data[0]
+                else:
+                    primary_group = "?"
+            else:
+                primary_group = "?"
+
+            passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
+            shadow_content += f"{user.username}:{user.password}\n"
+
+        for group in self.get_all_groups().data:
+            uids = self.find_users_in_group(group.gid).data
+            usernames = ""
+            for uid in uids:
+                user_lookup = self.find_user(uid=uid[0])
+                usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
+
+            usernames = usernames[:-1]
+
+            group_content += f"{group.name}:x:{group.gid}:{usernames}\n"
+            # print(group_content, end="")
+
+        if not passwd_file:
+            # Create the /etc/passwd
+            etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
+        else:
+            passwd_file.content = passwd_content
+
+        if not shadow_file:
+            # Create the /etc/shadow file and change its perms (rw-------)
+            shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
+            shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
+            etc_dir.add_file(shadow_file)
+        else:
+            shadow_file.content = shadow_content
+
+        if not group_file:
+            # Create the /etc/group
+            etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
+        else:
+            group_file.content = group_content
+
+        return Result(success=True)
 
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> Result:
         """
@@ -591,82 +666,6 @@ class Computer:
 
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type="primary")
-
-    def update_user_and_group_files(self) -> Result:
-        """
-        Makes sure that:
-        /etc/passwd matches our internal user map
-        /etc/shadow matches our internal user map
-        /etc/group matches our internal group map
-
-        Returns:
-            None
-        """
-        etc_dir: Directory = self.fs.files.find("etc")
-
-        if not etc_dir:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-        passwd_file: File = etc_dir.find("passwd")
-        shadow_file: File = etc_dir.find("shadow")
-        group_file: File = etc_dir.find("group")
-
-        # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
-        # shadow format: USERNAME:MD5_PASSWORD
-        # group format: GROUP_NAME:x:GID:GROUP_USERS
-
-        passwd_content = ""
-        shadow_content = ""
-        group_content = ""
-
-        for user in self.get_all_users().data:
-            # Find the "primary" group
-            primary_group = self.find_user_primary_group(user.uid)
-            if primary_group.success:
-                if len(primary_group.data) > 0:
-                    primary_group = primary_group.data[0]
-                else:
-                    primary_group = "?"
-            else:
-                primary_group = "?"
-
-            passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
-            shadow_content += f"{user.username}:{user.password}\n"
-
-        for group in self.get_all_groups().data:
-            uids = self.find_users_in_group(group.gid).data
-            usernames = ""
-            for uid in uids:
-                user_lookup = self.find_user(uid=uid[0])
-                usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
-
-            usernames = usernames[:-1]
-
-            group_content += f"{group.name}:x:{group.gid}:{usernames}\n"
-            # print(group_content, end="")
-
-        if not passwd_file:
-            # Create the /etc/passwd
-            etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
-        else:
-            passwd_file.content = passwd_content
-
-        if not shadow_file:
-            # Create the /etc/shadow file and change its perms (rw-------)
-            shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
-            shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
-            etc_dir.add_file(shadow_file)
-        else:
-            shadow_file.content = shadow_content
-
-        if not group_file:
-            # Create the /etc/group
-            etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
-        else:
-            group_file.content = group_content
-
-        return Result(success=True)
 
     # TODO: Create setenv function for the stdlib method
     def get_env(self, key) -> Optional[str]:
