@@ -1,8 +1,9 @@
 from enum import Enum
+from enum import IntFlag
 from typing import Union
 
 
-class SysCallMessages(Enum):
+class ResultMessages(Enum):
     """
     Enum: Messages regarding the status of a syscall
     """
@@ -34,27 +35,59 @@ class SysCallMessages(Enum):
     """The argument given to the command was invalid for one reason or another"""
 
 
-class SysCallStatus:
+class Result:
     """
     Class that contains status information about a "syscall"
 
     Args:
         success (bool): Success status of the "syscall"
-        message (SysCallMessages, optional): Message regarding the status (successful or otherwise). May or may not be used. Changes on a case by case basis
+        message (ResultMessages, optional): Message regarding the status (successful or otherwise). May or may not be used. Changes on a case by case basis
         data (str, optional): Data returned by the function. Changes on a case by case basis
 
     """
 
-    def __init__(self, success: bool, message: Union[SysCallMessages, None] = None, data=None):
+    def __init__(self, success: bool, message: Union[ResultMessages, None] = None, data=None):
         self.success = success
         self.message = message
         self.data = data
 
     def __str__(self):
-        return f"SysCallStatus(success={self.success}, message={self.message}, data={self.data})"
+        return f"Result(success={self.success}, message={self.message}, data={self.data})"
 
     def __eq__(self, other):
         """Overrides the default implementation"""
-        if isinstance(other, SysCallStatus):
+        if isinstance(other, Result):
             return self.success == other.success and self.message == other.message and self.data == other.data
         return False
+
+
+# Modes for access()
+class AccessMode(IntFlag):
+    F_OK = 1 << 0  # Check for existence
+    R_OK = 1 << 1  # Check read bit
+    W_OK = 1 << 2  # Check write bit
+    X_OK = 1 << 3  # Check execute bit
+
+
+class timeval:
+    def __init__(self, tv_sec, tv_usec):
+        self.tv_sec = tv_sec
+        self.tv_usec = tv_usec
+
+
+class stat_struct:
+    def __init__(self, st_isfile: bool, st_mode: int, st_nlink: int, st_uid: int, st_gid: int, st_size: float,
+                 st_atime: int, st_mtime: int, st_ctime: int, st_path: str):
+        self.st_isfile: bool = st_isfile  # Bool telling if file or is dir
+        self.st_mode: int = st_mode  # chmod mode
+        self.st_nlink: int = st_nlink  # How many links
+        self.st_uid: int = st_uid  # UID of owner
+        self.st_gid: int = st_gid  # GID of owner
+        self.st_size: float = st_size  # Size in bytes
+        self.st_atime: int = st_atime  # Last access time (unix time stamp)
+        self.st_mtime: int = st_mtime  # Last modified time (unix time stamp)
+        self.st_ctime: int = st_ctime  # Last file status change time (unix time stamp)
+        self.st_path: str = st_path  # Path in the filesystem
+        # Access: Read
+        # Modified: Write (content)
+        # Change: Change metadata (perms)

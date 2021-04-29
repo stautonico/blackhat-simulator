@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -7,7 +7,7 @@ __COMMAND__ = "cd"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -33,10 +33,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if response.success:
             if response.data.is_file():
                 return output(f"{__COMMAND__}: not a directory: {args.directory}", pipe, success=False,
-                              success_message=SysCallMessages.IS_FILE)
+                              success_message=ResultMessages.IS_FILE)
             else:
                 computer.sessions[-1].current_dir = response.data
                 return output("", pipe)
         else:
             return output(f"{__COMMAND__}: no such file or directory: {args.directory}", pipe, success=False,
-                          success_message=SysCallMessages.NOT_FOUND)
+                          success_message=ResultMessages.NOT_FOUND)

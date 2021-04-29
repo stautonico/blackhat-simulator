@@ -4,7 +4,7 @@ from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 
 from .setup_computers_universal import init
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..session import Session
 from ..user import User
 
@@ -23,9 +23,9 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("adduser", ["--help"], True)
 
         create_new_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
-        expected_create_new_user_result = SysCallStatus(success=True, message=None, data=None)
+        expected_create_new_user_result = Result(success=True, message=None, data=None)
         create_duplicate_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
-        expected_create_duplicate_user_result = SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS,
+        expected_create_duplicate_user_result = Result(success=False, message=ResultMessages.ALREADY_EXISTS,
                                                               data="adduser: The user 'testuser' already exists.\n")
 
         self.assertEqual(create_new_user_result, expected_create_new_user_result)
@@ -33,7 +33,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # Now confirm that the user was actually added
         find_user_result = self.computer.find_user(username="testuser")
-        expected_find_user_result = SysCallStatus(success=True, message=None,
+        expected_find_user_result = Result(success=True, message=None,
                                                   data=User(1001, "testuser", md5("password".encode()).hexdigest()))
         self.assertEqual(find_user_result, expected_find_user_result)
 
@@ -167,7 +167,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command("hostname", ["localhost"], True)
-        expected_set_hostname_result = SysCallStatus(success=False,
+        expected_set_hostname_result = Result(success=False,
                                                      data="hostname: you must be root to change the host name")
 
         set_hostname_result.data = set_hostname_result.data.strip("\n")
@@ -217,7 +217,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # In the user's home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command("ls", ["--no-color"], True)
-        expected_ls_result = SysCallStatus(success=True, message=None,
+        expected_ls_result = Result(success=True, message=None,
                                            data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
 
         ls_result.data = ls_result.data.strip("\n")
@@ -388,7 +388,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("touch", ["--help"], True)
 
         touch_result = self.computer.run_command("touch", ["testfile"], True)
-        expected_touch_result = SysCallStatus(success=True)
+        expected_touch_result = Result(success=True)
 
         # We should double check that the file exists in our home directory
         self.assertIn("testfile", self.computer.run_command("ls", [], True).data)

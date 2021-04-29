@@ -2,7 +2,7 @@ from typing import Union
 
 from ..computer import Computer
 from ..fs import File, Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.unistd import getuid, getgid
@@ -14,7 +14,7 @@ __VERSION__ = "1.1.1"
 # TODO: This is old code from the original demo, this will be re-written soon
 
 def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserve_permissions: bool,
-         verbose: bool) -> SysCallStatus:
+         verbose: bool) -> Result:
     # Handle file copying
     if src.is_file():
         # If the path is in the local dir
@@ -28,7 +28,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             # Try to find the destination file parent folder
             try_find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
             if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         to_write: Union[Directory, File] = try_find_dst.data
 
@@ -45,10 +45,10 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             # Check the permissions (write to `copy_to_dir + file` and read from `self`)
             # Check read first (split for error messages)
             if not src.check_perm("read", computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
             else:
                 if not to_write.check_perm("write", computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
                 else:
                     to_write.write(src.content, computer)
                     to_write.owner = getuid()
@@ -56,10 +56,10 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
         else:
             # If we have the parent dir, we need to create a new file
             if not src.check_perm("read", computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
             else:
                 if not to_write.check_perm("write", computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_filename = new_file_name
                     new_file = File(new_filename, src.content, to_write, getuid(), getgid())
@@ -72,7 +72,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             to_write.permissions = src.permissions
 
         to_write.handle_event("move")
-        return SysCallStatus(success=True)
+        return Result(success=True)
     # Handle directory copying
     else:
         # TODO: Refactor this to work in both cases instead of re-writing a ton of code
@@ -87,7 +87,7 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
             # Try to find the destination file parent folder
             try_find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
             if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         to_write: Union[Directory, File] = try_find_dst.data
 
@@ -99,10 +99,10 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
 
         if new_file_name not in to_write.files:
             if not src.check_perm("read", computer):
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
             else:
                 if not to_write.check_perm("write", computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
                 else:
                     new_dir = Directory(new_file_name, to_write, getuid(), getgid())
                     new_dir.events = to_write.events
@@ -114,21 +114,21 @@ def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserv
                         response = copy(computer, file, new_dir.pwd(), preserve_permissions, verbose)
 
                         if not response.success:
-                            if response.message == SysCallMessages.NOT_ALLOWED_READ:
+                            if response.message == ResultMessages.NOT_ALLOWED_READ:
                                 print(f"{__COMMAND__}: cannot open '{file.pwd()}' for reading: Permission denied")
-                            elif response.message == SysCallMessages.NOT_ALLOWED_WRITE:
+                            elif response.message == ResultMessages.NOT_ALLOWED_WRITE:
                                 print(f"{__COMMAND__}: cannot open '{file.pwd()}' for writing: Permission denied")
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         if preserve_permissions:
             new_dir.permissions = src.permissions
 
         new_dir.handle_event("move")
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -172,19 +172,19 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
                 # Output the proper message
                 if not copy_result.success:
-                    if copy_result.message == SysCallMessages.NOT_FOUND:
+                    if copy_result.message == ResultMessages.NOT_FOUND:
                         return output(f"{__COMMAND__}: cannot find '{args.destination}': No such file or directory",
                                       pipe,
                                       success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
+                    elif copy_result.message == ResultMessages.NOT_ALLOWED_READ:
                         return output(f"{__COMMAND__}: cannot open '{args.source}' for reading: Permission denied",
                                       pipe,
                                       success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
+                    elif copy_result.message == ResultMessages.NOT_ALLOWED_WRITE:
                         return output(
                             f"{__COMMAND__}: cannot open '{args.destination} for writing: Permission denied", pipe,
                             success=False)
-                    elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
+                    elif copy_result.message == ResultMessages.ALREADY_EXISTS:
                         return output(f"{__COMMAND__}: cannot write '{args.destination}: Directory already exists",
                                       pipe,
                                       success=False)

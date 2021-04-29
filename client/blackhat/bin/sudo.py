@@ -3,21 +3,21 @@ from getpass import getpass
 from hashlib import md5
 
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import ResultMessages, Result
 from ..lib.output import output
 
 __COMMAND__ = "sudo"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     # TODO: Find a way to do this with arg parser without it breaking lol
     if "--version" in args:
         return output(f"Sudo version {__VERSION__} (miscutils)", pipe)
 
     if len(args) == 0:
         return output(f"{__COMMAND__}: missing argument: command", pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+                      success_message=ResultMessages.MISSING_ARGUMENT)
 
     # We can't run sudo without the /etc/sudoers
     sudoers_file_result = computer.fs.find("/etc/sudoers")
@@ -50,12 +50,12 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
             if not user_lookup.success:
                 return output(f"{__COMMAND__}: unknown user: {user_run_as}", pipe, success=False,
-                              success_message=SysCallMessages.NOT_FOUND)
+                              success_message=ResultMessages.NOT_FOUND)
             else:
                 user = user_lookup.data
         except IndexError:
             return output(f"{__COMMAND__}: option requires an argument -- 'u'", pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+                          success_message=ResultMessages.MISSING_ARGUMENT)
 
     else:
         user = computer.find_user(uid=0).data
@@ -134,4 +134,4 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 print("Sorry, try again.")
 
     return output(f"{__COMMAND__}: 3 incorrect password attempts", pipe, success=False,
-                  success_message=SysCallMessages.NOT_ALLOWED)
+                  success_message=ResultMessages.NOT_ALLOWED)

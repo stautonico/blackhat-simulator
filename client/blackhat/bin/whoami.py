@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.unistd import getuid
@@ -51,7 +51,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -67,10 +67,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        lookup_result: SysCallStatus = computer.find_user(getuid())
+        lookup_result: Result = computer.find_user(getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)
         else:
             return output(f"{__COMMAND__}: failed to find username for uid {getuid()}", pipe, success=False,
-                          success_message=SysCallMessages.NOT_FOUND)
+                          success_message=ResultMessages.NOT_FOUND)

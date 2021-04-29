@@ -1,6 +1,6 @@
 from .service import Service
 from ..fs import Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 
 
 class AptServer(Service):
@@ -14,11 +14,11 @@ class AptServer(Service):
     def __init__(self, computer):
         super().__init__("AptServer", 80, computer)
 
-    def main(self, args: dict) -> SysCallStatus:
+    def main(self, args: dict) -> Result:
         find_var_www_html_repo = self.computer.fs.find("/var/www/html/repo/")
 
         if not find_var_www_html_repo.success:
-            return SysCallStatus(success=True, data={})
+            return Result(success=True, data={})
         else:
             repo_dir: Directory = find_var_www_html_repo.data
             if args.get("packages"):
@@ -36,6 +36,6 @@ class AptServer(Service):
                     else:
                         packages_we_dont_have.append(package)
 
-                return SysCallStatus(success=True, data={"have": packages_we_have, "dont_have": packages_we_dont_have})
+                return Result(success=True, data={"have": packages_we_have, "dont_have": packages_we_dont_have})
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+                return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)

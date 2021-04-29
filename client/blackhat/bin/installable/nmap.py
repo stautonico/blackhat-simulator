@@ -3,7 +3,7 @@ import ipaddress
 from tabulate import tabulate
 
 from ...computer import Computer
-from ...helpers import SysCallStatus
+from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
 
@@ -11,7 +11,7 @@ __COMMAND__ = "nmap"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     nmap - Network exploration tool and security / port scanner
 

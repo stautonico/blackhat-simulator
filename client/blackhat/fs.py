@@ -7,7 +7,7 @@ from typing import Optional, Dict, List, Literal, Union, Callable
 
 from colorama import Style
 
-from .helpers import SysCallStatus, SysCallMessages
+from .helpers import Result, ResultMessages
 
 event_types = Literal["read", "write", "move", "change_perm", "change_owner", "delete"]
 
@@ -59,7 +59,7 @@ class FSBaseObject:
         """
         return type(self) == File
 
-    def check_perm(self, perm: Literal["read", "write", "execute"], computer) -> SysCallStatus:
+    def check_perm(self, perm: Literal["read", "write", "execute"], computer) -> Result:
         """
         Checks if the current user has the given `perm`
 
@@ -68,27 +68,27 @@ class FSBaseObject:
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         """
         # If we"re root (UID 0), return True because root has all permissions
         if computer.get_uid() == 0:
-            return SysCallStatus(success=True)
+            return Result(success=True)
         # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
         if "group" in self.permissions[perm]:
             if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
-                return SysCallStatus(success=True)
+                return Result(success=True)
 
         if "owner" in self.permissions[perm]:
             if self.owner == computer.get_uid():
-                return SysCallStatus(success=True)
+                return Result(success=True)
 
         # No permission
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def check_owner(self, computer) -> SysCallStatus:
+    def check_owner(self, computer) -> Result:
         """
         Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)
 
@@ -96,18 +96,18 @@ class FSBaseObject:
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         """
         # Get the list of user's groups
         groups = computer.find_user_groups(computer.get_uid()).data
 
         if self.owner == computer.get_uid() or self.group_owner in groups:
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def change_owner(self, computer, new_user_owner: Optional[int] = None,
-                     new_group_owner: Optional[int] = None) -> SysCallStatus:
+                     new_group_owner: Optional[int] = None) -> Result:
         """
         Change the owner (user and/or group) of a given `File`/`Directory`, but check if the given UID should be allowed to first
 
@@ -117,7 +117,7 @@ class FSBaseObject:
             new_group_owner (int): The GID of the new owner (group) of the `File`/`Directory`
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         """
         caller_groups = computer.find_user_groups(computer.get_uid()).data
         # Check if the owner or group owner is correct or if we're root
@@ -125,7 +125,7 @@ class FSBaseObject:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won't work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
-                return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+                return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)
             else:
                 # Same thing with uid 0
                 if new_user_owner is not None:
@@ -133,7 +133,7 @@ class FSBaseObject:
                     if computer.find_user(uid=new_user_owner).success:
                         self.owner = new_user_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 # Confirm that the new group exists
                 # Same thing with gid 0
@@ -142,12 +142,12 @@ class FSBaseObject:
                     if computer.find_group(gid=new_group_owner).success:
                         self.group_owner = new_group_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 self.handle_event("change_owner")
-                return SysCallStatus(success=True)
+                return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def pwd(self) -> str:
         """
@@ -174,7 +174,7 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self, computer) -> SysCallStatus:
+    def delete(self, computer) -> Result:
         """
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
@@ -182,16 +182,16 @@ class FSBaseObject:
             computer: The current computer object
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         """
         if self.parent:
             # In unix, we need read+write permissions to delete
             if self.check_perm("read", computer).success and self.check_perm("write", computer).success:
                 self.handle_event("delete")
                 del self.parent.files[self.name]
-                return SysCallStatus(success=True)
+                return Result(success=True)
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def add_event_listener(self, event: event_types, function: Callable):
         """
@@ -212,10 +212,10 @@ class FSBaseObject:
             function: The function/method to be called when the given `event` is fired
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         """
         self.events[event] = function
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def remove_event_listener(self, event: event_types):
         """
@@ -225,14 +225,14 @@ class FSBaseObject:
             event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         """
         try:
             self.events.pop(event)
         except Exception:
             pass
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def handle_event(self, event: event_types):
         """
@@ -242,12 +242,12 @@ class FSBaseObject:
             event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         """
         if event in self.events.keys():
             self.events[event](self)
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
 
 class File(FSBaseObject):
@@ -266,22 +266,22 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, computer) -> SysCallStatus:
+    def read(self, computer) -> Result:
         """
         Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
             computer: The current `Computer` instance
 
-        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file's content if permitted
+        Returns: Result: A `Result` object with the `success` flag set and the `data` flag set with the  file's content if permitted
         """
         if self.check_perm("read", computer).success:
             self.handle_event("read")
-            return SysCallStatus(success=True, data=self.content)
+            return Result(success=True, data=self.content)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def write(self, data: str, computer) -> SysCallStatus:
+    def write(self, data: str, computer) -> Result:
         """
         Check if the current UID has permission to write to the file. Update the file's contents if allowed
 
@@ -290,17 +290,17 @@ class File(FSBaseObject):
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         """
         if self.check_perm("write", computer).success:
             self.content = data
             self.update_size()
             self.handle_event("write")
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def append(self, data: str, computer) -> SysCallStatus:
+    def append(self, data: str, computer) -> Result:
         """
         Check if the current UID has permission to write to the file. Append to the file's contents if allowed
 
@@ -309,16 +309,16 @@ class File(FSBaseObject):
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         """
         # NOTE: This may be unnecessary, we"ll find out later
         if self.check_perm("write", computer).success:
             self.content += data
             self.update_size()
             self.handle_event("write")
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def update_size(self) -> None:
         """
@@ -357,7 +357,7 @@ class Directory(FSBaseObject):
 
         self.update_size()
 
-    def add_file(self, file: Union[File, "Directory"]) -> SysCallStatus:
+    def add_file(self, file: Union[File, "Directory"]) -> Result:
         """
         Add a new `File` or `Directory` to self's internal file map
         Also updates its size and triggers its parent to update their size
@@ -366,14 +366,14 @@ class Directory(FSBaseObject):
             file (File/Directory): The `File`/`Directory` to add to self
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         """
         if file.name in self.files.keys():
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         self.files[file.name] = file
         self.update_size()
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def calculate_size(self) -> int:
         """
@@ -486,10 +486,14 @@ class StandardFS:
             # Ignore the __init__.py and __pycache__ because those aren't bins (auto generated)
             if file not in ["__init__.py", "__pycache__", "installable"]:
                 current_file = File(file.replace(".py", ""), "[BINARY DATA]", bin_dir, 0, 0)
-                with open(f"./blackhat/bin/{file}", "r") as f:
-                    current_file.size = sys.getsizeof(f.read()) / 32
-                    current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
-                                                "execute": ["owner", "group", "public"]}
+                try:
+                    with open(f"./blackhat/bin/{file}", "r") as f:
+                        current_file.size = sys.getsizeof(f.read()) / 32
+                except IsADirectoryError:
+                    current_file.size = 0
+
+                current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                                            "execute": ["owner", "group", "public"]}
 
                 bin_dir.add_file(current_file)
 
@@ -754,7 +758,7 @@ class StandardFS:
         html_dir: Directory = Directory("html", www_dir, 0, 0)
         www_dir.add_file(html_dir)
 
-    def find(self, pathname: str) -> SysCallStatus:
+    def find(self, pathname: str) -> Result:
         """
         Try to find a given file anywhere in the file system based on a given `pathname`
 
@@ -762,7 +766,7 @@ class StandardFS:
             pathname (str): The full (absolute or relative) path of the file
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
+            Result: A `Result` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
         """
 
         # Special cases
@@ -772,19 +776,19 @@ class StandardFS:
             pathname = pathname.replace("~", get_home_env_var)
 
         if pathname == "/":
-            return SysCallStatus(success=True, data=self.files)
+            return Result(success=True, data=self.files)
 
         if pathname == ".":
-            return SysCallStatus(success=True, data=self.computer.get_pwd())
+            return Result(success=True, data=self.computer.get_pwd())
 
         if pathname == "..":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
             if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.files)
+                return Result(success=True, data=self.files)
             else:
-                return SysCallStatus(success=True, data=self.computer.get_pwd().parent)
+                return Result(success=True, data=self.computer.get_pwd().parent)
 
         if pathname == "...":
             # Check if the directory has a parent
@@ -792,13 +796,13 @@ class StandardFS:
             # In the case of /, just return /
             # And then do it again (go back twice)0
             if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.computer.fs.files)
+                return Result(success=True, data=self.computer.fs.files)
             else:
                 current_dir = self.computer.get_pwd().parent
                 if current_dir.parent:
-                    return SysCallStatus(success=True, data=current_dir.parent)
+                    return Result(success=True, data=current_dir.parent)
                 else:
-                    return SysCallStatus(success=True, data=self.computer.fs.files)
+                    return Result(success=True, data=self.computer.fs.files)
 
         # Regular (non-special cases)
         pathname = pathname.split("/")
@@ -831,10 +835,10 @@ class StandardFS:
             else:
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # This only runs when we successfully found
-        return SysCallStatus(success=True, data=current_dir)
+        return Result(success=True, data=current_dir)
 
     def generate_manpages(self):
         find_man_dir = self.find("/usr/share/man")

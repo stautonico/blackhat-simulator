@@ -1,5 +1,5 @@
 from .service import Service
-from ..helpers import SysCallStatus
+from ..helpers import Result
 
 
 class SSHServer(Service):
@@ -10,5 +10,5 @@ class SSHServer(Service):
     def __init__(self, computer):
         super().__init__("SSH", 22, computer)
 
-    def main(self, args: dict) -> SysCallStatus:
-        return SysCallStatus(success=True, data={"args": args})
+    def main(self, args: dict) -> Result:
+        return Result(success=True, data={"args": args})

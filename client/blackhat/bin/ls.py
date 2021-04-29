@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import ResultMessages, Result
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -108,7 +108,7 @@ def calculate_output(directory, computer, all=False, long=False, nocolor=False):
                             output_text += f"{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} "
     return output_text
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -152,7 +152,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             if response.success:
                 output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
             else:
-                return output("Error", pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
+                return output("Error", pipe, success=False, success_message=ResultMessages.NOT_FOUND)
 
         if not output_text:
             return output("", pipe)

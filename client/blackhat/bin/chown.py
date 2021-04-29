@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -7,7 +7,7 @@ __COMMAND__ = "chown"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -66,7 +66,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 update_response = result.data.change_owner(computer, new_user_owner=owner,
                                                            new_group_owner=group_owner)
                 if not update_response.success:
-                    if update_response.message == SysCallMessages.NOT_ALLOWED:
+                    if update_response.message == ResultMessages.NOT_ALLOWED:
                         return output(
                             f"{__COMMAND__}: changing ownership of '{args.file}': Operation not permitted",
                             pipe,

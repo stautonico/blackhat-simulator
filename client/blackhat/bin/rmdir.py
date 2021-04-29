@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -7,7 +7,7 @@ __COMMAND__ = "rmdir"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -50,7 +50,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                         response = result.data.delete(computer)
 
                         if not response.success:
-                            if response.message == SysCallMessages.NOT_ALLOWED:
+                            if response.message == ResultMessages.NOT_ALLOWED:
                                 output_text += f"cannot remove '{file}': Permission denied"
                                 continue
             if args.verbose:

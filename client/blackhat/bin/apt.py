@@ -3,7 +3,7 @@ from json import loads
 
 from ..computer import Computer
 from ..fs import File, Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -11,7 +11,7 @@ __COMMAND__ = "apt"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -28,7 +28,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         if not args.version and not args.command and not args.packages:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+                          success_message=ResultMessages.MISSING_ARGUMENT)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:

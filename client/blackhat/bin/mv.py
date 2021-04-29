@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 from .cp import copy
@@ -8,7 +8,7 @@ __COMMAND__ = "mv"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -42,18 +42,18 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                 copy_result = copy(computer, src_result.data, args.destination, True, args.verbose)
 
                 if not copy_result.success:
-                    if copy_result.message == SysCallMessages.NOT_FOUND:
+                    if copy_result.message == ResultMessages.NOT_FOUND:
                         return output(f"{__COMMAND__}: cannot find '{args.destination}': No such file or directory", pipe,
                                       success=False)
-                    elif copy_result.message == SysCallMessages.GENERIC:
+                    elif copy_result.message == ResultMessages.GENERIC:
                         return output(f"{__COMMAND__}: invalid destination '{args.destination}'", pipe, success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
+                    elif copy_result.message == ResultMessages.NOT_ALLOWED_READ:
                         return output(f"{__COMMAND__}: cannot open '{args.source}' for reading: Permission denied", pipe,
                                       success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
+                    elif copy_result.message == ResultMessages.NOT_ALLOWED_WRITE:
                         return output(f"{__COMMAND__}: cannot open '{args.destination} for writing: Permission denied", pipe,
                                       success=False)
-                    elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
+                    elif copy_result.message == ResultMessages.ALREADY_EXISTS:
                         return output(f"{__COMMAND__}: cannot write '{args.destination}: Directory already exists", pipe,
                                       success=False)
                 else:

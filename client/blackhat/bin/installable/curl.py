@@ -1,5 +1,5 @@
 from ...computer import Computer
-from ...helpers import SysCallStatus, SysCallMessages
+from ...helpers import Result, ResultMessages
 from ...lib.input import ArgParser
 from ...lib.output import output
 
@@ -7,7 +7,7 @@ __COMMAND__ = "curl"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -31,7 +31,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         result = computer.send_tcp(args.host, 80, {})
 
         if not result.success:
-            if result.message == SysCallMessages.NOT_FOUND:
+            if result.message == ResultMessages.NOT_FOUND:
                 return output(f"{__COMMAND__}: (6) Could not resolve host: {args.host}", pipe, success=False)
             else:
                 return output(f"{__COMMAND__}: (7) Failed to connect to {args.host} port 80: Connection refused", pipe,

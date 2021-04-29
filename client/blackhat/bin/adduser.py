@@ -2,7 +2,7 @@ from getpass import getpass
 
 from ..computer import Computer
 from ..fs import Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -10,7 +10,7 @@ __COMMAND__ = "adduser"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -36,7 +36,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         if computer.find_user(username=args.username).success:
             return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False,
-                          success_message=SysCallMessages.ALREADY_EXISTS)
+                          success_message=ResultMessages.ALREADY_EXISTS)
 
         prev_uid = computer.get_all_users().data[-1].uid
 

@@ -7,16 +7,16 @@ from datetime import datetime
 from hashlib import md5
 from random import choice
 from secrets import token_hex
+from time import time
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
-from .helpers import SysCallStatus, SysCallMessages
+from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
+from .lib import unistd, stdlib
+from .lib.sys import time, stat
 from .services.service import Service
 from .session import Session
 from .user import User, Group
-from .lib import unistd, stdlib
-from .lib.sys import time, stat
-
 
 
 class Computer:
@@ -44,6 +44,9 @@ class Computer:
         self.services: dict[int, Service] = {}
         self.post_fs_init()
 
+    ##################
+    # Init functions #
+    ##################
 
     def init(self) -> None:
         """
@@ -86,7 +89,33 @@ class Computer:
         for lib in libs:
             lib.update(self)
 
-    def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> SysCallStatus:
+    ################
+    # Update files #
+    ################
+
+    def update_hostname(self) -> None:
+        """
+        Reads /etc/hostname and sets the system hostname accordingly
+        If /etc/hostname doesn't exist, the hostname is set to "localhost"
+
+        Returns:
+            None
+        """
+        # Note: We don't need to use the sethostname syscall because this is only if we updated the /etc/hostname file
+        etc_dir: Directory = self.fs.files.find("etc")
+
+        if not etc_dir:
+            self.hostname = "localhost"
+
+        else:
+            hostname_file: File = etc_dir.find("hostname")
+
+            if not hostname_file:
+                self.hostname = "localhost"
+            else:
+                self.hostname = hostname_file.content.split("\n")[0]
+
+    def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> Result:
         """
         Runs a system binary or an external binary
 
@@ -96,7 +125,7 @@ class Computer:
             pipe (bool): If a pipe was used (used for routing input/output)
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
+            Result: A `Result` object that contains a success status and some response data (changed on a case-by-case basis)
         """
         # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
         # The one that matches first in the path gets run
@@ -120,20 +149,32 @@ class Computer:
 
         if len(bin_dirs) == 0:
             print(f"{command}: command not found")
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        exists = False
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
-                to_run = True
+                # Now we have to decide which version to run (for now, we'll just run the newest)
+                # but in the future, we'll run according to whats installed on the system
+                try:
+                    all_versions = [float(x.replace(".py", "").replace(command, "")[1:].replace("_", ".")) for x in
+                                    os.listdir(f"blackhat/bin/{command}")
+                                    if x != "__init__.py" and x != "__pycache__"]
+                    # Now we need to decide which is the newer version
+                    newest = max(all_versions)
+                    to_run = f"{command}_{str(newest).replace('.', '_')}"
+
+                except Exception as e:
+                    to_run = None
                 break
         else:
             print(f"{command}: command not found")
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         try:
-            module = importlib.import_module(f"blackhat.bin.{command}")
+            if not to_run:
+                module = importlib.import_module(f"blackhat.bin.{command}")
+            else:
+                module = importlib.import_module(f"blackhat.bin.{command}.{to_run}")
             response = module.main(self, args, pipe)
             if os.getenv("DEBUGMODE") == "false":
                 self.save()
@@ -142,7 +183,10 @@ class Computer:
         except ImportError as e:
             print(e)
             try:
-                module = importlib.import_module(f"blackhat.bin.installable.{command}")
+                if not to_run:
+                    module = importlib.import_module(f"blackhat.bin.installable.{command}")
+                else:
+                    module = importlib.import_module(f"blackhat.bin.installable.{command}.{to_run}")
                 response = module.main(self, args, pipe)
                 # After ending a process, we need to reset the uid and gid
                 self.sessions[-1].effective_uid = self.sessions[-1].real_uid
@@ -153,57 +197,9 @@ class Computer:
             except ImportError as e:
                 print(f"There was an error when running command: {command}")
                 print(e)
-                return SysCallStatus(success=False, message=SysCallMessages.GENERIC)
+                return Result(success=False, message=ResultMessages.GENERIC)
 
-    def set_hostname(self, hostname: str) -> SysCallStatus:
-        """
-        An easy function to update the hostname (also updates /etc/hostname)
-        Args:
-            hostname (str): The `Computer`'s new hostname
-
-        Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
-        """
-        # Try to find the hostname file
-        find_etc_hostname = self.fs.find("/etc/hostname")
-
-        if not find_etc_hostname.success:
-            # Make sure we at least have the /etc/ dir
-            find_etc = self.fs.find("/etc")
-            if not find_etc.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-            else:
-                # Create the /etc/hostname
-                hostname_file = File("hostname", hostname, find_etc.data, 0, 0)
-                find_etc.data.add_file(hostname_file)
-        else:
-            find_etc_hostname.data.content = hostname
-
-        self.hostname = hostname
-        return SysCallStatus(success=True)
-
-    def update_hostname(self) -> None:
-        """
-        Reads /etc/hostname and sets the system hostname accordingly
-        If /etc/hostname doesn't exist, the hostname is set to "localhost"
-
-        Returns:
-            None
-        """
-        etc_dir: Directory = self.fs.files.find("etc")
-
-        if not etc_dir:
-            self.hostname = "localhost"
-
-        else:
-            hostname_file: File = etc_dir.find("hostname")
-
-            if not hostname_file:
-                self.hostname = "localhost"
-            else:
-                self.hostname = hostname_file.content.split("\n")[0]
-
-    def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -> SysCallStatus:
+    def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -> Result:
         """
         Add a new user to the system.
         This function also generates the UID for the new user (unless manually specified)
@@ -215,10 +211,10 @@ class Computer:
                         plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
+            Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
         """
         if self.find_user(username=username).success:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         # new_user = User(username)
         # new_user.set_password(password)
@@ -227,7 +223,7 @@ class Computer:
         if uid:
             # Check if a user with the given UID already exists
             if self.find_user(uid=uid).success:
-                return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+                return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
             else:
                 next_uid = uid
         # Auto-generate the UID (depending on the situation)
@@ -252,9 +248,9 @@ class Computer:
                               (next_uid, username, hashed_password, self.id))
         self.connection.commit()
 
-        return SysCallStatus(success=True, data=next_uid)
+        return Result(success=True, data=next_uid)
 
-    def delete_user(self, username: str) -> SysCallStatus:
+    def delete_user(self, username: str) -> Result:
         """
         Deletes a user from the system (by username)
 
@@ -262,16 +258,16 @@ class Computer:
             username (str): The username of the user to delete
 
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+            Result: A `Result` instance with the `success` flag set appropriately.
         """
         if self.find_user(username=username).success:
             self.database.execute("DELETE FROM blackhat_user WHERE computer_id=? and username=?", (self.id, username))
             self.connection.commit()
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def change_user_password(self, uid: int, new_password: str, plaintext=True) -> SysCallStatus:
+    def change_user_password(self, uid: int, new_password: str, plaintext=True) -> Result:
         """
         Change the password of the user by uid
 
@@ -281,12 +277,12 @@ class Computer:
             plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+            Result: A `Result` with the `success` flag set accordingly.
         """
         # Double check that the user with the given UID exists
         lookup_user = self.find_user(uid=uid)
         if not lookup_user.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # Hash the plain text password
         password_hash = md5(new_password.encode()).hexdigest() if plaintext else new_password
@@ -295,9 +291,9 @@ class Computer:
         result = self.database.execute("UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?",
                                        (password_hash, uid, self.id))
         self.connection.commit()
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
-    def change_user_uid(self, uid: int, new_uid: int) -> SysCallStatus:
+    def change_user_uid(self, uid: int, new_uid: int) -> Result:
         """
         Change the uid of the user by uid
 
@@ -306,17 +302,17 @@ class Computer:
             new_uid (int): The new uid of the given user
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+            Result: A `Result` with the `success` flag set accordingly.
         """
         # Double check that the user with the given UID exists
         lookup_user = self.find_user(uid=uid)
         if not lookup_user.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # Make sure that no other user has the given `new_uid`
         lookup_user = self.find_user(uid=new_uid)
         if lookup_user.success:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         # Update the uid in the database
         result = self.database.execute("UPDATE blackhat_user SET uid=? WHERE uid=? AND computer_id=?",
@@ -335,9 +331,9 @@ class Computer:
         self.database.execute("UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?",
                               (new_uid, uid, self.id))
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
-    def add_group(self, name: str, gid: Optional[int] = None) -> SysCallStatus:
+    def add_group(self, name: str, gid: Optional[int] = None) -> Result:
         """
         Add a new group to the system.
         This function also generates the GID for the new group (unless manually specified)
@@ -347,15 +343,15 @@ class Computer:
             gid (int, optional): The GID of the new user
 
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
+            Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
         """
         if self.find_group(name=name).success:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         if gid:
             # Check if a group with the given GID already exists
             if self.find_group(gid=gid, name=name).success:
-                return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+                return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
             else:
                 next_gid = gid
         else:
@@ -376,9 +372,9 @@ class Computer:
                               (next_gid, name, self.id))
         self.connection.commit()
 
-        return SysCallStatus(success=True, data=next_gid)
+        return Result(success=True, data=next_gid)
 
-    def delete_group(self, name: str) -> SysCallStatus:
+    def delete_group(self, name: str) -> Result:
         """
         Deletes a group from the system (by name)
 
@@ -386,17 +382,17 @@ class Computer:
             name (str): The name of the group to delete
 
         Returns:
-            SysCallStatus: A `SysCallStatus` instance with the `success` flag set appropriately.
+            Result: A `Result` instance with the `success` flag set appropriately.
         """
         if self.find_group(name=name).success:
             self.database.execute("DELETE FROM blackhat_group WHERE computer_id=? and name=?", (self.id, name))
             self.connection.commit()
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     def add_user_to_group(self, uid: int, gid: int,
-                          membership_type: Literal["primary", "secondary"] = "secondary") -> SysCallStatus:
+                          membership_type: Literal["primary", "secondary"] = "secondary") -> Result:
         """
         Add a user to a group (by uid and gid)
 
@@ -406,7 +402,7 @@ class Computer:
             membership_type (str): The type of group relationship (primary, secondary)
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         """
         # Confirm that both user and group exists
         if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
@@ -414,11 +410,11 @@ class Computer:
                 "INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)",
                 (self.id, uid, gid, membership_type))
             self.connection.commit()
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_user_groups(self, uid: int) -> SysCallStatus:
+    def find_user_groups(self, uid: int) -> Result:
         """
         Get the list of `Group` GID's that the `User` belongs to (by UID)
 
@@ -426,18 +422,18 @@ class Computer:
             uid (int): The UID of the user to lookup
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+            Result: A `Result` with the `data` flag containing a list of GIDs
         """
         # Double check if the user exists
         if not self.find_user(uid=uid).success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
             result = self.database.execute("SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=?;",
                                            (self.id, uid)).fetchall()
-            return SysCallStatus(success=True, data=[x[0] for x in result])
+            return Result(success=True, data=[x[0] for x in result])
 
-    def find_user_primary_group(self, uid: int) -> SysCallStatus:
+    def find_user_primary_group(self, uid: int) -> Result:
         """
         Get the `Group` GID's that is the `User`s primary `Group` (by UID)
 
@@ -445,19 +441,19 @@ class Computer:
             uid (int): The UID of the user to lookup
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of GIDs
+            Result: A `Result` with the `data` flag containing a list of GIDs
         """
         # Double check if the user exists
         if not self.find_user(uid=uid).success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
             result = self.database.execute(
                 "SELECT group_gid FROM group_membership WHERE computer_id=? and user_uid=? and membership_type=?;",
                 (self.id, uid, "primary")).fetchone()
-            return SysCallStatus(success=True, data=[x for x in result])
+            return Result(success=True, data=[x for x in result])
 
-    def find_users_in_group(self, gid: int) -> SysCallStatus:
+    def find_users_in_group(self, gid: int) -> Result:
         """
         Get a list of user UIDs that are part of the given groups GID
 
@@ -465,19 +461,19 @@ class Computer:
             gid (int): The GID of the group to search
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `data` flag containing a list of UIDs
+            Result: A `Result` with the `data` flag containing a list of UIDs
         """
         # Double check if the group exists
         if not self.find_group(gid=gid).success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         # Ask the database for the UIDs
         result = self.database.execute(
             "SELECT uid FROM blackhat_user WHERE computer_id=? AND uid in (SELECT user_uid FROM group_membership WHERE computer_id=? AND group_gid=?)",
             (self.id, self.id, gid)).fetchall()
 
-        return SysCallStatus(success=True, data=[x for x in result])
+        return Result(success=True, data=[x for x in result])
 
-    def remove_user_from_group(self, uid: int, gid: int) -> SysCallStatus:
+    def remove_user_from_group(self, uid: int, gid: int) -> Result:
         """
         Remove a user from a group (by uid and gid)
 
@@ -486,18 +482,18 @@ class Computer:
             gid (int): The GID of the group to remove the user from
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         """
         # Confirm that both user and group exists
         if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
             self.database.execute("DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?",
                                   (self.id, uid, gid))
             self.connection.commit()
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> SysCallStatus:
+    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> Result:
         """
         Find a user in the database by UID or username
         Args:
@@ -505,22 +501,22 @@ class Computer:
             username (str, optional): The username of the user to find
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the user dict if found
         """
         if uid is None and username is None:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             result = self.database.execute("SELECT * FROM blackhat_user WHERE (uid=? OR username=?) AND computer_id=?",
                                            (uid, username, self.id)).fetchone()
             if not result:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-            return SysCallStatus(success=True,
-                                 data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
-                                           room_number=result[5],
-                                           work_phone=result[6], home_phone=result[7], other=result[8]))
+            return Result(success=True,
+                          data=User(uid=result[1], username=result[2], password=result[3], full_name=result[4],
+                                    room_number=result[5],
+                                    work_phone=result[6], home_phone=result[7], other=result[8]))
 
-    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -> SysCallStatus:
+    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -> Result:
         """
         Find a group in the database by GID or name or both
         Args:
@@ -528,10 +524,10 @@ class Computer:
             name (str, optional): The name of the group to find
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the group dict if found
         """
         if gid is None and name is None:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         # We're looking by name AND gid
         elif gid is not None and name is not None:
             result = self.database.execute("SELECT * FROM blackhat_group WHERE (gid=? AND name=?) AND computer_id=?",
@@ -541,16 +537,16 @@ class Computer:
                                            (gid, name, self.id)).fetchone()
 
         if not result:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        return SysCallStatus(success=True, data=Group(gid=result[1], name=result[2]))
+        return Result(success=True, data=Group(gid=result[1], name=result[2]))
 
-    def get_all_users(self) -> SysCallStatus:
+    def get_all_users(self) -> Result:
         """
         Get all users that exist in the given system in the given format:
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `User`s
+            Result: A `Result` with the `data` flag containing the array of `User`s
         """
         all_users = self.database.execute("SELECT * FROM blackhat_user WHERE computer_id=?",
                                           (self.id,)).fetchall()
@@ -561,14 +557,14 @@ class Computer:
             clean_users.append(
                 User(uid=user[1], username=user[2], password=user[3], full_name=user[4], room_number=user[5],
                      work_phone=user[6], home_phone=user[7], other=user[8]))
-        return SysCallStatus(success=True, data=clean_users)
+        return Result(success=True, data=clean_users)
 
-    def get_all_groups(self) -> SysCallStatus:
+    def get_all_groups(self) -> Result:
         """
         Get all groups that exist in the given system in the given format:
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `data` flag containing the array of `Group`s
+            Result: A `Result` with the `data` flag containing the array of `Group`s
         """
         all_groups = self.database.execute("SELECT * FROM blackhat_group WHERE computer_id=?",
                                            (self.id,)).fetchall()
@@ -577,7 +573,7 @@ class Computer:
 
         for group in all_groups:
             clean_groups.append(Group(gid=group[1], name=group[2]))
-        return SysCallStatus(success=True, data=clean_groups)
+        return Result(success=True, data=clean_groups)
 
     def create_root_user(self) -> None:
         """
@@ -596,7 +592,7 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type="primary")
 
-    def update_user_and_group_files(self) -> SysCallStatus:
+    def update_user_and_group_files(self) -> Result:
         """
         Makes sure that:
         /etc/passwd matches our internal user map
@@ -609,7 +605,7 @@ class Computer:
         etc_dir: Directory = self.fs.files.find("etc")
 
         if not etc_dir:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         passwd_file: File = etc_dir.find("passwd")
         shadow_file: File = etc_dir.find("shadow")
@@ -670,46 +666,9 @@ class Computer:
         else:
             group_file.content = group_content
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
-    def get_uid(self) -> int:
-        """
-        Returns the UID of the `Computer`'s current user
-        Returns:
-            int: UID of the `Computers`'s current user (from most recent session)
-        """
-        return self.sessions[-1].effective_uid
-
-    def get_gid(self) -> int:
-        """
-        Returns the (primary) GID of the `Computer`'s current user
-        Returns:
-            int: (primary) GID of the `Computers`'s current user (from most recent session)
-        """
-        current_uid = self.get_uid()
-        result = self.database.execute(
-            "SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?",
-            (self.id, current_uid, "primary")).fetchone()
-
-        if result:
-            return result[0]
-        else:
-            # NOTE: possible exploit, but maybe we leave it here on purpose?
-            # TODO: Write proof of concept exploit to exploit this exploit
-            return 0
-
-    def get_pwd(self) -> FSBaseObject:
-        """
-        Get current directory in the file system
-
-        Returns:
-            FSBaseObjectSB: The  user's current directory
-        """
-        if len(self.sessions) == 0:
-            return self.fs.files
-        else:
-            return self.sessions[-1].current_dir
-
+    # TODO: Create setenv function for the stdlib method
     def get_env(self, key) -> Optional[str]:
         """
         Get an environment variable from the current session
@@ -733,10 +692,10 @@ class Computer:
         Returns:
             None
         """
-        current_username = self.find_user(self.get_uid()).data.username
+        current_username = self.find_user(self.sys_getuid()).data.username
 
         # Don't check /home/username, check /root for .shellrc
-        if self.get_uid() == 0:
+        if self.sys_getuid() == 0:
             shellrc_loc = "/root/.shellrc"
         else:
             shellrc_loc = f"/home/{current_username}/.shellrc"
@@ -750,6 +709,7 @@ class Computer:
                 for line in shellrc_lines.data.split("\n"):
                     if line != "":
                         line = line.split()
+                        # TODO: replace with execvp
                         result = self.run_command(line[0], line[1:], pipe=False)
 
     def save(self, output_file: str = "blackhat.save") -> bool:
@@ -772,7 +732,11 @@ class Computer:
         else:
             return True
 
-    def handle_tcp_connection(self, host: str, port: int, args: dict) -> SysCallStatus:
+    ##############
+    # Networking #
+    ##############
+
+    def handle_tcp_connection(self, host: str, port: int, args: dict) -> Result:
         """
         Route network traffic to a `Service` on the local `Computer`
 
@@ -787,9 +751,9 @@ class Computer:
         if port in self.services.keys():
             return self.services[port].main(args)
 
-        return SysCallStatus(success=False, message=SysCallMessages.GENERIC_NETWORK)
+        return Result(success=False, message=ResultMessages.GENERIC_NETWORK)
 
-    def send_tcp(self, host: str, port: int, args: dict) -> SysCallStatus:
+    def send_tcp(self, host: str, port: int, args: dict) -> Result:
         """
         Pass a network connection to the router to route (either within the LAN or to an external LAN)
 
@@ -802,6 +766,302 @@ class Computer:
             SysCallMessage: A response generate by the `Service` or an error if no such `Service` exists.
         """
         return self.parent.handle_tcp_connection(host, port, args)
+
+    ############
+    # Syscalls #
+    ############
+    def sys_read(self, filepath: str) -> Result:
+        # Try to find the file
+        find_file = self.fs.find(filepath)
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if find_file.data.is_directory():
+            return Result(success=False, message=ResultMessages.IS_DIRECTORY)
+
+        try_read_file = find_file.data.read(self)
+
+        if not try_read_file.success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+
+        return Result(success=True, data=try_read_file.data)
+
+    def sys_write(self, filepath: str, data: str) -> Result:
+        # Try to find the file
+        find_file = self.fs.find(filepath)
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if find_file.data.is_directory():
+            return Result(success=False, message=ResultMessages.IS_DIRECTORY)
+
+        try_write_file = find_file.data.write(data, self)
+
+        if not try_write_file.success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+
+        return Result(success=True)
+
+    def sys_chown(self, pathname: str, owner: int, group: int) -> Result:
+        find_file = self.fs.find(pathname)
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        file = find_file.data
+
+        change_perms = file.change_owner(self, owner, group)
+
+        if not change_perms.success:
+            return Result(success=False, message=change_perms.message)
+
+        return Result(success=True)
+
+    def sys_chdir(self, pathname: str) -> Result:
+        find_file = self.fs.find(pathname)
+
+        if not find_file.success:
+            return Result(success=False)
+
+        # We need executable permissions to cd (???)
+        check_perm = find_file.data.check_perm("execute", self)
+        if not check_perm.success or self.sys_getuid() != 0:
+            return Result(success=False)
+
+        self.sessions[-1].current_dir = find_file.data
+        return Result(success=True)
+
+    def sys_getuid(self) -> int:
+        """
+        Returns the UID of the `Computer`'s current user
+        Returns:
+            int: UID of the `Computers`'s current user (from most recent session)
+        """
+        return self.sessions[-1].effective_uid
+
+    def sys_setuid(self, uid: int) -> Result:
+        # TODO: Implement a PROPER setuid
+        # The way setuid should work:
+        # If the "caller" uid is root, change the uid to whatever is given
+        # If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+        # If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
+
+        if self.sys_getuid() == 0:
+            self.sessions[-1].effective_uid = uid
+            return Result(success=True)
+        else:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+    def sys_getgid(self) -> int:
+        """
+        Returns the (primary) GID of the `Computer`'s current user
+        Returns:
+            int: (primary) GID of the `Computers`'s current user (from most recent session)
+        """
+        current_uid = self.sys_getuid()
+        result = self.database.execute(
+            "SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?",
+            (self.id, current_uid, "primary")).fetchone()
+
+        if result:
+            return result[0]
+        else:
+            # NOTE: possible exploit, but maybe we leave it here on purpose?
+            # TODO: Write proof of concept exploit to exploit this exploit
+            return 0
+
+    def sys_sethostname(self, hostname: str) -> Result:
+        """
+        An easy function to update the hostname (also updates /etc/hostname)
+        Args:
+            hostname (str): The `Computer`'s new hostname
+
+        Returns:
+            Result: A `Result` instance with the `success` flag set appropriately.
+        """
+        # Try to find the hostname file
+        if self.sys_getuid() != 0:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        if not self.sys_stat("/etc/hostname").success:
+            # Make sure we at least have the /etc/ dir so we can make /etc/hostname
+            if not self.sys_stat("/etc/").success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+            # Create the /etc/hostname
+            find_etc_dir = self.fs.find("/etc/")
+            find_etc_dir.data.add_file(File("hostname", hostname, find_etc_dir.data, 0, 0))
+        else:
+            # Even though we should never get here unless we're root, I'm gonna be a good boy and do this properly
+            if not self.sys_write("/etc/hostname", hostname).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+
+        self.hostname = hostname
+        return Result(success=True)
+
+    def sys_gethostname(self) -> str:
+        return "localhost" if not self.hostname else self.hostname
+
+    def sys_getcwd(self) -> FSBaseObject:
+        """
+        Get current directory in the file system
+
+        Returns:
+            FSBaseObjectSB: The  user's current directory
+        """
+        if len(self.sessions) == 0:
+            return self.fs.files
+        else:
+            return self.sessions[-1].current_dir
+
+    def sys_access(self, pathname: str, mode: int) -> Result:
+        # We need to find the file no matter what we do, so lets just find it now
+        find_file = self.fs.find(pathname)
+
+        success = True
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        file = find_file.data
+
+        if AccessMode.R_OK in mode:
+            if not file.check_perm("read", self).success:
+                success = False
+
+        if AccessMode.W_OK in mode:
+            if not file.check_perm("write", self).success:
+                success = False
+
+        if AccessMode.X_OK in mode:
+            if not file.check_perm("execute", self).success:
+                success = False
+
+        return Result(success=success)
+
+    def sys_gettimeofday(self) -> Result:
+        # TODO: Add get time by timezone
+        timestamp = time()
+        seconds = int(timestamp)
+        microseconds = int(str(timestamp - seconds).replace("0.", ""))
+
+        return Result(success=True, data=timeval(seconds, microseconds))
+
+    def sys_stat(self, path: str) -> Result:
+        find_file = self.fs.find(path)
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        file = find_file.data
+
+        is_file = file.is_file()
+
+        # TODO: Find a less shit way to do this
+        mode = [0, 0, 0]
+
+        # Owner bit
+        if "owner" in file.permissions["execute"]:
+            mode[0] += 1
+        if "owner" in file.permissions["write"]:
+            mode[0] += 2
+        if "owner" in file.permissions["read"]:
+            mode[0] += 4
+        # Group bit
+        if "group" in file.permissions["execute"]:
+            mode[1] += 1
+        if "group" in file.permissions["write"]:
+            mode[1] += 2
+        if "group" in file.permissions["read"]:
+            mode[1] += 4
+        # Public bit
+        if "public" in file.permissions["execute"]:
+            mode[2] += 1
+        if "public" in file.permissions["write"]:
+            mode[2] += 2
+        if "public" in file.permissions["read"]:
+            mode[2] += 4
+        mode = int("".join([str(x) for x in mode]))
+
+        nlink = 0
+        uid = file.owner
+        gid = file.group_owner
+        size = file.size
+        # TODO: Implement atime, mtime, and ctime
+        atime = 0
+        mtime = 0
+        ctime = 0
+        path = file.pwd()
+
+        stat_result = stat_struct(is_file, mode, nlink, uid, gid, size, atime, mtime, ctime, path)
+
+        return Result(success=True, data=stat_result)
+
+    def sys_mkdir(self, pathname: str, mode: int) -> Result:
+        # Make sure it doesn't already exist
+        find_dir = self.fs.find(pathname)
+
+        if find_dir.success:
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
+
+        # Make sure we have write permissions on the parent dir
+        parent_path = "/".join(pathname.split("/")[:-1])
+
+        # Just in case
+        find_parent = self.fs.find(parent_path)
+
+        if not find_parent.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if not find_parent.data.check_perm("write", self).success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+
+        new_dir = Directory(pathname.split("/")[-1], find_parent.data, owner=self.get_uid(),
+                            group_owner=self.sys_getgid())
+        if not self.sys_chmod(pathname, mode).success:
+            # rwxr-xr-x
+            new_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                                   "execute": ["owner", "group", "public"]}
+        add_file = find_parent.data.add_file(new_dir)
+
+        if not add_file.success:
+            return Result(success=False, message=ResultMessages.GENERIC)
+
+        return Result(success=True, data=new_dir)
+
+    def sys_chmod(self, pathname: str, mode: int) -> Result:
+        find_file = self.fs.find(pathname)
+
+        if not find_file.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        # Only the owner can change chmod permissions
+        if self.sys_getuid() not in [find_file.data.owner, 0]:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        raw_mode = str(bin(mode)).replace("0b", "")
+        raw_mode = "0" * (9 - len(raw_mode)) + raw_mode
+
+        chmod_bits = []
+        for x in range(0, len(raw_mode), 3):
+            chmod_bits.append(raw_mode[x: x + 3])
+
+        perms = {"read": [], "write": [], "execute": []}
+
+        for x in range(3):
+            bits = chmod_bits[x]
+            scope = ["owner", "group", "public"][x]
+
+            for y in range(3):
+                bit = bits[y]
+                perm_scope = ["read", "write", "execute"][y]
+
+                if bit == "1":
+                    perms[perm_scope].append(scope)
+
+        find_file.data.permissions = perms
+        return Result(success=True)
 
 
 class Router(Computer):
@@ -817,7 +1077,7 @@ class Router(Computer):
         self.lan = "192.168.1.1"
         self.port_forwarding = {}
 
-    def dhcp(self, subnet: int) -> SysCallStatus:
+    def dhcp(self, subnet: int) -> Result:
         """
         Distributes IP addresses to clients on the network
 
@@ -825,7 +1085,7 @@ class Router(Computer):
             subnet (int): subnet id to assign the client to
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         """
         # Split the router's IP to get the first 16 bits
         ip_split = self.lan.split(".")
@@ -841,16 +1101,16 @@ class Router(Computer):
 
         # Check if we have IP's left
         if len(self.ip_pool[subnet]) == 0:
-            return SysCallStatus(success=False, message=SysCallMessages.EMPTY)
+            return Result(success=False, message=ResultMessages.EMPTY)
 
         # Choose a random ip from the pool
         ip = choice(self.ip_pool[subnet])
 
         # Remove the IP from the pool since it's in use
         self.ip_pool[subnet].remove(ip)
-        return SysCallStatus(success=True, data=ip)
+        return Result(success=True, data=ip)
 
-    def find_local_client(self, ip: str) -> SysCallStatus:
+    def find_local_client(self, ip: str) -> Result:
         """
         Finds a client (`Computer` object) in the local network by IP address
 
@@ -858,16 +1118,16 @@ class Router(Computer):
             ip (str): The "private" IP of the client `Computer` to find
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
         subnet = ip.split(".")[2]
         for client in self.clients[int(subnet)].values():
             if client.lan == ip:
-                return SysCallStatus(success=True, data=client)
+                return Result(success=True, data=client)
 
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_client(self, ip: str, port: Optional[int] = None) -> SysCallStatus:
+    def find_client(self, ip: str, port: Optional[int] = None) -> Result:
         """
         A more "general" version of the `find_local_client()` function. This function determines if the given router will
         ask the `ISPRouter` for the given IP address or if the client is within the `Router`'s LAN
@@ -877,7 +1137,7 @@ class Router(Computer):
             port (int, optional): The open port on the given client (find `Computer` behind another `Router` in an external LAN)
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
         # Check if the client belongs to ourselves (don't ask isp)
         ip_split = self.lan.split(".")
@@ -887,7 +1147,7 @@ class Router(Computer):
         if ip.startswith(network_prefix):
             # We're looking for ourselves
             if ip == self.lan:
-                return SysCallStatus(success=True, data=self)
+                return Result(success=True, data=self)
             else:
                 client_ip_split = ip.split(".")
                 subnet = client_ip_split[2]
@@ -896,16 +1156,16 @@ class Router(Computer):
                     client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
 
                     if client_result:
-                        return SysCallStatus(success=True, data=client_result)
+                        return Result(success=True, data=client_result)
 
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
 
             # If the given ip is our wan address, another router is asking for a client
             if ip == self.wan:
                 # If there is no port, we want the router (ourselves)
                 if not port:
-                    return SysCallStatus(success=True, data=self)
+                    return Result(success=True, data=self)
                 else:
                     # We want a host at a specific open port
                     return self.find_client_by_port(port)
@@ -917,16 +1177,16 @@ class Router(Computer):
                     # We found the other router
                     # If there's no port, we're done (we wanted the router not a host behind the router)
                     if not port:
-                        return SysCallStatus(success=True, data=wan_client.data)
+                        return Result(success=True, data=wan_client.data)
                     else:
                         # If there is a port, we want to ask the external router for the client behind that port
                         # We can ask that router directly
                         return wan_client.data.find_client_by_port(port)
                 else:
                     # Even the ISP couldn't find that router, it must not exist
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_client_by_port(self, port: int) -> SysCallStatus:
+    def find_client_by_port(self, port: int) -> Result:
         """
         Find a client in the given `Router`'s LAN by open port.
         Primarily used for finding the `Computer` hosting a given `Service` through an open port in the given `Router`
@@ -935,15 +1195,15 @@ class Router(Computer):
             port (int): The port number (1-65535) of the given `Computer`
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
         ip_to_find = self.port_forwarding.get(port, None)
         if not ip_to_find:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
-            return SysCallStatus(success=True, data=ip_to_find)
+            return Result(success=True, data=ip_to_find)
 
-    def add_new_client(self, client: Computer, subnet: int = 1) -> SysCallStatus:
+    def add_new_client(self, client: Computer, subnet: int = 1) -> Result:
         """
         Connect a given `Computer` to the given `Router`'s LAN.
         Also, assign an IP address using the `dhcp()` function.
@@ -953,7 +1213,7 @@ class Router(Computer):
             subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
         """
         # Generate an IP for the client
         generate_ip_status = self.dhcp(subnet)
@@ -981,9 +1241,9 @@ class Router(Computer):
 
         client.parent = self
 
-        return SysCallStatus(success=True, data=client.lan)
+        return Result(success=True, data=client.lan)
 
-    def resolve_dns(self, domain_name: str) -> SysCallStatus:
+    def resolve_dns(self, domain_name: str) -> Result:
         """
         Ask the ISP to resolve a dns domain name to an IP address
 
@@ -991,12 +1251,12 @@ class Router(Computer):
             domain_name (str): The domain name to resolve
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP of the given `domain_name` if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP of the given `domain_name` if found.
         """
         # Ask our parent (ISP router) to resolve a dns record
         return self.parent.resolve_dns(domain_name)
 
-    def handle_tcp_connection(self, host: str, port: int, args: dict) -> SysCallStatus:
+    def handle_tcp_connection(self, host: str, port: int, args: dict) -> Result:
         """
         Handle network traffic routing within the `Router`'s LAN and between LANs
 
@@ -1006,17 +1266,17 @@ class Router(Computer):
             args (dict): The data to send to the given `host` (processed by the `Service` on the other end)
 
         Returns:
-            SysCallStatus: A `SysCallStatus` instance containing results about the connection (successful or not) and a response from the `Service` (if successful)
+            Result: A `Result` instance containing results about the connection (successful or not) and a response from the `Service` (if successful)
         """
         # If we don't manually check for our own ip, we end up in an infinite loop of trying to handle tcp connections
         if host == self.lan:
             if port in self.services.keys():
                 return self.services[port].main(args)
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.GENERIC_NETWORK)
+                return Result(success=False, message=ResultMessages.GENERIC_NETWORK)
         client = self.find_client(host, port)
         if not client.success:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             return client.data.handle_tcp_connection(host, port, args)
 
@@ -1032,20 +1292,20 @@ class ISPRouter(Router):
         self.dns_records = {}
         self.whois_records = {}
 
-    def dhcp(self, **kwargs) -> SysCallStatus:
+    def dhcp(self, **kwargs) -> Result:
         """
         Distributes IP addresses to clients on the network
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
         """
         while True:
             ip = ".".join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
             if ip not in self.used_ips:
                 self.used_ips.append(ip)
-                return SysCallStatus(success=True, data=ip)
+                return Result(success=True, data=ip)
 
-    def find_client(self, ip: str, port: Optional[int] = None) -> SysCallStatus:
+    def find_client(self, ip: str, port: Optional[int] = None) -> Result:
         """
         Finds a client `Computer` in connected to the given `ISPRouter`
 
@@ -1054,11 +1314,11 @@ class ISPRouter(Router):
             port (int, optional): The open port on the given client (find `Computer` behind another `Router` in an external LAN)
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
         """
         # Check if the computer we're looking for is ourselves (isp)
         if ip == self.lan:
-            return SysCallStatus(success=True, data=self)
+            return Result(success=True, data=self)
 
         # Check if the client is an IP or a domain
         try:
@@ -1071,18 +1331,18 @@ class ISPRouter(Router):
             dns_result = self.resolve_dns(ip)
 
             if not dns_result.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
             else:
                 ip = dns_result.data
 
         find_client = next((x for x in self.clients.values() if x.wan == ip), None)
         if find_client:
-            return SysCallStatus(success=True, data=find_client)
+            return Result(success=True, data=find_client)
 
         # Client not found
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def add_new_client(self, client: Router, **kwargs) -> SysCallStatus:
+    def add_new_client(self, client: Router, **kwargs) -> Result:
         """
         Connect a given `Computer` to the given `ISPRouter`
         Also, assign an IP address using the `dhcp()` function.
@@ -1091,19 +1351,19 @@ class ISPRouter(Router):
             client (Computer): The `Computer` instance to connect to the `ISPRouter`
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
         """
         dhcp_result = self.dhcp()
         if dhcp_result.success:
             client.wan = dhcp_result.data
             client.parent = self
             self.clients[client.wan] = client
-            return SysCallStatus(success=True, data=client.wan)
+            return Result(success=True, data=client.wan)
         else:
             # Failed for some reason (DHCP will give us our error)
             return dhcp_result
 
-    def add_dns_record(self, domain_name: str, ip: str) -> SysCallStatus:
+    def add_dns_record(self, domain_name: str, ip: str) -> Result:
         """
         Add a new record to the given `ISPRouters` DNS records table
 
@@ -1112,13 +1372,13 @@ class ISPRouter(Router):
             ip (str): The IP address that the given `domain_name` should resolve to
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately.
+            Result: A `Result` with the `success` flag set appropriately.
         """
         if domain_name in self.dns_records.keys():
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         self.dns_records[domain_name] = ip
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def remove_dns_record(self, domain_name):
         """
@@ -1128,15 +1388,15 @@ class ISPRouter(Router):
             domain_name (str): The domain name of the record to be removed
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately.
+            Result: A `Result` with the `success` flag set appropriately.
         """
         if domain_name in self.dns_records.keys():
             del self.dns_records[domain_name]
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def resolve_dns(self, domain_name: str) -> SysCallStatus:
+    def resolve_dns(self, domain_name: str) -> Result:
         """
         Find the IP address linked to the given `domain_name`
 
@@ -1144,19 +1404,19 @@ class ISPRouter(Router):
             domain_name (str): The domain name to resolve
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set appropriately. The `data` flag contains the resolved IP address if found.
+            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the resolved IP address if found.
         """
         dns_record = self.dns_records.get(domain_name, None)
         if dns_record:
-            return SysCallStatus(success=True, data=dns_record)
+            return Result(success=True, data=dns_record)
 
         # Failed to find
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     def add_whois(self, domain_name: str) -> None:
         self.whois_records[domain_name] = {"domain_name": domain_name.upper()}
 
-    def get_whois(self, domain_name: str) -> SysCallStatus:
+    def get_whois(self, domain_name: str) -> Result:
         """
         Get a whois record (by domain name)
 
@@ -1164,11 +1424,11 @@ class ISPRouter(Router):
             domain_name (str): The domain name to search
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag appropriately and the `data` flag containing the fields if successful
+            Result: A `Result` object with the `success` flag appropriately and the `data` flag containing the fields if successful
         """
         record = self.whois_records.get(domain_name)
 
         if not record:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        return SysCallStatus(success=True, data=record)
+        return Result(success=True, data=record)

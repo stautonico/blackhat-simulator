@@ -2,7 +2,7 @@ from getpass import getpass
 from hashlib import md5
 
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.unistd import getuid
@@ -13,7 +13,7 @@ __VERSION__ = "1.1"
 from ..session import Session
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -48,7 +48,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             user = user_lookup.data
         else:
             return output(f"{__COMMAND__}: user {args[0]} does not exist", pipe, success=False,
-                          success_message=SysCallMessages.NOT_FOUND)
+                          success_message=ResultMessages.NOT_FOUND)
 
         input_password = None
 
@@ -67,4 +67,4 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             return output("", pipe)
         else:
             return output(f"{__COMMAND__}: Authentication failure", pipe, success=False,
-                          success_message=SysCallMessages.NOT_ALLOWED)
+                          success_message=ResultMessages.NOT_ALLOWED)

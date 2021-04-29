@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.unistd import getuid
@@ -59,7 +59,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     # TODO: Add hostname aliases
     # TODO: Add local domain names (NIS/YP)
 

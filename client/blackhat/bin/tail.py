@@ -1,5 +1,5 @@
 from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -7,7 +7,7 @@ __COMMAND__ = "tail"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -34,7 +34,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             to_read_result = computer.fs.find(file)
 
             if not to_read_result.success:
-                if to_read_result.message == SysCallMessages.NOT_FOUND:
+                if to_read_result.message == ResultMessages.NOT_FOUND:
                     output_text += f"{__COMMAND__}: {file}: No such file or directory\n"
                 else:
                     output_text += f"{__COMMAND__}: Failed to read file\n"
@@ -58,7 +58,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                         data = "\n".join(data[-10:])
                         output_text += data
                     else:
-                        if read_response.message == SysCallMessages.NOT_ALLOWED:
+                        if read_response.message == ResultMessages.NOT_ALLOWED:
                             output_text += f"{__COMMAND__}: {to_read.name}: Permission denied\n"
 
         return output(output_text, pipe)

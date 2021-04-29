@@ -1,7 +1,7 @@
-from time import time
 from typing import Optional
 
-from ...helpers import SysCallStatus
+from ...helpers import Result
+from ...helpers import timeval as timevalinternal
 
 computer: Optional["Computer"] = None
 
@@ -11,16 +11,10 @@ def update(comp: "Computer"):
     computer = comp
 
 
-class timeval:
-    def __init__(self, tv_sec, tv_usec):
-        self.tv_sec = tv_sec
-        self.tv_usec = tv_usec
+# This is here so we can `from sys.time import timeval`
+# And also so we dont have to have two declarations of the same thing
+timeval = timevalinternal
 
 
-def gettimeofday() -> SysCallStatus:
-    # TODO: Add get time by timezone
-    timestamp = time()
-    seconds = int(timestamp)
-    microseconds = int(str(timestamp - seconds).replace("0.", ""))
-
-    return SysCallStatus(success=True, data=timeval(seconds, microseconds))
+def gettimeofday() -> Result:
+    return computer.sys_gettimeofday()

@@ -1,5 +1,5 @@
 from .service import Service
-from ..helpers import SysCallStatus
+from ..helpers import Result
 
 
 class WebServer(Service):
@@ -11,12 +11,12 @@ class WebServer(Service):
     def __init__(self, computer):
         super().__init__("WebServer", 80, computer)
 
-    def main(self, args: dict) -> SysCallStatus:
+    def main(self, args: dict) -> Result:
         find_var_www_html = self.computer.fs.find("/var/www/html/index.html")
 
         if not find_var_www_html.success:
-            return SysCallStatus(success=True, data={})
+            return Result(success=True, data={})
         else:
 
-            return SysCallStatus(success=True, data={"content": find_var_www_html.data.content})
-        # return SysCallStatus(success=True, data={"args": args})
+            return Result(success=True, data={"content": find_var_www_html.data.content})
+        # return Result(success=True, data={"args": args})
