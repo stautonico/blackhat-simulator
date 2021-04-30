@@ -78,24 +78,24 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             # Check if a UID was entered
             try:
                 uid = int(args.user)
-                user_to_lookup_result = computer.find_user(uid=uid)
+                user_to_lookup_result = computer.get_user(uid=uid)
             except ValueError:
                 # That means we entered a username
-                user_to_lookup_result = computer.find_user(username=args.user)
+                user_to_lookup_result = computer.get_user(username=args.user)
         else:
-            user_to_lookup_result = computer.find_user(uid=getuid())
+            user_to_lookup_result = computer.get_user(uid=getuid())
 
         if not user_to_lookup_result.success:
             return output(f"{__COMMAND__}: '{args.user}': no such user", pipe, success=False)
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group_gid = computer.find_user_primary_group(uid).data[0]
-            secondary_groups_gids = computer.find_user_groups(uid)
+            primary_group_gid = computer.get_user_primary_group(uid).data[0]
+            secondary_groups_gids = computer.get_user_groups(uid)
             secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
             secondary_groups_gids.remove(primary_group_gid)
 
-            primary_group_name = computer.find_group(gid=primary_group_gid)
+            primary_group_name = computer.get_group(gid=primary_group_gid)
 
             if not primary_group_name.success:
                 primary_group_name = "?"
@@ -105,7 +105,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             secondary_group_names = []
 
             for item in secondary_groups_gids:
-                find_secondary_group = computer.find_group(gid=item)
+                find_secondary_group = computer.get_group(gid=item)
                 if not find_secondary_group.success:
                     secondary_group_names.append("?")
                 else:
@@ -134,7 +134,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                 output_text += "groups="
 
             for group in secondary_groups_gids:
-                group_lookup = computer.find_group(gid=group)
+                group_lookup = computer.get_group(gid=group)
                 if group_lookup.success:
                     output_text += f"{group}({group_lookup.data.name}),"
                 else:

@@ -2,12 +2,13 @@ from ...computer import Computer
 from ...helpers import Result, ResultMessages
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.unistd import read
 
 __COMMAND__ = "cat"
 __VERSION__ = "2.0"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -28,4 +29,21 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
     if not args:
         return output("", pipe)
     else:
-        return output("We're running the new cat!", pipe)
+        output_text = ""
+
+        for file in args.files:
+            try_read = read(file)
+
+            if not try_read.success:
+                if try_read.message == ResultMessages.NOT_FOUND:
+                    output_text += f"{__COMMAND__}: {file}: No such file or directory\n"
+                elif try_read.message == ResultMessages.IS_DIRECTORY:
+                    output_text += f"{__COMMAND__}: {file}: Is a directory\n"
+                elif try_read.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f"{__COMMAND__}: {file}: Permission denied\n"
+            else:
+                # Make sure they're are no extra \n at the end
+                if try_read.data.endswith("\n"):
+                    try_read.data = try_read.data[:-1]
+                output_text += try_read.data
+        return output(output_text, pipe)

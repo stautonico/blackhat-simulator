@@ -67,8 +67,8 @@ def calculate_output(directory, computer, all=False, long=False, nocolor=False):
         else:
             if long:
                 # Find the owner's username by uid and group name by gid
-                username_lookup = computer.find_user(uid=directory.owner)
-                group_lookup = computer.find_group(gid=directory.group_owner)
+                username_lookup = computer.get_user(uid=directory.owner)
+                group_lookup = computer.get_group(gid=directory.group_owner)
 
                 username = username_lookup.data.username if username_lookup.success else "?"
                 group_name = group_lookup.data.name if group_lookup.success else "?"
@@ -85,8 +85,8 @@ def calculate_output(directory, computer, all=False, long=False, nocolor=False):
             else:
                 if long:
                     # Find the owner's username by uid and group name by gid
-                    username_lookup = computer.find_user(uid=file.owner)
-                    group_lookup = computer.find_group(gid=file.group_owner)
+                    username_lookup = computer.get_user(uid=file.owner)
+                    group_lookup = computer.get_group(gid=file.group_owner)
 
                     username = username_lookup.data.username if username_lookup.success else "?"
                     group_name = group_lookup.data.name if group_lookup.success else "?"

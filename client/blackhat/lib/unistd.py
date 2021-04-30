@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 
 from ..fs import FSBaseObject
 from ..helpers import Result
@@ -69,3 +69,24 @@ def chown(pathname: str, owner: int, group: int) -> Result:
 
 def chdir(pathname: str) -> Result:
     return computer.sys_chdir(pathname)
+
+
+def add_user(username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) -> Result:
+    return computer.add_user(username, password, uid, plaintext)
+
+
+def get_user(uid: Optional[int] = None, username: Optional[str] = None) -> Result:
+    return computer.get_user(uid, username)
+
+
+def get_all_users() -> Result:
+    return computer.get_all_users()
+
+
+def add_group(name: str, gid: Optional[int] = None) -> Result:
+    return computer.add_group(name, gid)
+
+
+def add_user_to_group(uid: int, gid: int,
+                      membership_type: Literal["primary", "secondary"] = "secondary") -> Result:
+    return computer.add_user_to_group(uid, gid, membership_type)

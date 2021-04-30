@@ -54,7 +54,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                           success=False)
 
         # Try to get the user from the remote computer
-        user_result = computer_result.data.find_user(username=username)
+        user_result = computer_result.data.get_user(username=username)
 
         # If we found the host, let's try to authenticate with the given host
         for x in range(3):

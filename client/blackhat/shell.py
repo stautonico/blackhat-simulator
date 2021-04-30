@@ -73,10 +73,10 @@ class Shell:
         prompt = prompt.replace("\\T", datetime.now().strftime("%I:%M:%S"))
         prompt = prompt.replace("\\@", datetime.now().strftime("%I:%M:%S %p"))
         prompt = prompt.replace("\\u",
-                                self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+                                self.computers[-1].get_user(uid=self.computers[-1].sys_getuid()).data.username)
         prompt = prompt.replace("\\w", self.computers[-1].sessions[-1].current_dir.pwd())
         prompt = prompt.replace("\\W", self.computers[-1].sessions[-1].current_dir.pwd().split("/")[-1] or "/")
-        prompt = prompt.replace("\\$", "#" if self.computers[-1].get_uid() == 0 else "$")
+        prompt = prompt.replace("\\$", "#" if self.computers[-1].sys_getuid() == 0 else "$")
         prompt = prompt.replace("\\\\", "\\")
 
         prompt = prompt.replace("\\e[0;31m", Fore.RED)

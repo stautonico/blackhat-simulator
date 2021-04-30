@@ -75,7 +75,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.count:
             usernames = []
             for session in computer.sessions:
-                username_result = computer.find_user(session.real_uid)
+                username_result = computer.get_user(session.real_uid)
                 if username_result.success:
                     username = username_result.data.username
                 else:
@@ -91,7 +91,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             output_text += "NAME\tLINE\n"
 
         for session in computer.sessions:
-            username_result = computer.find_user(session.real_uid)
+            username_result = computer.get_user(session.real_uid)
             if username_result.success:
                 username = username_result.data.username
             else:

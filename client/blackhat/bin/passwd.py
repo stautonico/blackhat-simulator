@@ -37,9 +37,9 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
 
         if not args.user:
             # User just typed `passwd` (change current user password)
-            user_to_change = computer.find_user(uid=getuid()).data
+            user_to_change = computer.get_user(uid=getuid()).data
         else:
-            user_to_change = computer.find_user(username=args.user)
+            user_to_change = computer.get_user(username=args.user)
             if not user_to_change.success:
                 return output(f"{__COMMAND__}: user '{args[0]}' does not exist", pipe, success=False)
 
@@ -86,7 +86,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         else:
             computer.change_user_password(user_to_change.uid, password)
 
-        computer.update_user_and_group_files()
+        computer.sync_user_and_group_files()
 
         return output("", pipe)
 

@@ -43,7 +43,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         user = None
 
         # Check if the given user exists
-        user_lookup = computer.find_user(username=to_login_as)
+        user_lookup = computer.get_user(username=to_login_as)
         if user_lookup.success:
             user = user_lookup.data
         else:

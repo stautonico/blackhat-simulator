@@ -11,7 +11,6 @@ from .helpers import Result, ResultMessages
 
 event_types = Literal["read", "write", "move", "change_perm", "change_owner", "delete"]
 
-
 class FSBaseObject:
     def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int) -> None:
         """
@@ -71,18 +70,18 @@ class FSBaseObject:
             Result: A `Result` object with the `success` flag set accordingly
         """
         # If we"re root (UID 0), return True because root has all permissions
-        if computer.get_uid() == 0:
+        if computer.sys_getuid() == 0:
             return Result(success=True)
         # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
             return Result(success=True)
 
         if "group" in self.permissions[perm]:
-            if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
+            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
                 return Result(success=True)
 
         if "owner" in self.permissions[perm]:
-            if self.owner == computer.get_uid():
+            if self.owner == computer.sys_getuid():
                 return Result(success=True)
 
         # No permission
@@ -99,9 +98,9 @@ class FSBaseObject:
             Result: A `Result` object with the `success` flag set accordingly
         """
         # Get the list of user's groups
-        groups = computer.find_user_groups(computer.get_uid()).data
+        groups = computer.get_user_groups(computer.sys_getuid()).data
 
-        if self.owner == computer.get_uid() or self.group_owner in groups:
+        if self.owner == computer.sys_getuid() or self.group_owner in groups:
             return Result(success=True)
         else:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
@@ -119,9 +118,9 @@ class FSBaseObject:
         Returns:
             Result: A `Result` with the `success` flag set accordingly
         """
-        caller_groups = computer.find_user_groups(computer.get_uid()).data
+        caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we're root
-        if computer.get_uid() == self.owner or self.group_owner in caller_groups or computer.get_uid() == 0:
+        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won't work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
@@ -130,7 +129,7 @@ class FSBaseObject:
                 # Same thing with uid 0
                 if new_user_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_user(uid=new_user_owner).success:
+                    if computer.get_user(uid=new_user_owner).success:
                         self.owner = new_user_owner
                     else:
                         return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -139,7 +138,7 @@ class FSBaseObject:
                 # Same thing with gid 0
                 if new_group_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_group(gid=new_group_owner).success:
+                    if computer.get_group(gid=new_group_owner).success:
                         self.group_owner = new_group_owner
                     else:
                         return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -531,12 +530,12 @@ class StandardFS:
                         return
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # If we don't find the user, that means we added a new user
                     if not user_lookup.success:
                         # Make sure no user has the uid
-                        if not self.computer.find_user(uid=uid).success:
+                        if not self.computer.get_user(uid=uid).success:
                             # Add the user
                             self.computer.add_user(username, password, uid, plaintext=False)
                             self.computer.add_group(name=username, gid=primary_gid)
@@ -560,15 +559,15 @@ class StandardFS:
                         # 1. Make sure the new GID exists
                         # 2. Remove the user's old primary gid membership
                         # 3. Add a the user to the new gid as primary
-                        user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+                        user_primary_gid = self.computer.get_user_primary_group(user.uid).data[0]
 
                         if user_primary_gid != primary_gid:
-                            if self.computer.find_group(gid=primary_gid).success:
+                            if self.computer.get_group(gid=primary_gid).success:
                                 self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
                                 self.computer.add_user_to_group(user.uid, primary_gid, "primary")
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         def update_shadow(file):
             content = file.content.split("\n")
@@ -580,7 +579,7 @@ class StandardFS:
                     username, password = subitems
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # We have a user, now lets check if any of the data has changed
                     user = user_lookup.data
@@ -592,7 +591,7 @@ class StandardFS:
                             user.password = password
 
                 # Will automatically remove incorrect changes
-                self.computer.update_user_and_group_files()
+                self.computer.sync_user_and_group_files()
 
         def update_group(file):
             content = file.content.split("\n")
@@ -609,12 +608,12 @@ class StandardFS:
                         return
 
                     # Now we want to get the group by group name
-                    group_lookup = self.computer.find_group(name=group_name)
+                    group_lookup = self.computer.get_group(name=group_name)
 
                     # If we don't find the user, that means we added a new user
                     if not group_lookup.success:
                         # Make sure no group has the gid
-                        if not self.computer.find_group(gid=gid).success:
+                        if not self.computer.get_group(gid=gid).success:
                             # Add the group
                             self.computer.add_group(group_name, gid)
                             # TODO: Add users to the group by last param
@@ -624,7 +623,7 @@ class StandardFS:
                         # TODO: Add changes here
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         etc_dir: Directory = self.files.find("etc")
         # Create the /etc/passwd file
@@ -779,26 +778,26 @@ class StandardFS:
             return Result(success=True, data=self.files)
 
         if pathname == ".":
-            return Result(success=True, data=self.computer.get_pwd())
+            return Result(success=True, data=self.computer.sys_getcwd())
 
         if pathname == "..":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
-            if not self.computer.get_pwd().parent:
+            if not self.computer.sys_getcwd().parent:
                 return Result(success=True, data=self.files)
             else:
-                return Result(success=True, data=self.computer.get_pwd().parent)
+                return Result(success=True, data=self.computer.sys_getcwd().parent)
 
         if pathname == "...":
             # Check if the directory has a parent
             # If it doesn't, we can assume that we're at /
             # In the case of /, just return /
             # And then do it again (go back twice)0
-            if not self.computer.get_pwd().parent:
+            if not self.computer.sys_getcwd().parent:
                 return Result(success=True, data=self.computer.fs.files)
             else:
-                current_dir = self.computer.get_pwd().parent
+                current_dir = self.computer.sys_getcwd().parent
                 if current_dir.parent:
                     return Result(success=True, data=current_dir.parent)
                 else:
@@ -813,7 +812,7 @@ class StandardFS:
             current_dir = self.files
         else:
             # Relative (based on current dir)
-            current_dir = self.computer.get_pwd()
+            current_dir = self.computer.sys_getcwd()
 
         # Filter out garbage
         while "" in pathname:

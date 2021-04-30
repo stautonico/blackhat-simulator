@@ -30,7 +30,7 @@ def init():
 
     computer.sessions.append(session)
 
-    computer.update_user_and_group_files()
+    computer.sync_user_and_group_files()
 
     computer.run_current_user_shellrc()
     computer.run_command("cd", ["~"], False)

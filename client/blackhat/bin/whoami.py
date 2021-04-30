@@ -67,7 +67,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        lookup_result: Result = computer.find_user(getuid())
+        lookup_result: Result = computer.get_user(getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)

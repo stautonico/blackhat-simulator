@@ -1,10 +1,10 @@
 from getpass import getpass
 
-from ..computer import Computer
-from ..fs import Directory
-from ..helpers import Result, ResultMessages
-from ..lib.input import ArgParser
-from ..lib.output import output
+from ...computer import Computer
+from ...fs import Directory
+from ...helpers import Result, ResultMessages
+from ...lib.input import ArgParser
+from ...lib.output import output
 
 __COMMAND__ = "adduser"
 __VERSION__ = "1.1"
@@ -34,7 +34,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         return output("", pipe)
     else:
 
-        if computer.find_user(username=args.username).success:
+        if computer.get_user(username=args.username).success:
             return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False,
                           success_message=ResultMessages.ALREADY_EXISTS)
 
@@ -79,8 +79,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         # Find the user object and its its group to the new group
         computer.add_user_to_group(user_result.data, group_result.data, membership_type="primary")
 
-        update_passwd_result = computer.update_user_and_group_files()
-        update_group_result = computer.update_user_and_group_files()
+        update_passwd_result = computer.sync_user_and_group_files()
+        update_group_result = computer.sync_user_and_group_files()
 
         if not update_passwd_result.success:
             return output("passwd: Failed to update password", pipe, success=False)

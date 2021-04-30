@@ -32,10 +32,10 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(create_duplicate_user_result, expected_create_duplicate_user_result)
 
         # Now confirm that the user was actually added
-        find_user_result = self.computer.find_user(username="testuser")
-        expected_find_user_result = Result(success=True, message=None,
+        get_user_result = self.computer.get_user(username="testuser")
+        expected_get_user_result = Result(success=True, message=None,
                                                   data=User(1001, "testuser", md5("password".encode()).hexdigest()))
-        self.assertEqual(find_user_result, expected_find_user_result)
+        self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
         self.computer.run_command("base32", ["--version"], True)

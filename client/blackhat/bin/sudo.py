@@ -30,7 +30,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = computer.find_user(uid=getuid())
+    user_lookup = computer.get_user(uid=getuid())
 
     if user_lookup.success:
         username = user_lookup.data.username
@@ -46,7 +46,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             args.remove(user_run_as)
 
             # Check if the given user exists
-            user_lookup = computer.find_user(username=user_run_as)
+            user_lookup = computer.get_user(username=user_run_as)
 
             if not user_lookup.success:
                 return output(f"{__COMMAND__}: unknown user: {user_run_as}", pipe, success=False,
@@ -58,7 +58,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                           success_message=ResultMessages.MISSING_ARGUMENT)
 
     else:
-        user = computer.find_user(uid=0).data
+        user = computer.get_user(uid=0).data
 
     # We need to authenticate as that user before we can run any commands
     for x in range(3):
@@ -67,7 +67,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         # Encode the password
         password = md5(password.encode()).hexdigest()
 
-        current_user = computer.find_user(uid=getuid()).data
+        current_user = computer.get_user(uid=getuid()).data
         if password == current_user.password:
 
             # Now lets isolate the record regarding this `username`

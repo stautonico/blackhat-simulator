@@ -12,7 +12,7 @@ from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
-from .lib import unistd, stdlib
+from .lib import unistd, stdlib, dirent
 from .lib.sys import time, stat
 from .services.service import Service
 from .session import Session
@@ -83,7 +83,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib]
+        libs = [unistd, time, stat, stdlib, dirent]
 
         for lib in libs:
             lib.update(self)
@@ -144,7 +144,7 @@ class Computer:
 
         for user in self.get_all_users().data:
             # Find the "primary" group
-            primary_group = self.find_user_primary_group(user.uid)
+            primary_group = self.get_user_primary_group(user.uid)
             if primary_group.success:
                 if len(primary_group.data) > 0:
                     primary_group = primary_group.data[0]
@@ -157,10 +157,10 @@ class Computer:
             shadow_content += f"{user.username}:{user.password}\n"
 
         for group in self.get_all_groups().data:
-            uids = self.find_users_in_group(group.gid).data
+            uids = self.get_users_in_group(group.gid).data
             usernames = ""
             for uid in uids:
-                user_lookup = self.find_user(uid=uid[0])
+                user_lookup = self.get_user(uid=uid[0])
                 usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
 
             usernames = usernames[:-1]
@@ -250,7 +250,7 @@ class Computer:
                 module = importlib.import_module(f"blackhat.bin.{command}")
             else:
                 module = importlib.import_module(f"blackhat.bin.{command}.{to_run}")
-            response = module.main(self, args, pipe)
+            response = module.main(args, pipe)
             if os.getenv("DEBUGMODE") == "false":
                 self.save()
 
@@ -274,6 +274,10 @@ class Computer:
                 print(e)
                 return Result(success=False, message=ResultMessages.GENERIC)
 
+    #################
+    # User + Groups #
+    #################
+
     def add_user(self, username: str, password: str, uid: Optional[int] = None, plaintext=True) -> Result:
         """
         Add a new user to the system.
@@ -288,7 +292,7 @@ class Computer:
         Returns:
             Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
         """
-        if self.find_user(username=username).success:
+        if self.get_user(username=username).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         # new_user = User(username)
@@ -297,7 +301,7 @@ class Computer:
         # Manually specific UID
         if uid:
             # Check if a user with the given UID already exists
-            if self.find_user(uid=uid).success:
+            if self.get_user(uid=uid).success:
                 return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
             else:
                 next_uid = uid
@@ -314,6 +318,11 @@ class Computer:
                     next_uid = 1000
                 else:
                     next_uid = last_uid + 1
+                    user_with_next_uid = self.get_user(uid=next_uid)
+
+                    while user_with_next_uid.success:
+                        next_uid += 1
+                        user_with_next_uid = self.get_user(uid=next_uid)
 
         # Hash the password before saving to the database
         hashed_password = md5(password.encode()).hexdigest() if plaintext else password
@@ -335,7 +344,7 @@ class Computer:
         Returns:
             Result: A `Result` instance with the `success` flag set appropriately.
         """
-        if self.find_user(username=username).success:
+        if self.get_user(username=username).success:
             self.database.execute("DELETE FROM blackhat_user WHERE computer_id=? and username=?", (self.id, username))
             self.connection.commit()
             return Result(success=True)
@@ -355,7 +364,7 @@ class Computer:
             Result: A `Result` with the `success` flag set accordingly.
         """
         # Double check that the user with the given UID exists
-        lookup_user = self.find_user(uid=uid)
+        lookup_user = self.get_user(uid=uid)
         if not lookup_user.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -380,12 +389,12 @@ class Computer:
             Result: A `Result` with the `success` flag set accordingly.
         """
         # Double check that the user with the given UID exists
-        lookup_user = self.find_user(uid=uid)
+        lookup_user = self.get_user(uid=uid)
         if not lookup_user.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # Make sure that no other user has the given `new_uid`
-        lookup_user = self.find_user(uid=new_uid)
+        lookup_user = self.get_user(uid=new_uid)
         if lookup_user.success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
@@ -420,12 +429,12 @@ class Computer:
         Returns:
             Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
         """
-        if self.find_group(name=name).success:
+        if self.get_group(name=name).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         if gid:
             # Check if a group with the given GID already exists
-            if self.find_group(gid=gid, name=name).success:
+            if self.get_group(gid=gid, name=name).success:
                 return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
             else:
                 next_gid = gid
@@ -459,7 +468,7 @@ class Computer:
         Returns:
             Result: A `Result` instance with the `success` flag set appropriately.
         """
-        if self.find_group(name=name).success:
+        if self.get_group(name=name).success:
             self.database.execute("DELETE FROM blackhat_group WHERE computer_id=? and name=?", (self.id, name))
             self.connection.commit()
             return Result(success=True)
@@ -480,7 +489,7 @@ class Computer:
             Result: A `Result` object with the `success` flag set accordingly
         """
         # Confirm that both user and group exists
-        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+        if self.get_user(uid=uid).success and self.get_group(gid=gid).success:
             self.database.execute(
                 "INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)",
                 (self.id, uid, gid, membership_type))
@@ -489,7 +498,7 @@ class Computer:
         else:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_user_groups(self, uid: int) -> Result:
+    def get_user_groups(self, uid: int) -> Result:
         """
         Get the list of `Group` GID's that the `User` belongs to (by UID)
 
@@ -500,7 +509,7 @@ class Computer:
             Result: A `Result` with the `data` flag containing a list of GIDs
         """
         # Double check if the user exists
-        if not self.find_user(uid=uid).success:
+        if not self.get_user(uid=uid).success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
@@ -508,7 +517,7 @@ class Computer:
                                            (self.id, uid)).fetchall()
             return Result(success=True, data=[x[0] for x in result])
 
-    def find_user_primary_group(self, uid: int) -> Result:
+    def get_user_primary_group(self, uid: int) -> Result:
         """
         Get the `Group` GID's that is the `User`s primary `Group` (by UID)
 
@@ -519,7 +528,7 @@ class Computer:
             Result: A `Result` with the `data` flag containing a list of GIDs
         """
         # Double check if the user exists
-        if not self.find_user(uid=uid).success:
+        if not self.get_user(uid=uid).success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
         else:
             # Ask the database for the GIDs
@@ -528,7 +537,7 @@ class Computer:
                 (self.id, uid, "primary")).fetchone()
             return Result(success=True, data=[x for x in result])
 
-    def find_users_in_group(self, gid: int) -> Result:
+    def get_users_in_group(self, gid: int) -> Result:
         """
         Get a list of user UIDs that are part of the given groups GID
 
@@ -539,7 +548,7 @@ class Computer:
             Result: A `Result` with the `data` flag containing a list of UIDs
         """
         # Double check if the group exists
-        if not self.find_group(gid=gid).success:
+        if not self.get_group(gid=gid).success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
         # Ask the database for the UIDs
         result = self.database.execute(
@@ -560,7 +569,7 @@ class Computer:
             Result: A `Result` object with the `success` flag set accordingly
         """
         # Confirm that both user and group exists
-        if self.find_user(uid=uid).success and self.find_group(gid=gid).success:
+        if self.get_user(uid=uid).success and self.get_group(gid=gid).success:
             self.database.execute("DELETE FROM group_membership WHERE computer_id=? AND user_uid=? AND group_gid=?",
                                   (self.id, uid, gid))
             self.connection.commit()
@@ -568,7 +577,7 @@ class Computer:
         else:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    def find_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> Result:
+    def get_user(self, uid: Optional[int] = None, username: Optional[str] = None) -> Result:
         """
         Find a user in the database by UID or username
         Args:
@@ -591,7 +600,7 @@ class Computer:
                                     room_number=result[5],
                                     work_phone=result[6], home_phone=result[7], other=result[8]))
 
-    def find_group(self, gid: Optional[int] = None, name: Optional[str] = None) -> Result:
+    def get_group(self, gid: Optional[int] = None, name: Optional[str] = None) -> Result:
         """
         Find a group in the database by GID or name or both
         Args:
@@ -691,7 +700,7 @@ class Computer:
         Returns:
             None
         """
-        current_username = self.find_user(self.sys_getuid()).data.username
+        current_username = self.get_user(self.sys_getuid()).data.username
 
         # Don't check /home/username, check /root for .shellrc
         if self.sys_getuid() == 0:
@@ -838,6 +847,9 @@ class Computer:
         Returns:
             int: UID of the `Computers`'s current user (from most recent session)
         """
+        if len(self.sessions) == 0:
+            return 0
+
         return self.sessions[-1].effective_uid
 
     def sys_setuid(self, uid: int) -> Result:
@@ -1016,7 +1028,7 @@ class Computer:
         if not find_parent.data.check_perm("write", self).success:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
 
-        new_dir = Directory(pathname.split("/")[-1], find_parent.data, owner=self.get_uid(),
+        new_dir = Directory(pathname.split("/")[-1], find_parent.data, owner=self.sys_getuid(),
                             group_owner=self.sys_getgid())
         if not self.sys_chmod(pathname, mode).success:
             # rwxr-xr-x

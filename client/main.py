@@ -135,7 +135,7 @@ if not load_save_success:
         other_comp.services[80] = WebServer(other_comp)
         other_comp.services[22] = SSHServer(other_comp)
 
-        lan2.set_hostname("google.com")
+        lan2.sys_sethostname("google.com")
 
         lan2.services[2222] = SSHServer(lan2)
 
@@ -186,7 +186,7 @@ if not load_save_success:
         # comp.sessions.append(session)
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
-            computer.update_user_and_group_files()
+            computer.sync_user_and_group_files()
 
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
