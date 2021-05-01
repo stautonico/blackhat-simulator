@@ -1,16 +1,17 @@
 from getpass import getpass
 
-from ...helpers import Result, ResultMessages
-from ...lib.dirent import readdir
-from ...lib.input import ArgParser
-from ...lib.output import output
-from ...lib.sys.stat import stat, mkdir
-from ...lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group
+from ..helpers import Result, ResultMessages
+from ..lib.dirent import readdir
+from ..lib.fcntl import creat
+from ..lib.input import ArgParser
+from ..lib.output import output
+from ..lib.sys.stat import stat, mkdir
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown
 
 __COMMAND__ = "adduser"
 __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
-__VERSION__ = "2.0"
+__VERSION__ = "1.0"
 
 
 def parse_args(args=[], doc=False):
@@ -145,22 +146,13 @@ def main(args: list, pipe: bool) -> Result:
         else:
 
             # Copy the contents of /etc/skel to the new users folder
-            # for file in skel_read.data:
-            # TODO: DO this
-            # computer.run_command("cp", [f"/etc/skel/{file.name}", f"/home/{args.username}/{file.name}", "-r"], pipe)
-            #
-            # computer.run_command("chmod", ["a-rwx", f"/home/{args.username}/{file.name}"], pipe)
-            # computer.run_command("chmod", ["u+rwx", f"/home/{args.username}/{file.name}"], pipe)
-            # # # Locate the new file and update the permissions
-            # # TODO: Replace this with the -R flag in chmod (recursive)
-            # new_file_find = computer.fs.find(f"/home/{args.username}/{file.name}")
-            # if new_file_find.success:
-            #     computer.run_command("chmod", ["a-rwx", new_file_find.data.pwd()], pipe=False)
-            #     computer.run_command("chmod", ["u+rwx", new_file_find.data.pwd()], pipe=False)
-            #
-            #     # Change the file's owner (user and group)
-            #     computer.run_command("chown",
-            #                          [f"{args.username}:{args.username}", f"/home/{args.username}/{file.name}"], pipe)
+            for file in skel_read.data:
+                if file.is_directory():
+                    mkdir(f"/home/{args.username}/{file.name}", 0o700)
+                else:
+                    creat(f"/home/{args.username}/{file.name}", 0o700)
+
+                chown(f"/home/{args.username}/{file.name}", next_uid, next_uid)
 
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f"/home/{args.username}/.shellrc")

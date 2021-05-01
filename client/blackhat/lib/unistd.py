@@ -1,7 +1,7 @@
 from typing import Optional, Literal
 
 from ..fs import FSBaseObject
-from ..helpers import Result
+from ..helpers import Result, ResultMessages
 
 computer: Optional["Computer"] = None
 
@@ -72,21 +72,31 @@ def chdir(pathname: str) -> Result:
 
 
 def add_user(username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) -> Result:
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user(username, password, uid, plaintext)
 
 
 def get_user(uid: Optional[int] = None, username: Optional[str] = None) -> Result:
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.get_user(uid, username)
 
 
 def get_all_users() -> Result:
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.get_all_users()
 
 
 def add_group(name: str, gid: Optional[int] = None) -> Result:
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_group(name, gid)
 
 
 def add_user_to_group(uid: int, gid: int,
                       membership_type: Literal["primary", "secondary"] = "secondary") -> Result:
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user_to_group(uid, gid, membership_type)

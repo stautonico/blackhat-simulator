@@ -1,18 +1,19 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import stat
+from ..lib.unistd import read
 
 __COMMAND__ = "man"
 __DESCRIPTION__ = "an interface to the system reference manuals"
 __DESCRIPTION_LONG__ = "man is the system's manual pager.  Each page argument given to man is normally the name of a program, utility or function."
-__VERSION__ = "1.2"
+__VERSION__ = "1.0"
 
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("command")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
@@ -53,25 +54,25 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f"man {__VERSION__} (miscutils)", pipe)
-
-        if not args.command and not args.version:
-            return output(f"What manual page do you want?\nFor example try 'man man'", pipe)
+        if not args.version:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
-        return output(f"", pipe)
+        return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         # Find the manpage from /usr/share/man
-        find_man_result = computer.fs.find(f"/usr/share/man/{args.command}")
+        find_man_result = stat(f"/usr/share/man/{args.command}")
 
         if find_man_result.success:
-            read_result = find_man_result.data.read(computer)
+            read_result = read(f"/usr/share/man/{args.command}")
 
             if read_result.success:
                 return output(read_result.data, pipe)
@@ -79,3 +80,4 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                 return output(f"{__COMMAND__}: {args.command}: Permission denied", pipe, success=False)
         else:
             return output(f"{__COMMAND__}: No manual entry for {args.command}", pipe, success=False)
+

@@ -1,4 +1,3 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
@@ -7,11 +6,12 @@ from ..lib.unistd import getcwd
 __COMMAND__ = "pwd"
 __DESCRIPTION__ = "print name of current/working directory"
 __DESCRIPTION_LONG__ = "Print the full filename of the current working directory."
-__VERSION__ = "1.2"
+__VERSION__ = "1.0"
+
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
@@ -51,12 +51,13 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
-            return output(f"{__COMMAND__}: too many arguments", pipe, success=False)
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
@@ -64,4 +65,6 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
     else:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         return output(getcwd().pwd(), pipe)
+6

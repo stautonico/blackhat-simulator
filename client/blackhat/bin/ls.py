@@ -1,156 +1,99 @@
-from ..computer import Computer
-from ..helpers import ResultMessages, Result
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
-
-from colorama import Fore, Style
+from ..lib.sys.stat import stat
 
 __COMMAND__ = "ls"
-__VERSION__ = "1.1"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
+__VERSION__ = "1.0"
 
-def calculate_permission_string(fileobj):
-    # Permission format
-    # 0 - owner read
-    # 1 - owner write
-    # 2 - owner execute
-    # 3 - group read
-    # 4 - group write
-    # 5 - group execute
-    # 6 - public read
-    # 7 - public write
-    # 8 - public execute
-    permissions = ["-", "-", "-", "-", "-", "-", "-", "-", "-"]
-    # Owner read
-    if "owner" in fileobj.permissions["read"]:
-        permissions[0] = "r"
 
-    # Owner write
-    if "owner" in fileobj.permissions["write"]:
-        permissions[1] = "w"
-
-    # Owner execute
-    if "owner" in fileobj.permissions["execute"]:
-        permissions[2] = "x"
-
-    # Group read
-    if "group" in fileobj.permissions["read"]:
-        permissions[3] = "r"
-
-    # Group write
-    if "group" in fileobj.permissions["write"]:
-        permissions[4] = "w"
-
-    # Group execute
-    if "group" in fileobj.permissions["execute"]:
-        permissions[5] = "x"
-
-    # Public read
-    if "public" in fileobj.permissions["read"]:
-        permissions[6] = "r"
-
-    # Public write
-    if "public" in fileobj.permissions["write"]:
-        permissions[7] = "w"
-
-    # Public execute
-    if "public" in fileobj.permissions["execute"]:
-        permissions[8] = "x"
-
-    return "".join(permissions)
-
-def calculate_output(directory, computer, all=False, long=False, nocolor=False):
-    output_text = ""
-    # Output a file (only show that one thing)
-    if directory.is_file():
-        if directory.name.startswith(".") and not all:
-            return None
-        else:
-            if long:
-                # Find the owner's username by uid and group name by gid
-                username_lookup = computer.get_user(uid=directory.owner)
-                group_lookup = computer.get_group(gid=directory.group_owner)
-
-                username = username_lookup.data.username if username_lookup.success else "?"
-                group_name = group_lookup.data.name if group_lookup.success else "?"
-                if nocolor:
-                    output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n'
-                else:
-                    output_text += f'{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n'
-            else:
-                output_text += directory.name
-    else:
-        for file in directory.files.values():
-            if file.name.startswith(".") and not all:
-                pass
-            else:
-                if long:
-                    # Find the owner's username by uid and group name by gid
-                    username_lookup = computer.get_user(uid=file.owner)
-                    group_lookup = computer.get_group(gid=file.group_owner)
-
-                    username = username_lookup.data.username if username_lookup.success else "?"
-                    group_name = group_lookup.data.name if group_lookup.success else "?"
-
-                    if file.is_file():
-                        output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n'
-                    else:
-                        if nocolor:
-                            output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n'
-                        else:
-                            output_text += f'{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n'
-                else:
-                    if file.is_file():
-                        output_text += f"{file.name} "
-                    else:
-                        if nocolor:
-                            output_text += f"{file.name} "
-                        else:
-                            output_text += f"{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} "
-    return output_text
-
-def main(computer: Computer, args: list, pipe: bool) -> Result:
-    """
-    # TODO: Add docstring for manpage
-    """
-
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument("files", nargs="+", default=".")
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
+    parser.add_argument("files", nargs="*", default=".")
     parser.add_argument("-a", dest="all", action="store_true")
     parser.add_argument("-l", dest="long", action="store_true")
     parser.add_argument("--no-color", dest="nocolor", action="store_true")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            elif item.nargs == "+":
+                SYNOPSIS += f"[{item.dest.upper()}]... "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -> Result:
+    args, parser = parse_args(args)
+
     if parser.error_message:
-        if args.version:
-            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+        if not args.version:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         output_text = ""
         if len(args.files) > 0:
 
             for file in args.files:
 
-                response = computer.fs.find(file)
+                response = stat(file)
 
                 if response.success:
                     if len(args.files) > 1:
-                        if response.data.is_directory():
+                        if not response.data.st_isfile:
                             output_text += f"{file}: \n"
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + "\n\n"
+                    # TODO: Calculate output
+                    # output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + "\n\n"
                 else:
                     output_text += f"cannot access '{file}': No such file or directory\n\n"
 
         # No file args were specified (so print the local dir)
         else:
-            response = computer.fs.find(".")
+            response = stat(".")
 
             if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
+                # TODO: Calcualte output
+                pass
+                # output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
             else:
                 return output("Error", pipe, success=False, success_message=ResultMessages.NOT_FOUND)
 

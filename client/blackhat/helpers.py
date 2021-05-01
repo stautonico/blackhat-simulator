@@ -91,3 +91,18 @@ class stat_struct:
         # Access: Read
         # Modified: Write (content)
         # Change: Change metadata (perms)
+
+    def __str__(self):
+        output = "{\n"
+        output += f"    st_isfile: {self.st_isfile}\n"
+        output += f"    st_mode: {self.st_mode}\n"
+        output += f"    st_nlink: {self.st_nlink}\n"
+        output += f"    st_uid: {self.st_uid}\n"
+        output += f"    st_gid: {self.st_gid}\n"
+        output += f"    st_size: {self.st_size}\n"
+        output += f"    st_atime: {self.st_atime}\n"
+        output += f"    st_mtime: {self.st_mtime}\n"
+        output += f"    st_ctime: {self.st_ctime}\n"
+        output += f"    st_path: {self.st_path}\n"
+        output += "}"
+        return output

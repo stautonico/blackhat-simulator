@@ -1,11 +1,11 @@
-from ...computer import Computer
-from ...helpers import Result, ResultMessages
-from ...lib.input import ArgParser
-from ...lib.output import output
-from ...lib.unistd import read
+from ..computer import Computer
+from ..helpers import Result, ResultMessages
+from ..lib.input import ArgParser
+from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = "cat"
-__VERSION__ = "2.0"
+__VERSION__ = "1=2.0"
 
 
 def main(args: list, pipe: bool) -> Result:

@@ -11,9 +11,9 @@
 
 ## Libraries
 ### stdlib.h
-- [ ] getenv
-- [ ] setenv
-- [ ] unsetenv
+- [x] getenv
+- [x] setenv
+- [x] unsetenv
 
 
 ## Binaries

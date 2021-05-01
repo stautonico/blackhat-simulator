@@ -12,7 +12,7 @@ from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
-from .lib import unistd, stdlib, dirent
+from .lib import unistd, stdlib, dirent, fcntl
 from .lib.sys import time, stat
 from .services.service import Service
 from .session import Session
@@ -83,7 +83,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl]
 
         for lib in libs:
             lib.update(self)
@@ -193,14 +193,12 @@ class Computer:
     def run_command(self, command: str, args: Union[str, List[str], None], pipe: bool) -> Result:
         """
         Runs a system binary or an external binary
-
         Args:
             command (str): The command or binary to run
             args (list): A list of arguments passed to the command or binary
             pipe (bool): If a pipe was used (used for routing input/output)
-
         Returns:
-            Result: A `Result` object that contains a success status and some response data (changed on a case-by-case basis)
+            SysCallStatus: A `SysCallStatus` object that contains a success status and some response data (changed on a case-by-case basis)
         """
         # The way that the path works is that if there are 2 binaries with the same name in 2 different directories,
         # The one that matches first in the path gets run
@@ -226,53 +224,38 @@ class Computer:
             print(f"{command}: command not found")
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
+        exists = False
+
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
-                # Now we have to decide which version to run (for now, we'll just run the newest)
-                # but in the future, we'll run according to whats installed on the system
-                try:
-                    all_versions = [float(x.replace(".py", "").replace(command, "")[1:].replace("_", ".")) for x in
-                                    os.listdir(f"blackhat/bin/{command}")
-                                    if x != "__init__.py" and x != "__pycache__"]
-                    # Now we need to decide which is the newer version
-                    newest = max(all_versions)
-                    to_run = f"{command}_{str(newest).replace('.', '_')}"
-
-                except Exception as e:
-                    to_run = None
+                to_run = True
                 break
         else:
             print(f"{command}: command not found")
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         try:
-            if not to_run:
-                module = importlib.import_module(f"blackhat.bin.{command}")
-            else:
-                module = importlib.import_module(f"blackhat.bin.{command}.{to_run}")
-            response = module.main(args, pipe)
-            if os.getenv("DEBUGMODE") == "false":
-                self.save()
+            module = importlib.import_module(f"blackhat.bin.{command}")
 
-            return response
-        except ImportError as e:
-            print(e)
+        except ImportError:
             try:
-                if not to_run:
-                    module = importlib.import_module(f"blackhat.bin.installable.{command}")
-                else:
-                    module = importlib.import_module(f"blackhat.bin.installable.{command}.{to_run}")
-                response = module.main(self, args, pipe)
-                # After ending a process, we need to reset the uid and gid
-                self.sessions[-1].effective_uid = self.sessions[-1].real_uid
-                if os.getenv("DEBUGMODE") == "false":
-                    self.save()
-
-                return response
-            except ImportError as e:
+                module = importlib.import_module(f"blackhat.bin.installable.{command}")
+            except ImportError:
                 print(f"There was an error when running command: {command}")
-                print(e)
                 return Result(success=False, message=ResultMessages.GENERIC)
+
+        try:
+            response = module.main(args, pipe)
+
+        except Exception:
+            print(f"{command}: Segmentation violation")
+            return Result(success=False, message=ResultMessages.GENERIC)
+
+        self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+        if os.getenv("DEBUGMODE") == "false":
+            self.save()
+
+        return response
 
     #################
     # User + Groups #
@@ -692,6 +675,23 @@ class Computer:
         else:
             return self.sessions[-1].env.get(key)
 
+    def set_env(self, key: str, value: str) -> Result:
+        """
+        Set an environment variable to the current session
+
+        Args:
+            key (str): The env var to set
+            value (str): The value of the new var to set
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
+        if len(self.sessions) == 0:
+            return Result(success=False, message=ResultMessages.GENERIC)
+
+        self.sessions[-1].env[key] = value
+        return Result(success=True)
+
     def run_current_user_shellrc(self):
         """
         Run the .shellrc file in the current user's home folder (/home/<USERNAME>/.shellrc)
@@ -831,12 +831,15 @@ class Computer:
         find_file = self.fs.find(pathname)
 
         if not find_file.success:
-            return Result(success=False)
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # We need executable permissions to cd (???)
         check_perm = find_file.data.check_perm("execute", self)
-        if not check_perm.success or self.sys_getuid() != 0:
-            return Result(success=False)
+        if not check_perm.success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        if find_file.data.is_file():
+            return Result(success=False, message=ResultMessages.IS_FILE)
 
         self.sessions[-1].current_dir = find_file.data
         return Result(success=True)
@@ -965,6 +968,9 @@ class Computer:
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
+        if not find_file.data.check_perm("read", self).success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
         file = find_file.data
 
         is_file = file.is_file()
@@ -1072,6 +1078,33 @@ class Computer:
                     perms[perm_scope].append(scope)
 
         find_file.data.permissions = perms
+        return Result(success=True)
+
+    def sys_creat(self, pathname: str, mode: int) -> Result:
+        # Try to resolve the path
+        find_file = self.fs.find(pathname)
+
+        if find_file.success:
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
+
+        # Make sure we have write permissions on the parent dir
+        parent_path = "/".join(pathname.split("/")[:-1])
+
+        # Just in case
+        find_parent = self.fs.find(parent_path)
+
+        # Sanity check
+        if not find_parent.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        # We need write permissions on the parent
+        if not find_parent.data.check_perm("write", self).success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        new_file = File(pathname.split("/")[-1], "", find_parent.data, self.sys_getuid(), self.sys_getgid())
+        self.sys_chmod(pathname, mode)
+        find_parent.data.add_file(new_file)
+
         return Result(success=True)
 
 

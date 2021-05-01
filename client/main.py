@@ -175,8 +175,8 @@ if not load_save_success:
         # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it
         # This has to happen after we add our apt server to /etc/apt/sources.list and after the network is fully inited
         # but before we remove our temporary root session
-        comp.run_command("apt", ["install", "nmap"], False)
-        comp.run_command("apt", ["install", "john"], False)
+        # comp.run_command("apt", ["install", "nmap"], False)
+        # comp.run_command("apt", ["install", "john"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
