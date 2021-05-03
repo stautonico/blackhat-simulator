@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import gethostname
 
 __COMMAND__ = "uname"
 __DESCRIPTION__ = "print system information"
@@ -66,7 +66,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -83,7 +83,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
 
         uname = SimpleNamespace(**{
             "kernel_name": "Linux",
-            "nodename": computer.hostname,
+            "nodename": gethostname(),
             "kernel_release": "1.1",
             "kernel_version": "v1",
             "machine": "x86_64",

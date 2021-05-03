@@ -71,6 +71,8 @@ def chdir(pathname: str) -> Result:
     return computer.sys_chdir(pathname)
 
 
+# TODO: Replace the `get_` functions with something related to pwd.h
+
 def add_user(username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) -> Result:
     if computer.sys_getuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
@@ -78,14 +80,10 @@ def add_user(username: str, password: str, uid: Optional[int] = None, plaintext:
 
 
 def get_user(uid: Optional[int] = None, username: Optional[str] = None) -> Result:
-    if computer.sys_getuid() != 0:
-        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.get_user(uid, username)
 
 
 def get_all_users() -> Result:
-    if computer.sys_getuid() != 0:
-        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.get_all_users()
 
 
@@ -95,8 +93,20 @@ def add_group(name: str, gid: Optional[int] = None) -> Result:
     return computer.add_group(name, gid)
 
 
+def get_group(gid: Optional[int] = None, name: Optional[str] = None) -> Result:
+    return computer.get_group(gid, name)
+
+
 def add_user_to_group(uid: int, gid: int,
                       membership_type: Literal["primary", "secondary"] = "secondary") -> Result:
     if computer.sys_getuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user_to_group(uid, gid, membership_type)
+
+
+def get_user_primary_group(uid: int) -> Result:
+    return computer.get_user_primary_group(uid)
+
+
+def get_user_groups(uid: int) -> Result:
+    return computer.get_user_groups(uid)

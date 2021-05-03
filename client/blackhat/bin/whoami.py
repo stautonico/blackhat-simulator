@@ -1,8 +1,7 @@
-from ..computer import Computer
 from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
+from ..lib.unistd import getuid, get_user
 
 __COMMAND__ = "whoami"
 __DESCRIPTION__ = "print effective userid"
@@ -51,7 +50,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -67,7 +66,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        lookup_result: Result = computer.get_user(getuid())
+        lookup_result: Result = get_user(uid=getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)

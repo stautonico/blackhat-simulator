@@ -1,3 +1,4 @@
+import datetime
 import importlib
 import os
 import sys
@@ -10,6 +11,7 @@ from colorama import Style
 from .helpers import Result, ResultMessages
 
 event_types = Literal["read", "write", "move", "change_perm", "change_owner", "delete"]
+
 
 class FSBaseObject:
     def __init__(self, name: str, parent: Optional["Directory"], owner: int, group_owner: int) -> None:
@@ -192,7 +194,7 @@ class FSBaseObject:
             else:
                 return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def add_event_listener(self, event: event_types, function: Callable):
+    def add_event_listener(self, event: event_types, function: Callable, when: Literal["before", "after"] = "after"):
         """
         Bind a function to run whenever a given event fires.
         A `FSBaseObject` can only have one function per event type.
@@ -209,6 +211,7 @@ class FSBaseObject:
                 <li>delete - Before a file is deleted</li>
             </ul>
             function: The function/method to be called when the given `event` is fired
+            when (str): When the event is fired (for example, before the read happens, or after)
 
         Returns:
              Result: A `Result` with the `success` flag set accordingly.
@@ -445,12 +448,15 @@ class StandardFS:
             None
         """
         # Setup the directory structure in the file system (Unix FHS)
-        for dir in ["bin", "etc", "home", "lib", "root", "tmp", "usr", "var"]:
+        for dir in ["bin", "etc", "home", "lib", "root", "proc", "tmp", "usr", "var"]:
             directory = Directory(dir, self.files, 0, 0)
             # Special case for /tmp (read and write by everyone)
             if dir == "tmp":
                 directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group", "public"],
                                          "execute": []}
+            elif dir == "proc":
+                directory.permissions = {"read": ["owner", "group", "public"], "write": [],
+                                         "execute": ["owner", "group", "public"]}
             else:
                 # TODO: Change this to be more accurate
                 # (rwx rw- r--)
@@ -466,6 +472,7 @@ class StandardFS:
         self.setup_etc()
         # self.setup_home()
         # self.setup_lib()
+        self.setup_proc()
         self.setup_root()
         # self.setup_tmp()
         self.setup_usr()
@@ -674,6 +681,29 @@ class StandardFS:
 
         sources_file: File = File("sources.list", "", apt_dir, 0, 0)
         apt_dir.add_file(sources_file)
+
+    def setup_proc(self) -> None:
+        """
+        Sets up:
+        <ul>
+            <li>/proc/uptime - Contains the amount of seconds since the system was booted</li>
+        </ul>
+
+        Returns:
+            None
+        """
+
+        # EventHandler functions for /proc/uptime
+        def update_uptime(file):
+            file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
+
+        proc_dir: Directory = self.files.find("proc")
+        # Create the /etc/passwd file
+        uptime_file: File = File("uptime", f"", proc_dir, 0, 0)
+        uptime_file.permissions = {"read": ["owner", "group", "public"], "write": [], "execute": []}
+
+        uptime_file.add_event_listener("read", update_uptime, when="before")
+        proc_dir.add_file(uptime_file)
 
     def setup_root(self) -> None:
         """

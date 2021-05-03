@@ -1,9 +1,9 @@
 import codecs
 
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import get_env
 
 __COMMAND__ = "echo"
 __DESCRIPTION__ = "display a line of text"
@@ -57,8 +57,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
-    # TODO: Add -e flag
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -77,7 +76,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         # If the output starts with $, read from env vars
         for arg in args.string:
             if arg.startswith("$"):
-                env_var = computer.get_env(arg.replace("$", ""))
+                env_var = get_env(arg.replace("$", ""))
                 if env_var:
                     clean_args.append(env_var)
             else:

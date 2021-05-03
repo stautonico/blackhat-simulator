@@ -1,9 +1,9 @@
-from datetime import datetime
+import datetime
 
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = "uptime"
 __DESCRIPTION__ = "Tell how long the system has been running."
@@ -56,7 +56,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -70,17 +70,23 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"uptime from blackhat sysutils {__VERSION__}", pipe)
 
-        now = datetime.now()
-        total_seconds = (now - computer.boot_time).total_seconds()
+        # TODO: Create special attribute for files in /proc so that they can't be modified
+        # For now, just trust that they'll exist
+        read_uptime = read("/proc/uptime")
+
+        if not read_uptime.success:
+            raise Exception
+
+        total_seconds = int(float(read_uptime.data))
+
+        if args.since:
+            return output((datetime.datetime.now() - datetime.timedelta(seconds=total_seconds)).strftime("%Y-%m-%d %H:%M:%S"), pipe)
 
         seconds = total_seconds % (24 * 3600)
         hours = seconds // 3600
         seconds %= 3600
         minutes = seconds // 60
         seconds %= 60
-
-        if args.since:
-            return output(computer.boot_time.strftime("%Y-%m-%d %H:%M:%S"), pipe)
 
         if args.pretty:
             if hours == 0:

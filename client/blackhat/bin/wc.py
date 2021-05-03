@@ -1,7 +1,8 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
+from ..lib.sys.stat import stat
 
 __COMMAND__ = "wc"
 __DESCRIPTION__ = "print newline, word, and byte counts for each file"
@@ -60,7 +61,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -82,18 +83,17 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
 
         # TODO: Allow cat <FILE> | wc
         for file in args.file:
-            find_file = computer.fs.find(file)
+            find_file = stat(file)
             if not find_file.success:
                 output_text += f"{__COMMAND__}: '{file}': No such file or directory\n"
                 continue
 
-            found_file = find_file.data
 
-            if found_file.is_directory():
+            if not find_file.data.st_isfile:
                 output_text += f"{__COMMAND__}: '{file}': Is a directory\n"
                 continue
 
-            try_read_file = found_file.read(computer)
+            try_read_file = read(file)
 
             if not try_read_file.success:
                 output_text += f"{__COMMAND__}: '{file}': Permission denied\n"

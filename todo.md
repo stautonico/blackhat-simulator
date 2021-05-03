@@ -56,3 +56,4 @@ MAYBE:
 ## Misc
 - [x] Change `SysCallStatus` to something else (maybe `Result` or `Response`)
 - [x] Also change `SysCallMessages` to something else like `ResultMessage` or `ResponseMessage`
+- [ ] Add docstrings to all new functions (lib, syscalls, binaries, etc)

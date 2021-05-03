@@ -35,6 +35,7 @@ class TestIncludedBinaries(unittest.TestCase):
         get_user_result = self.computer.get_user(username="testuser")
         expected_get_user_result = Result(success=True, message=None,
                                                   data=User(1001, "testuser", md5("password".encode()).hexdigest()))
+        print(f"First: {get_user_result} Second: {expected_get_user_result}")
         self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):

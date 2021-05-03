@@ -14,6 +14,7 @@ from .fs import Directory, File, StandardFS, FSBaseObject
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
 from .lib import unistd, stdlib, dirent, fcntl
 from .lib.sys import time, stat
+from .lib.arpa import inet
 from .services.service import Service
 from .session import Session
 from .user import User, Group
@@ -83,7 +84,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent, fcntl]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet]
 
         for lib in libs:
             lib.update(self)
@@ -247,7 +248,8 @@ class Computer:
         try:
             response = module.main(args, pipe)
 
-        except Exception:
+        except Exception as e:
+            print(e)
             print(f"{command}: Segmentation violation")
             return Result(success=False, message=ResultMessages.GENERIC)
 
