@@ -1,3 +1,4 @@
+import os
 from getpass import getpass
 
 from ..helpers import Result, ResultMessages
@@ -147,12 +148,13 @@ def main(args: list, pipe: bool) -> Result:
 
             # Copy the contents of /etc/skel to the new users folder
             for file in skel_read.data:
-                if file.is_directory():
-                    mkdir(f"/home/{args.username}/{file.name}", 0o700)
+                stat_file = stat(os.path.join("/etc/skel", file)).data
+                if stat_file.st_isfile:
+                    creat(f"/home/{args.username}/{file}", 0o700)
                 else:
-                    creat(f"/home/{args.username}/{file.name}", 0o700)
+                    mkdir(f"/home/{args.username}/{file}", 0o700)
 
-                chown(f"/home/{args.username}/{file.name}", next_uid, next_uid)
+                chown(f"/home/{args.username}/{file}", next_uid, next_uid)
 
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f"/home/{args.username}/.shellrc")

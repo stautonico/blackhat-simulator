@@ -1,12 +1,19 @@
-from ..helpers import Result, ResultMessages
+import os
+
+from colorama import Fore, Style
+
+from ..helpers import Result
+from ..helpers import stat_struct
+from ..lib.dirent import readdir
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.sys.stat import stat
+from ..lib.unistd import get_user, get_group
 
 __COMMAND__ = "ls"
 __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
-__VERSION__ = "1.0"
+__VERSION__ = "2.0"
 
 
 def parse_args(args=[], doc=False):
@@ -56,6 +63,53 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
+def calculate_permission_string(perm_octal: int) -> str:
+    perms = {
+        "0": "---",
+        "1": "--x",
+        "2": "-w-",
+        "3": "-wx",
+        "4": "r--",
+        "5": "r-x",
+        "6": "rw-",
+        "7": "rwx"
+    }
+
+    result = ""
+
+    for bit in str(perm_octal):
+        result += perms[bit]
+
+    return result
+
+
+def calculate_output(filename, long=False, nocolor=False):
+    output_text = ""
+
+    find_file_struct = stat(filename)
+
+    if not find_file_struct.success:
+        return ""
+
+    file_struct: stat_struct = find_file_struct.data
+
+    base_filename = filename.split("/")[-1]
+    color = Fore.WHITE if file_struct.st_isfile or nocolor else Fore.LIGHTBLUE_EX
+
+    if long:
+        username_lookup = get_user(uid=file_struct.st_uid)
+        group_lookup = get_group(gid=file_struct.st_gid)
+
+        username = username_lookup.data.username if username_lookup.success else "?"
+        group_name = group_lookup.data.name if group_lookup.success else "?"
+
+        output_text += f'{calculate_permission_string(file_struct.st_mode)} {username} {group_name} {round(file_struct.st_size, 1)}kB {color}{base_filename}{Style.RESET_ALL}\n'
+    else:
+        output_text += f"{color}{base_filename}{Style.RESET_ALL} "
+
+    return output_text
+
+
 def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
@@ -71,35 +125,23 @@ def main(args: list, pipe: bool) -> Result:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
         output_text = ""
-        if len(args.files) > 0:
 
-            for file in args.files:
-
-                response = stat(file)
-
-                if response.success:
-                    if len(args.files) > 1:
-                        if not response.data.st_isfile:
-                            output_text += f"{file}: \n"
-                    # TODO: Calculate output
-                    # output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + "\n\n"
-                else:
-                    output_text += f"cannot access '{file}': No such file or directory\n\n"
+        if len(args.files) > 0 and args.files != ".":
+            to_list = args.files
 
         # No file args were specified (so print the local dir)
         else:
-            response = stat(".")
+            to_list = ["."]
 
-            if response.success:
-                # TODO: Calcualte output
-                pass
-                # output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
-            else:
-                return output("Error", pipe, success=False, success_message=ResultMessages.NOT_FOUND)
+        for file in to_list:
+            # if args.long:
+            read_result = readdir(file)
+
+            for subfile in read_result.data:
+                if args.all or not subfile.startswith("."):
+                    output_text += calculate_output(os.path.join(file, subfile), args.long, args.nocolor)
 
         if not output_text:
             return output("", pipe)
         else:
-
             return output(output_text, pipe)
-

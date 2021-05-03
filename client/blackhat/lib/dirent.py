@@ -32,4 +32,4 @@ def readdir(pathname: str) -> Result:
     if not find_dir.data.check_perm("execute", computer).success:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    return Result(success=True, data=[x for x in find_dir.data.files.values()])
+    return Result(success=True, data=[x.name for x in find_dir.data.files.values()])

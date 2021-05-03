@@ -249,7 +249,8 @@ class Computer:
             response = module.main(args, pipe)
 
         except Exception as e:
-            print(e)
+            import traceback
+            traceback.print_exc()
             print(f"{command}: Segmentation violation")
             return Result(success=False, message=ResultMessages.GENERIC)
 
