@@ -2,7 +2,6 @@ from enum import Enum
 from enum import IntFlag
 from typing import Union
 
-
 class ResultMessages(Enum):
     """
     Enum: Messages regarding the status of a syscall
@@ -106,3 +105,27 @@ class stat_struct:
         output += f"    st_path: {self.st_path}\n"
         output += "}"
         return output
+
+
+class passwd:
+    def __init__(self, username: str, password: str, uid: int, gid: int, gecos: str = None, home_dir: str = None):
+        self.pw_name = username
+        self.pw_passwd = password
+        self.pw_uid = uid
+        self.pw_gid = gid
+        self.pw_gecos = gecos
+        self.pw_dir = home_dir if home_dir else f"/home/{self.pw_name}"
+
+    def __str__(self):
+        output = "{\n"
+        output += f"    pw_name: {self.pw_name}\n"
+        output += f"    pw_passwd: {self.pw_passwd}\n"
+        output += f"    pw_uid: {self.pw_uid}\n"
+        output += f"    pw_gid: {self.pw_gid}\n"
+        output += f"    pw_gecos: {self.pw_gecos}\n"
+        output += f"    pw_dir: {self.pw_dir}\n"
+        output += "}"
+        return output
+
+
+

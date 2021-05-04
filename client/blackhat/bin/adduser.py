@@ -6,7 +6,7 @@ from ..lib.dirent import readdir
 from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.sys.stat import stat, mkdir
+from ..lib.sys.stat import stat, mkdir, chmod
 from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown
 
 __COMMAND__ = "adduser"
@@ -154,7 +154,10 @@ def main(args: list, pipe: bool) -> Result:
                 else:
                     mkdir(f"/home/{args.username}/{file}", 0o700)
 
+
                 chown(f"/home/{args.username}/{file}", next_uid, next_uid)
+
+            chown(f"/home/{args.username}", next_uid, next_uid)
 
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f"/home/{args.username}/.shellrc")

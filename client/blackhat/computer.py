@@ -10,11 +10,11 @@ from secrets import token_hex
 from time import time
 from typing import Optional, Dict, Union, List, Literal
 
-from .fs import Directory, File, StandardFS, FSBaseObject
+from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
-from .lib import unistd, stdlib, dirent, fcntl
-from .lib.sys import time, stat
+from .lib import unistd, stdlib, dirent, fcntl, stdio
 from .lib.arpa import inet
+from .lib.sys import time, stat
 from .services.service import Service
 from .session import Session
 from .user import User, Group
@@ -84,7 +84,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio]
 
         for lib in libs:
             lib.update(self)
@@ -662,7 +662,6 @@ class Computer:
         # Add root to the root group
         self.add_user_to_group(0, 0, membership_type="primary")
 
-    # TODO: Create setenv function for the stdlib method
     def get_env(self, key) -> Optional[str]:
         """
         Get an environment variable from the current session
@@ -1090,6 +1089,9 @@ class Computer:
         if find_file.success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
+        if "/" not in pathname:
+            pathname = "./" + pathname
+
         # Make sure we have write permissions on the parent dir
         parent_path = "/".join(pathname.split("/")[:-1])
 
@@ -1109,6 +1111,63 @@ class Computer:
         find_parent.data.add_file(new_file)
 
         return Result(success=True)
+
+    def sys_rename(self, oldpath: str, newpath: str) -> Result:
+        find_old = self.fs.find(oldpath)
+
+        if not find_old.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+
+        if not find_old.data.check_owner(self).success or self.sys_getuid() != 0:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        copy_result = copy(self, oldpath, newpath)
+
+        if not copy_result.success:
+            return copy_result
+
+        # Rename means move, so delete the original
+        delete_result = self.fs.find(oldpath).data.delete(self)
+
+        if not delete_result.success:
+            return delete_result
+
+        return Result(success=True)
+
+        # src_result = self.fs.find(oldpath)
+        #
+        # if not src_result.success:
+        #     return Result(success=False, message=ResultMessages.NOT_FOUND)
+        #
+        # # Make sure we have proper permissions before copying
+        # if src_result.data.check_perm("read", self).success and src_result.data.check_perm(
+        #         "write", self).success:
+        #     copy_result = copy(self, src_result.data, args.destination, True, args.verbose)
+        #
+        #     if not copy_result.success:
+        #         if copy_result.message == ResultMessages.NOT_FOUND:
+        #             return output(f"{__COMMAND__}: cannot find '{args.destination}': No such file or directory", pipe,
+        #                           success=False)
+        #         elif copy_result.message == ResultMessages.GENERIC:
+        #             return output(f"{__COMMAND__}: invalid destination '{args.destination}'", pipe, success=False)
+        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_READ:
+        #             return output(f"{__COMMAND__}: cannot open '{args.source}' for reading: Permission denied", pipe,
+        #                           success=False)
+        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_WRITE:
+        #             return output(f"{__COMMAND__}: cannot open '{args.destination} for writing: Permission denied",
+        #                           pipe,
+        #                           success=False)
+        #         elif copy_result.message == ResultMessages.ALREADY_EXISTS:
+        #             return output(f"{__COMMAND__}: cannot write '{args.destination}: Directory already exists", pipe,
+        #                           success=False)
+        #     else:
+        #         self.run_command("rm", [args.source, "-r"], pipe)
+        #         if args.verbose:
+        #             print(f"{args.source} -> {args.destination}")
+        #         return output("", pipe)
+        # else:
+        #     return output(f"{__COMMAND__}: cannot open '{args.source}': Permission denied", pipe, success=False)
 
 
 class Router(Computer):

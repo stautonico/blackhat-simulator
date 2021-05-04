@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from ..helpers import Result, ResultMessages
 
@@ -31,5 +31,8 @@ def unsetenv(key: str) -> Result:
     return Result(success=True)
 
 
-def get_env(key: str) -> Optional[str]:
-    return computer.get_env(key)
+def get_env(key: Optional[str] = None) -> Optional[Union[str, dict]]:
+    if key:
+        return computer.get_env(key)
+
+    return computer.sessions[-1].env

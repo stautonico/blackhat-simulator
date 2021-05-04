@@ -1,7 +1,9 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import get_env
+from ..lib.sys.stat import stat
+from ..lib.dirent import readdir
 
 __COMMAND__ = "commands"
 __DESCRIPTION__ = "list all the commands available in the system"
@@ -52,7 +54,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -69,22 +71,23 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         output_text = ""
 
         try:
-            bin_dirs_text = computer.sessions[-1].env.get("PATH").split(":")
+            bin_dirs_text = get_env("PATH").split(":")
             bin_dirs = []
 
             for dir in bin_dirs_text:
-                find_dir = computer.fs.find(dir)
+                find_dir = stat(dir)
                 if find_dir.success:
-                    bin_dirs.append(find_dir.data)
+                    bin_dirs.append(dir)
         except AttributeError:
-            find_bin = computer.fs.find("/bin")
+            find_bin = stat("/bin")
             if find_bin.success:
                 bin_dirs = [find_bin.data]
             else:
                 bin_dirs = []
 
         for dir in bin_dirs:
-            for command in list(dir.files.keys()):
-                output_text += f"{command} "
+            readdir_result = readdir(dir)
+            if readdir_result.success:
+                output_text += " ".join(readdir_result.data)
 
         return output(output_text, pipe)

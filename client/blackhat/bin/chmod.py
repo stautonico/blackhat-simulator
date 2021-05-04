@@ -64,6 +64,7 @@ def parse_characters(chars, current_perms):
     # DATE: 3/15/2021
     # DATE: 3/19/2021
     # DATE: 4/14/2021
+    # DATE: 5/4/2021
     # Now lets apply the new permissions
     if mode == "remove":
         for mode in ["read", "write", "execute"]:

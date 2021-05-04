@@ -437,6 +437,9 @@ class StandardFS:
 
         # The filesystem root (/) (owned by root)
         self.files = Directory("/", None, 0, 0)
+        self.files.permissions = {"read": ["owner", "group", "public"],
+                                  "write": ["owner", "group"],
+                                  "execute": ["owner", "group", "public"]}
 
         self.init()
 
@@ -453,7 +456,7 @@ class StandardFS:
             # Special case for /tmp (read and write by everyone)
             if dir == "tmp":
                 directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group", "public"],
-                                         "execute": []}
+                                         "execute": ["owner", "group", "public"]}
             elif dir == "proc":
                 directory.permissions = {"read": ["owner", "group", "public"], "write": [],
                                          "execute": ["owner", "group", "public"]}
@@ -461,7 +464,7 @@ class StandardFS:
                 # TODO: Change this to be more accurate
                 # (rwx rw- r--)
                 directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group"],
-                                         "execute": ["owner"]}
+                                         "execute": ["owner", "group", "public"]}
 
             self.files.add_file(directory)
 
@@ -656,7 +659,7 @@ class StandardFS:
         for dir in ["Desktop", "Documents", "Downloads", "Music", "Pictures", "Public", "Templates", "Videos"]:
             current_dir = Directory(dir, skel_dir, 0, 0)
             current_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
-                                       "execute": []}
+                                       "execute": ["owner", "group", "public"]}
             skel_dir.add_file(current_dir)
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
@@ -904,3 +907,163 @@ class StandardFS:
                     man_dir.add_file(current_manpage)
                 except AttributeError:
                     continue
+
+
+def copy(computer, src_path: str, dst_path: str) -> Result:
+    find_src = computer.fs.find(src_path)
+
+    if not find_src.success:
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    src = find_src.data
+
+    # Handle file copying
+    if src.is_file():
+        # If the path is in the local dir
+        if "/" not in dst_path:
+            dst_path = "./" + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn't exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split("/")[-1] != to_write.name:
+            new_file_name = dst_path.split("/")[-1]
+            if new_file_name == "":
+                new_file_name = src.name
+        else:
+            new_file_name = src.name
+
+        if to_write.is_file():
+            # If its a file, we're overwriting
+            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
+            # Check read first (split for error messages)
+            if not src.check_perm("read", computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm("write", computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    to_write.write(src.content, computer)
+                    to_write.owner = computer.sys_getuid()
+                    to_write.group_owner = computer.sys_getgid()
+        else:
+            # If we have the parent dir, we need to create a new file
+            if not src.check_perm("read", computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm("write", computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_filename = new_file_name
+                    new_file = File(new_filename, src.content, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_file.events = src.events
+                    to_write.add_file(new_file)
+                    # We have to do this so the permissions work no matter if we're overwriting or not
+                    to_write = new_file
+
+        to_write.handle_event("move")
+        return Result(success=True)
+    # Handle directory copying
+    else:
+        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
+        # If the path is in the local dir
+        if "/" not in dst_path:
+            dst_path = "./" + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn't exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split("/")[-1] != to_write.name:
+            new_file_name = dst_path.split("/")[-1]
+        else:
+            new_file_name = src.name
+
+        if new_file_name not in to_write.files:
+            if not src.check_perm("read", computer):
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm("write", computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_dir = Directory(new_file_name, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_dir.events = to_write.events
+                    to_write.add_file(new_dir)
+                    # Set a temporary write permission no matter what the new dir's permissions were so we can add its children
+                    new_dir.permissions["write"] = ["owner"]
+                    # Go through all the source's files and copy them into the new dir
+                    for file in src.files.values():
+                        response = copy(computer, file, new_dir.pwd())
+
+                        if not response.success:
+                            if response.message == ResultMessages.NOT_ALLOWED_READ:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+                            elif response.message == ResultMessages.NOT_ALLOWED_WRITE:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+        else:
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
+
+        new_dir.handle_event("move")
+        return Result(success=True)
+
+# TODO: Re-write the copy function so its not so shit
+
+
+# def copy(computer, src_path: str, dst_path: str) -> Result:
+#     # Make sure the src exists
+#     find_src = computer.fs.find(src_path)
+#
+#     if "/" not in src_path:
+#         src_path = "./" + src_path
+#
+#     src_filename = src_path.split("/")[-1]
+#
+#     if not find_src.success:
+#         return Result(success=False, message=ResultMessages.NOT_FOUND)
+#
+#     # We need read permissions to copy
+#     if not find_src.data.check_perm("read", computer).success:
+#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+#
+#     if "/" not in dst_path:
+#         dst_path = "/" + dst_path
+#
+#     find_dst = computer.fs.find(dst_path)
+#
+#     if not find_dst.success:
+#         # Try to find the destination file parent folder
+#         find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
+#         if not find_dst.success:
+#             return Result(success=False, message=ResultMessages.NOT_FOUND)
+#
+#     # We need write permissions of the dest
+#     if not find_dst.data.check_perm("write", computer).success:
+#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+#
+#     if find_src.data.is_file():
+#         copy_file = File(src_filename, find_src.data.content, find_dst.data, find_src.data.owner,
+#                          find_src.data.group_owner)
+#     else:
+#         copy_file = Directory(src_filename, find_dst.data, find_src.data.owner,
+#                               find_src.data.group_owner)
+#
+#     find_dst.data.add_file(copy_file)
+#
+#     return Result(success=True)

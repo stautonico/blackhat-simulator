@@ -28,7 +28,7 @@
 - [x] access (check if a file exists or check permissions on a file)
 - [x] getcwd (get pathname of current working directory)
 - [x] chdir (change current directory)
-- [ ] rename (move a file)
+- [~] rename (move a file)
 - [x] mkdir (make a directory)
 - [ ] rmdir (remove a directory)
 - [x] chmod (change directory/file permissons)

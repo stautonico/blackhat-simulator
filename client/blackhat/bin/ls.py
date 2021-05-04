@@ -83,15 +83,8 @@ def calculate_permission_string(perm_octal: int) -> str:
     return result
 
 
-def calculate_output(filename, long=False, nocolor=False):
+def calculate_output(filename, file_struct: stat_struct, long=False, nocolor=False):
     output_text = ""
-
-    find_file_struct = stat(filename)
-
-    if not find_file_struct.success:
-        return ""
-
-    file_struct: stat_struct = find_file_struct.data
 
     base_filename = filename.split("/")[-1]
     color = Fore.WHITE if file_struct.st_isfile or nocolor else Fore.LIGHTBLUE_EX
@@ -134,12 +127,24 @@ def main(args: list, pipe: bool) -> Result:
             to_list = ["."]
 
         for file in to_list:
-            # if args.long:
-            read_result = readdir(file)
+            stat_result = stat(file)
 
-            for subfile in read_result.data:
-                if args.all or not subfile.startswith("."):
-                    output_text += calculate_output(os.path.join(file, subfile), args.long, args.nocolor)
+            if not stat_result.success:
+                output_text += f"{__COMMAND__}: Cannot stat file: {file}\n"
+                continue
+
+            if stat_result.data.st_isfile:
+                output_text += calculate_output(file, stat_result.data, args.long, args.nocolor)
+            else:
+                read_result = readdir(file)
+
+                for subfile in read_result.data:
+                    if args.all or not subfile.startswith("."):
+                        stat_result = stat(file)
+                        if not stat_result.success:
+                            output_text += f"{__COMMAND__}: Cannot stat file: {file}\n"
+                        else:
+                            output_text += calculate_output(subfile, stat_result.data, args.long, args.nocolor)
 
         if not output_text:
             return output("", pipe)

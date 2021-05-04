@@ -1,10 +1,9 @@
 from hashlib import md5
 
-from ..computer import Computer
-from ..fs import File
-from ..helpers import Result
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = "md5sum"
 __DESCRIPTION__ = "compute and check MD5 message digest"
@@ -58,7 +57,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -75,23 +74,22 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         output_text = ""
 
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f"{filename}: No such file or directory\n"
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f"{__COMMAND__}: {filename}: No such file or directory\n"
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f"{__COMMAND__}: {filename}: Permission denied\n"
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
+                    output_text += f"{__COMMAND__}: {filename}: Is a directory\n"
+
+            to_hash = find_file_result.data[:-1] if find_file_result.data.endswith(
+                "\n") and args.zero else find_file_result.data
+            hash = md5(to_hash.encode()).hexdigest()
+            if args.tag:
+                output_text += f"MD5 ({filename}) = {hash}\n"
             else:
-                file: File = find_file_result.data
-                if file.is_directory():
-                    output_text += f"{filename}: Is a directory\n"
-                else:
-                    # We need read perms!
-                    if not file.check_perm("read", computer).success:
-                        output_text += f"{filename}: Permission denied\n"
-                    else:
-                        to_hash = file.content[:-1] if file.content.endswith("\n") and args.zero else file.content
-                        hash = md5(to_hash.encode()).hexdigest()
-                        if args.tag:
-                            output_text += f"MD5 ({filename}) = {hash}\n"
-                        else:
-                            output_text += f"{hash}  {filename}\n"
+                output_text += f"{hash}  {filename}\n"
 
         return output(output_text, pipe)
+

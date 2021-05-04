@@ -1,7 +1,7 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import unsetenv, get_env
 
 __COMMAND__ = "unset"
 __DESCRIPTION__ = "unset values and attributes of variables and functions"
@@ -52,7 +52,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -64,7 +64,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         for arg in args.vars:
             if arg.startswith("$"):
                 arg = arg[1:]
-            if arg in computer.sessions[-1].env.keys():
-                del computer.sessions[-1].env[arg]
+
+            if get_env(arg):
+                unsetenv(arg)
 
         return output("", pipe)

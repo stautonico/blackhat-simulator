@@ -68,15 +68,15 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("cd", ["--version"], True)
         self.computer.run_command("cd", ["--help"], True)
 
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home/steve")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
         self.computer.run_command("cd", [".."], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home")
         self.computer.run_command("cd", ["..."], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/")
         self.computer.run_command("cd", ["/etc/skel/Desktop"], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/etc/skel/Desktop")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/etc/skel/Desktop")
         self.computer.run_command("cd", ["~"], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home/steve")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
 
     def test_chown(self):
         self.computer.run_command("chown", ["--version"], True)
@@ -213,17 +213,24 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(id_result, "steve")
 
     def test_ls(self):
+        import re
         self.computer.run_command("ls", ["--version"], True)
         self.computer.run_command("ls", ["--help"], True)
 
         # In the user's home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command("ls", ["--no-color"], True)
         expected_ls_result = Result(success=True, message=None,
-                                           data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
+                                    data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
 
         ls_result.data = ls_result.data.strip("\n")
 
-        self.assertEqual(ls_result, expected_ls_result)
+        print(ls_result)
+        print(expected_ls_result)
+
+        color_filter = re.compile(r'\x1b[^m]*m')
+        stripped_color = color_filter.sub('', ls_result.data)
+
+        self.assertEqual(stripped_color, expected_ls_result.data)
         # Make sure .shellrc isn't there (as -a isn't specified)
         self.assertNotIn(".shellrc", ls_result.data)
 
@@ -520,4 +527,4 @@ class TestInstallableBinaries(unittest.TestCase):
 
     def setUp(self) -> None:
         self.computer = init()
-        
+
