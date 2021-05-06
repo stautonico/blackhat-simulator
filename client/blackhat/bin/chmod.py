@@ -1,9 +1,11 @@
-from ..computer import Computer
-from ..helpers import Result
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import chmod, stat
 
 __COMMAND__ = "chmod"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.1"
 
 
@@ -87,16 +89,56 @@ def parse_characters(chars, current_perms):
     return True
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
-    """
-    # TODO: Add docstring for manpage
-    """
-    parser = ArgParser(prog=__COMMAND__)
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("umask")
     parser.add_argument("file")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            elif item.nargs == "+":
+                SYNOPSIS += f"[{item.dest.upper()}]... "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -> Result:
+    """
+    # TODO: Add docstring for manpage
+    """
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -110,27 +152,34 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         return output("", pipe)
     else:
         # Try to find the target file
-        find_file_response = computer.fs.find(args.file)
+        find_file_response = stat(args.file)
 
         if not find_file_response.success:
             return output(f"{__COMMAND__}: cannot access '{args.file}': No such file or directory", pipe,
                           success=False)
 
-        file_to_update = find_file_response.data
+        # TODO: Make the ability to use a+rwx to change permissions instead of octals
+        chmod_result = chmod(args.file, int(args.umask))
 
-        # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
+
+        if not chmod_result.success:
+            if chmod_result.message == ResultMessages.NOT_ALLOWED:
+                return output(f"{__COMMAND__}: changing permissions of '{args.file}': Operation not permitted",
+                              pipe,
+                              success=False)
+            else:
+
+                return output(f"{__COMMAND__}: Failed to change permissions of '{args.file}': Generic Error",
+                              pipe,
+                              success=False)
 
         # I can't figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-        if file_to_update.check_owner(computer):
-            new_perms = parse_characters(args.umask, file_to_update.permissions)
-
-            if not new_perms:
-                return output(f"{__COMMAND__}: invalid mode: '{args.umask}'", pipe, success=False)
-
-            # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
-            file_to_update.handle_event("change_perm")
-            return output("", pipe)
-        else:
-            return output(f"{__COMMAND__}: changing permissions of '{args.file}': Operation not permitted",
-                          pipe,
-                          success=False)
+        # if file_to_update.check_owner(computer):
+        #     new_perms = parse_characters(args.umask, file_to_update.permissions)
+        #
+        #     if not new_perms:
+        #         return output(f"{__COMMAND__}: invalid mode: '{args.umask}'", pipe, success=False)
+        #
+        #     # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
+        #     file_to_update.handle_event("change_perm")
+        return output("", pipe)

@@ -6,8 +6,8 @@ from ..lib.dirent import readdir
 from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.sys.stat import stat, mkdir, chmod
-from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown
+from ..lib.sys.stat import stat, mkdir
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid
 
 __COMMAND__ = "adduser"
 __DESCRIPTION__ = ""
@@ -74,6 +74,10 @@ def main(args: list, pipe: bool) -> Result:
     else:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
+        if getuid() != 0:
+            return output(f"{__COMMAND__}: Only root can add new users!", pipe, success=False,
+                          success_message=ResultMessages.NOT_ALLOWED)
 
         if get_user(username=args.username).success:
             return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False,
@@ -153,7 +157,6 @@ def main(args: list, pipe: bool) -> Result:
                     creat(f"/home/{args.username}/{file}", 0o700)
                 else:
                     mkdir(f"/home/{args.username}/{file}", 0o700)
-
 
                 chown(f"/home/{args.username}/{file}", next_uid, next_uid)
 

@@ -3,7 +3,7 @@
 
 
 ## FS
-- [ ] Use (not yet implemented) internal functions to handle the `setup_dir` functions in the `StandardFS.init()` function instead of making them manually (stupid)
+- [ ] Use (not yet implemented) internal functions to handle the `setup_dir` functions in the `StandardFS.init()` function instead of making them manually (stupid) (AKA use sys_mkdir() rather then calling run_command("mkdir", ["folder"]), bc if "mkdir" binary is broken, the system wont "post")
 
 
 ## Users/Groups

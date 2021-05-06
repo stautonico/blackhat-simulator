@@ -1080,6 +1080,7 @@ class Computer:
                     perms[perm_scope].append(scope)
 
         find_file.data.permissions = perms
+        find_file.data.handle_event("change_perm")
         return Result(success=True)
 
     def sys_creat(self, pathname: str, mode: int) -> Result:

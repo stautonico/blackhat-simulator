@@ -1,12 +1,13 @@
 from ..helpers import Result, ResultMessages
+from ..lib.fcntl import copy
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.fcntl import copy
 
 __COMMAND__ = "cp"
 __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.1"
+
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
@@ -55,6 +56,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
+
 def main(args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
@@ -96,30 +98,3 @@ def main(args: list, pipe: bool) -> Result:
                               success=False)
 
         return output("", pipe)
-        # # Make sure we have proper permissions before copying
-        # if src_result.data.check_perm("read", computer).success and src_result.data.check_perm(
-        #         "write", computer).success:
-        #     copy_result = copy(computer, src_result.data, args.destination, True, args.verbose)
-        #
-        #     if not copy_result.success:
-        #         if copy_result.message == ResultMessages.NOT_FOUND:
-        #             return output(f"{__COMMAND__}: cannot find '{args.destination}': No such file or directory", pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.GENERIC:
-        #             return output(f"{__COMMAND__}: invalid destination '{args.destination}'", pipe, success=False)
-        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_READ:
-        #             return output(f"{__COMMAND__}: cannot open '{args.source}' for reading: Permission denied", pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_WRITE:
-        #             return output(f"{__COMMAND__}: cannot open '{args.destination} for writing: Permission denied", pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.ALREADY_EXISTS:
-        #             return output(f"{__COMMAND__}: cannot write '{args.destination}: Directory already exists", pipe,
-        #                           success=False)
-        #     else:
-        #         computer.run_command("rm", [args.source, "-r"], pipe)
-        #         if args.verbose:
-        #             print(f"{args.source} -> {args.destination}")
-        #         return output("", pipe)
-        # else:
-        #     return output(f"{__COMMAND__}: cannot open '{args.source}': Permission denied", pipe, success=False)

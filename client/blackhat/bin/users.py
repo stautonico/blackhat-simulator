@@ -1,6 +1,7 @@
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import get_sessions, get_user
 
 __COMMAND__ = "users"
 __DESCRIPTION__ = "print the user names of users currently logged in to the current host"
@@ -67,8 +68,8 @@ def main(args: list, pipe: bool) -> Result:
 
         output_text = ""
 
-        for session in computer.sessions:
-            username_result = computer.get_user(session.real_uid)
+        for session in get_sessions().data:
+            username_result = get_user(session.real_uid)
             if username_result.success:
                 username = username_result.data.username
             else:

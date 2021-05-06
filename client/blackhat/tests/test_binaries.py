@@ -22,11 +22,18 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("adduser", ["--version"], True)
         self.computer.run_command("adduser", ["--help"], True)
 
+        fail_bc_not_root_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
+        expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED, data="adduser: Only root can add new users!\n")
+
+        self.assertEqual(fail_bc_not_root_result, expected_fail_bc_not_root_result)
+
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+
         create_new_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
         expected_create_new_user_result = Result(success=True, message=None, data=None)
         create_duplicate_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
         expected_create_duplicate_user_result = Result(success=False, message=ResultMessages.ALREADY_EXISTS,
-                                                              data="adduser: The user 'testuser' already exists.\n")
+                                                       data="adduser: The user 'testuser' already exists.\n")
 
         self.assertEqual(create_new_user_result, expected_create_new_user_result)
         self.assertEqual(create_duplicate_user_result, expected_create_duplicate_user_result)
@@ -34,8 +41,7 @@ class TestIncludedBinaries(unittest.TestCase):
         # Now confirm that the user was actually added
         get_user_result = self.computer.get_user(username="testuser")
         expected_get_user_result = Result(success=True, message=None,
-                                                  data=User(1001, "testuser", md5("password".encode()).hexdigest()))
-        print(f"First: {get_user_result} Second: {expected_get_user_result}")
+                                          data=User(1001, "testuser", md5("password".encode()).hexdigest()))
         self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
