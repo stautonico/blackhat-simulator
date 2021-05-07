@@ -1,7 +1,7 @@
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import exit as stdlib_exit
 
 __COMMAND__ = "exit"
 __DESCRIPTION__ = "cause the shell to exit"
@@ -54,7 +54,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -68,21 +68,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        if args.force:
-            if len(computer.shell.computers) == 1:
-                computer.save()
-                exit(0)
-            else:
-                computer.sessions = []
-                computer.shell.computers.pop()
+        stdlib_exit(args.force)
 
-        if len(computer.shell.computers) == 1:
-            if len(computer.sessions) == 1:
-                computer.save()
-                exit(0)
-            else:
-                computer.sessions.pop()
-        else:
-            computer.shell.computers.pop()
+        return output("", pipe)
 
-    return output("", pipe)
+        

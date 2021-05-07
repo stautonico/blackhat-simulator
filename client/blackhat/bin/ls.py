@@ -140,7 +140,7 @@ def main(args: list, pipe: bool) -> Result:
 
                 for subfile in read_result.data:
                     if args.all or not subfile.startswith("."):
-                        stat_result = stat(file)
+                        stat_result = stat(os.path.join(file, subfile))
                         if not stat_result.success:
                             output_text += f"{__COMMAND__}: Cannot stat file: {file}\n"
                         else:

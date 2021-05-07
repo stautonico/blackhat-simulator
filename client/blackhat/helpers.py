@@ -68,6 +68,10 @@ class AccessMode(IntFlag):
     X_OK = 1 << 3  # Check execute bit
 
 
+class RebootMode(IntFlag):
+    LINUX_REBOOT_CMD_POWER_OFF = 1 << 0  # Shut down the computer
+    LINUX_REBOOT_CMD_RESTART = 1 << 1    # Reboot the computer
+
 class timeval:
     def __init__(self, tv_sec, tv_usec):
         self.tv_sec = tv_sec

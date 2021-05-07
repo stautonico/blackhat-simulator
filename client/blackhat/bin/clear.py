@@ -1,7 +1,6 @@
 from os import system as syscall
 from platform import system
 
-from ..computer import Computer
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
@@ -55,7 +54,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:

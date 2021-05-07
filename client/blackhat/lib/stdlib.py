@@ -36,3 +36,6 @@ def get_env(key: Optional[str] = None) -> Optional[Union[str, dict]]:
         return computer.get_env(key)
 
     return computer.sessions[-1].env
+
+def exit(force=False) -> None:
+    computer.sys_exit(force)

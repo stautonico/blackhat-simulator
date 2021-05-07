@@ -5,13 +5,15 @@ import pickle
 import sqlite3
 from datetime import datetime
 from hashlib import md5
+from os import system as real_syscall
+from platform import system
 from random import choice
 from secrets import token_hex
-from time import time
+from time import time, sleep
 from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject, copy
-from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct
+from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
 from .lib import unistd, stdlib, dirent, fcntl, stdio
 from .lib.arpa import inet
 from .lib.sys import time, stat
@@ -1038,11 +1040,13 @@ class Computer:
 
         new_dir = Directory(pathname.split("/")[-1], find_parent.data, owner=self.sys_getuid(),
                             group_owner=self.sys_getgid())
+
+        add_file = find_parent.data.add_file(new_dir)
+
         if not self.sys_chmod(pathname, mode).success:
             # rwxr-xr-x
             new_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                    "execute": ["owner", "group", "public"]}
-        add_file = find_parent.data.add_file(new_dir)
 
         if not add_file.success:
             return Result(success=False, message=ResultMessages.GENERIC)
@@ -1119,7 +1123,6 @@ class Computer:
         if not find_old.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-
         if not find_old.data.check_owner(self).success or self.sys_getuid() != 0:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
@@ -1136,39 +1139,44 @@ class Computer:
 
         return Result(success=True)
 
-        # src_result = self.fs.find(oldpath)
-        #
-        # if not src_result.success:
-        #     return Result(success=False, message=ResultMessages.NOT_FOUND)
-        #
-        # # Make sure we have proper permissions before copying
-        # if src_result.data.check_perm("read", self).success and src_result.data.check_perm(
-        #         "write", self).success:
-        #     copy_result = copy(self, src_result.data, args.destination, True, args.verbose)
-        #
-        #     if not copy_result.success:
-        #         if copy_result.message == ResultMessages.NOT_FOUND:
-        #             return output(f"{__COMMAND__}: cannot find '{args.destination}': No such file or directory", pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.GENERIC:
-        #             return output(f"{__COMMAND__}: invalid destination '{args.destination}'", pipe, success=False)
-        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_READ:
-        #             return output(f"{__COMMAND__}: cannot open '{args.source}' for reading: Permission denied", pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.NOT_ALLOWED_WRITE:
-        #             return output(f"{__COMMAND__}: cannot open '{args.destination} for writing: Permission denied",
-        #                           pipe,
-        #                           success=False)
-        #         elif copy_result.message == ResultMessages.ALREADY_EXISTS:
-        #             return output(f"{__COMMAND__}: cannot write '{args.destination}: Directory already exists", pipe,
-        #                           success=False)
-        #     else:
-        #         self.run_command("rm", [args.source, "-r"], pipe)
-        #         if args.verbose:
-        #             print(f"{args.source} -> {args.destination}")
-        #         return output("", pipe)
-        # else:
-        #     return output(f"{__COMMAND__}: cannot open '{args.source}': Permission denied", pipe, success=False)
+    def sys_exit(self, force=False) -> None:
+        if force:
+            if len(self.shell.computers) == 1:
+                self.save()
+                exit(0)
+            else:
+                self.sessions = []
+                self.shell.computers.pop()
+        else:
+            if len(self.shell.computers) == 1:
+                if len(self.sessions) == 1:
+                    self.save()
+                    exit(0)
+                else:
+                    self.sessions.pop()
+            else:
+                self.shell.computers.pop()
+
+    def sys_reboot(self, mode: int) -> Result:
+        if self.sys_getuid() != 0:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        if RebootMode.LINUX_REBOOT_CMD_POWER_OFF in mode:
+            self.sys_exit(True)
+
+        if RebootMode.LINUX_REBOOT_CMD_RESTART in mode:
+            print(f"Rebooting...")
+            sleep(1)
+            if system() == "Windows":
+                real_syscall("cls")
+            else:
+                real_syscall("clear")
+            self.run_command("clear", [], pipe=True)
+            self.init()
+            while len(self.sessions) != 1:
+                self.sys_exit()
+
+        return Result(success=True)
 
 
 class Router(Computer):

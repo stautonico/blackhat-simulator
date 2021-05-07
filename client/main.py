@@ -180,10 +180,10 @@ if not load_save_success:
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
-        comp.sessions = []
+        # comp.sessions = []
         lan2_client2.sessions = []
 
-        comp.sessions.append(session)
+        # comp.sessions.append(session)
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
             computer.sync_user_and_group_files()

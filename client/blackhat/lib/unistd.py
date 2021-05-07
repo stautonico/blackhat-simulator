@@ -111,6 +111,11 @@ def get_user_primary_group(uid: int) -> Result:
 def get_user_groups(uid: int) -> Result:
     return computer.get_user_groups(uid)
 
+
 # NOTE: Temporary until I get a realistic version working
 def get_sessions() -> Result:
     return Result(success=True, data=computer.sessions)
+
+
+def reboot(mode: int) -> Result:
+    return computer.sys_reboot(mode)

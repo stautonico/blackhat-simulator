@@ -1,22 +1,19 @@
-from ..helpers import RebootMode
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
-from ..lib.unistd import reboot
+from ..lib.sys.stat import stat
+from ..lib.unistd import get_user, get_group
 
-__COMMAND__ = "reboot"
-__DESCRIPTION__ = "power-off or reboot the machine"
-__DESCRIPTION_LONG__ = "**poweroff*/, **reboot*/ may be used to power-off or reboot the machine. Both commands take the same options."
-__VERSION__ = "1.2"
+__COMMAND__ = "stat"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
+__VERSION__ = "1.0"
 
 
 def parse_args(args=[], doc=False):
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
-    parser.add_argument("-p", "--poweroff", action="store_true",
-                        help="Power-off the machine, regardless of which one of the two commands is invoked.")
-    parser.add_argument("--reboot", action="store_true",
-                        help="Reboot the machine, regardless of which one of the three commands is invoked.")
+    parser.add_argument("file")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
@@ -61,24 +58,37 @@ def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
-        return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+        if not args.version:
+            return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
-        # TODO: Add ability to power off/reboot external machines via SSH
-        # Only root can reboot/power off
-        if getuid() == 0:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-            if args.poweroff:
-                result = reboot(RebootMode.LINUX_REBOOT_CMD_POWER_OFF)
-            else:
-                result = reboot(RebootMode.LINUX_REBOOT_CMD_RESTART)
+        stat_file = stat(args.file)
 
-            if not result.success:
-                return output(f"{__COMMAND__}: Failed", pipe, success=False)
+        if not stat_file.success:
+            return output(f"{__COMMAND__}: cannot stat '{args.file}': No such file or directory", pipe, success=False)
 
-            return output("", pipe)
-        else:
-            return output(f"{__COMMAND__}: permission denied", pipe, success=False)
+        stat_struct = stat_file.data
+
+        lookup_username = get_user(uid=stat_struct.st_uid)
+        lookup_group = get_group(gid=stat_struct.st_gid)
+        username = lookup_username.data.username if lookup_username.success else "?"
+        group = lookup_group.data.name if lookup_group.success else "?"
+
+        output_text = ""
+
+        output_text += f"File: {args.file}\n"
+        output_text += f"Size: {stat_struct.st_size}\t{'regular file' if stat_struct.st_isfile else 'directory'}\n"
+        # TODO: Links
+        output_text += f"Links: 0\n"
+        output_text += f"Access: ({stat_struct.st_mode})\tUid: ({stat_struct.st_uid}/{username})\tGid: ({stat_struct.st_gid}/{group})\n"
+        output_text += f"Access: Not Yet Implemented\n"
+        output_text += f"Modify: Not Yet Implemented\n"
+        output_text += f"Change: Not Yet Implemented\n"
+
+        return output(output_text, pipe)
