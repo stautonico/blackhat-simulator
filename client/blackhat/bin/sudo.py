@@ -2,15 +2,15 @@ from asyncio import sleep
 from getpass import getpass
 from hashlib import md5
 
-from ..computer import Computer
 from ..helpers import ResultMessages, Result
 from ..lib.output import output
+from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp
 
 __COMMAND__ = "sudo"
 __VERSION__ = "1.1"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     # TODO: Find a way to do this with arg parser without it breaking lol
     if "--version" in args:
         return output(f"Sudo version {__VERSION__} (miscutils)", pipe)
@@ -20,9 +20,12 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                       success_message=ResultMessages.MISSING_ARGUMENT)
 
     # We can't run sudo without the /etc/sudoers
-    sudoers_file_result = computer.fs.find("/etc/sudoers")
+    sudoers_file_result = read("/etc/sudoers")
 
     if not sudoers_file_result.success:
+        if sudoers_file_result.message == ResultMessages.NOT_ALLOWED:
+            return output(f"{__COMMAND__}: Cannot read sudoers file: Permission denied", pipe, success=False)
+
         return output(f"{__COMMAND__}: no valid sudoers sources found, quitting", pipe, success=False)
 
     sudoers_file = sudoers_file_result.data
@@ -30,7 +33,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = computer.get_user(uid=getuid())
+    user_lookup = get_user(uid=getuid())
 
     if user_lookup.success:
         username = user_lookup.data.username
@@ -46,7 +49,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             args.remove(user_run_as)
 
             # Check if the given user exists
-            user_lookup = computer.get_user(username=user_run_as)
+            user_lookup = get_user(username=user_run_as)
 
             if not user_lookup.success:
                 return output(f"{__COMMAND__}: unknown user: {user_run_as}", pipe, success=False,
@@ -58,7 +61,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                           success_message=ResultMessages.MISSING_ARGUMENT)
 
     else:
-        user = computer.get_user(uid=0).data
+        user = get_user(uid=0).data
 
     # We need to authenticate as that user before we can run any commands
     for x in range(3):
@@ -67,11 +70,11 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         # Encode the password
         password = md5(password.encode()).hexdigest()
 
-        current_user = computer.get_user(uid=getuid()).data
+        current_user = get_user(uid=getuid()).data
         if password == current_user.password:
 
             # Now lets isolate the record regarding this `username`
-            split_sudoers_content = sudoers_file.content.split("\n")
+            split_sudoers_content = sudoers_file.split("\n")
 
             # NOTE: Possible exploit we're going to leave on purpose
             # Lets find the line that contains the username
@@ -90,7 +93,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             # Current line format <HOST> = (<USERS>) <COMMANDS>
             # Lets extract the host and make sure it says "ALL" or our current hostname
             host, line = line.split("=", 1)
-            if host.lower() != "all" and host != computer.hostname:
+            if host.lower() != "all" and host != gethostname():
                 return output(
                     f"{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported",
                     pipe, success=False)
@@ -120,12 +123,12 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
                     f"{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported",
                     pipe, success=False)
 
-            computer.sessions[-1].effective_uid = user.uid
+            setuid(user.uid)
             # args[0] : command
             # args[1:] : arguments
-            result = computer.run_command(args[0], args[1:], pipe)
+            result = execvp(args[0], args[1:])
             # Reset the effective user after running command
-            computer.sessions[-1].effective_uid = computer.sessions[-1].real_uid
+            setuid(current_user.uid)
             return result
         else:
             # Simulates the password checking delay when wrong password is entered

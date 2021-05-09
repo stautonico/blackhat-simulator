@@ -14,7 +14,7 @@ from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
-from .lib import unistd, stdlib, dirent, fcntl, stdio
+from .lib import unistd, stdlib, dirent, fcntl, stdio, pwd
 from .lib.arpa import inet
 from .lib.sys import time, stat
 from .services.service import Service
@@ -86,7 +86,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd]
 
         for lib in libs:
             lib.update(self)
@@ -866,11 +866,11 @@ class Computer:
         # If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
         # If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
 
-        if self.sys_getuid() == 0:
-            self.sessions[-1].effective_uid = uid
-            return Result(success=True)
-        else:
-            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+        # if self.sys_getuid() == 0:
+        self.sessions[-1].effective_uid = uid
+        return Result(success=True)
+        # else:
+        #     return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def sys_getgid(self) -> int:
         """
@@ -1026,6 +1026,9 @@ class Computer:
         if find_dir.success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
+        if "/" not in pathname:
+            pathname = "./" + pathname
+
         # Make sure we have write permissions on the parent dir
         parent_path = "/".join(pathname.split("/")[:-1])
 
@@ -1178,6 +1181,38 @@ class Computer:
 
         return Result(success=True)
 
+    def sys_rmdir(self, pathname: str) -> Result:
+        find_result = self.fs.find(pathname)
+
+        if not find_result.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if find_result.data.is_file():
+            return Result(success=False, message=ResultMessages.IS_FILE)
+
+        if len(find_result.data.files) > 0:
+            return Result(success=False, message=ResultMessages.NOT_EMPTY)
+
+        delete_response = find_result.data.delete(self)
+
+        if not delete_response.success:
+            return delete_response
+
+        return Result(success=True)
+
+    def sys_execv(self, pathname: str, argv: list) -> Result:
+        find_result = self.fs.find(pathname)
+
+        if not find_result.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if not find_result.data.check_perm("execute", self).success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        return self.run_command(pathname.split("/")[-1], argv, False)
+
+    def sys_execvp(self, command: str, argv: list) -> Result:
+        return self.run_command(command, argv, False)
 
 class Router(Computer):
     def __init__(self) -> None:

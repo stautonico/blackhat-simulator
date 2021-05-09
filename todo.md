@@ -32,7 +32,7 @@
 - [x] chdir (change current directory)
 - [~] rename (move a file)
 - [x] mkdir (make a directory)
-- [ ] rmdir (remove a directory)
+- [x] rmdir (remove a directory)
 - [x] chmod (change directory/file permissons)
 - [x] chown (change owner/group owner of file/directory)
 - [x] gettimeofday (get time of day in seconds)
@@ -40,11 +40,11 @@
 - [x] setuid (set current effective UID)
 - [x] getgid (get current effective group ID)
 - [ ] setgid (set current effective group ID)
-- [ ] reboot (reboot/shutdown the machine)
+- [x] reboot (reboot/shutdown the machine)
 - [x] sethostname (set the system hostname)
 - [x] gethostname (get the system hostname)
-- [ ] execv (execute an executable directly / just check if it exists then run it)
-- [ ] execvp (execute a command by checking path (what the shell does))
+- [x] execv (execute an executable directly / just check if it exists then run it)
+- [x] execvp (execute a command by checking path (what the shell does))
 
 MAYBE:
 - [ ] link (create a link to a file/directory)

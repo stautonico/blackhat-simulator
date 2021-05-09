@@ -2,6 +2,7 @@ from typing import Optional, Literal
 
 from ..fs import FSBaseObject
 from ..helpers import Result, ResultMessages
+from ..session import Session
 
 computer: Optional["Computer"] = None
 
@@ -119,3 +120,28 @@ def get_sessions() -> Result:
 
 def reboot(mode: int) -> Result:
     return computer.sys_reboot(mode)
+
+
+def rmdir(pathname: str) -> Result:
+    return computer.sys_rmdir(pathname)
+
+
+def save(file: Optional[str]) -> bool:
+    return computer.save(file)
+
+
+def execv(pathname: str, argv: list) -> Result:
+    return computer.sys_execv(pathname, argv)
+
+
+def execvp(command: str, argv: list) -> Result:
+    return computer.sys_execvp(command, argv)
+
+
+def new_session(uid:int) -> None:
+    # TODO: Make this more realistic since I have no clue how it works in real life
+    current_session: Session = computer.sessions[-1]
+    # Create a new session
+    new_session = Session(uid, current_session.current_dir, current_session.id + 1)
+    computer.sessions.append(new_session)
+    computer.run_current_user_shellrc()
