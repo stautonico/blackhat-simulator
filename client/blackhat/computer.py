@@ -1214,6 +1214,23 @@ class Computer:
     def sys_execvp(self, command: str, argv: list) -> Result:
         return self.run_command(command, argv, False)
 
+    def sys_unlink(self, pathname: str) -> Result:
+        find_result = self.fs.find(pathname)
+
+        if not find_result.success:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if not find_result.data.check_perm("write", self) or not find_result.data.check_perm("execute", self):
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        delete_result = find_result.data.delete(self)
+
+        if not delete_result.success:
+            return delete_result
+
+        return Result(success=True)
+
+
 class Router(Computer):
     def __init__(self) -> None:
         """

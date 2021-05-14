@@ -49,7 +49,7 @@
 MAYBE:
 - [ ] link (create a link to a file/directory)
 - [ ] symlink (same as link, but we don't use inodes (because we don't have a real fs lol))
-- [ ] unlink (delete a link or a file/directory)
+- [x] unlink (delete a link or a file/directory)
 - [ ] readlink (get the location of the file a link links to)
 
 ## Installable

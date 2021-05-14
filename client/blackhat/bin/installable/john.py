@@ -1,9 +1,11 @@
 from hashlib import md5
 
-from ...computer import Computer
 from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.sys.stat import stat
+from ...lib.unistd import read, write
+from ...lib.fcntl import creat
 
 __COMMAND__ = "john"
 __DESCRIPTION__ = ""
@@ -57,7 +59,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     # TODO: Add ability for john to crack more than just user passwords
     args, parser = parse_args(args)
 
@@ -72,8 +74,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        find_password_file = computer.fs.find(args.password)
-        find_wordlist_file = computer.fs.find(args.wordlist)
+        find_password_file = stat(args.password)
+        find_wordlist_file = stat(args.wordlist)
 
         if not find_password_file.success:
             return output(f"{__COMMAND__}: {args.password}: No such file or directory", pipe, success=False)
@@ -81,8 +83,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if not find_wordlist_file.success:
             return output(f"{__COMMAND__}: {args.wordlist}: No such file or directory", pipe, success=False)
 
-        try_read_password_file = find_password_file.data.read(computer)
-        try_read_wordlist_file = find_wordlist_file.data.read(computer)
+        try_read_password_file = read(args.password)
+        try_read_wordlist_file = read(args.wordlist)
 
         if not try_read_password_file.success:
             return output(f"{__COMMAND__}: {args.password}: Permission denied", pipe, success=False)
@@ -137,18 +139,18 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
 
         # If we're outputting, we should try to find the file to write to.
         if args.output:
-            find_output_file = computer.fs.find(args.output)
+            find_output_file = stat(args.output)
             if find_output_file.success:
-                write_result = find_output_file.data.write(output_text, computer)
+                write_result = write(find_output_file.data.st_path, output_text)
             else:
                 # Create the file
-                touch_output = computer.run_command("touch", [args.output], pipe)
-                if not touch_output.success:
+                touch_result = creat(args.output)
+                if not touch_result.success:
                     return output(f"{__COMMAND__}: cannot open '{args.output}' for writing: Permission denied", pipe,
                                   success=False)
-                find_output_file = computer.fs.find(args.output)
+                find_output_file = stat(args.output)
                 if find_output_file.success:
-                    write_result = find_output_file.data.write(output_text, computer)
+                    write_result = write(find_output_file.data.st_path, output_text)
                 else:
                     return output(f"{__COMMAND__}: cannot open '{args.output}' for writing: Permission denied", pipe,
                                   success=False)

@@ -138,10 +138,14 @@ def execvp(command: str, argv: list) -> Result:
     return computer.sys_execvp(command, argv)
 
 
-def new_session(uid:int) -> None:
+def new_session(uid: int) -> None:
     # TODO: Make this more realistic since I have no clue how it works in real life
     current_session: Session = computer.sessions[-1]
     # Create a new session
     new_session = Session(uid, current_session.current_dir, current_session.id + 1)
     computer.sessions.append(new_session)
     computer.run_current_user_shellrc()
+
+
+def unlink(pathname: str) -> Result:
+    return computer.sys_unlink(pathname)
