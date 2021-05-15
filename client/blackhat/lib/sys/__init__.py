@@ -1,1 +1,1 @@
-from . import time, stat
+from . import time, stat, socket

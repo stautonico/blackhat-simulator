@@ -375,6 +375,9 @@ class Directory(FSBaseObject):
 
         self.files[file.name] = file
         self.update_size()
+
+        self.handle_event("write")
+
         return Result(success=True)
 
     def calculate_size(self) -> int:
@@ -745,7 +748,11 @@ class StandardFS:
 
         self.generate_manpages()
 
+        def generate_manpages(file):
+            self.generate_manpages()
+
         bin_dir: Directory = Directory("bin", usr_dir, 0, 0)
+        bin_dir.add_event_listener("write", generate_manpages)
         usr_dir.add_file(bin_dir)
 
     def setup_var(self) -> None:

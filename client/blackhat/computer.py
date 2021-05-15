@@ -16,7 +16,9 @@ from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
 from .lib import unistd, stdlib, dirent, fcntl, stdio, pwd
 from .lib.arpa import inet
-from .lib.sys import time, stat
+from .lib.sys import time, stat, socket
+from .lib.sys.socket import Socket
+from .services.pingserver import PingServer
 from .services.service import Service
 from .session import Session
 from .user import User, Group
@@ -44,7 +46,7 @@ class Computer:
         # self.create_root_user()
 
         self.fs: StandardFS = StandardFS(self)
-        self.services: dict[int, Service] = {}
+        self.services: dict[int, Service] = {0: PingServer(self)}
         self.post_fs_init()
 
     ##################
@@ -86,7 +88,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd, socket]
 
         for lib in libs:
             lib.update(self)
@@ -799,22 +801,33 @@ class Computer:
 
         return Result(success=True, data=try_read_file.data)
 
-    def sys_write(self, filepath: str, data: str) -> Result:
-        # Try to find the file
-        find_file = self.fs.find(filepath)
+    def sys_write(self, fd: Union[str, Socket], data: Union[str, dict]) -> Result:
+        if type(fd) == Socket:
+            # We're 'writing' to a network socket
+            if not fd.host:
+                return Result(success=False, message=ResultMessages.NOT_CONNECTED)
 
-        if not find_file.success:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
+            if type(data) == str:
+                return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)
 
-        if find_file.data.is_directory():
-            return Result(success=False, message=ResultMessages.IS_DIRECTORY)
+            return self.handle_tcp_connection(fd.host, fd.port, data)
+        else:
+            # We're writing to a file
+            # Try to find the file
+            find_file = self.fs.find(fd)
 
-        try_write_file = find_file.data.write(data, self)
+            if not find_file.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        if not try_write_file.success:
-            return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+            if find_file.data.is_directory():
+                return Result(success=False, message=ResultMessages.IS_DIRECTORY)
 
-        return Result(success=True)
+            try_write_file = find_file.data.write(data, self)
+
+            if not try_write_file.success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+
+            return Result(success=True)
 
     def sys_chown(self, pathname: str, owner: int, group: int) -> Result:
         find_file = self.fs.find(pathname)
@@ -1456,7 +1469,6 @@ class ISPRouter(Router):
         super().__init__()
         # We're 1.1.1.1
         self.used_ips = ["1.1.1.1"]
-        self.dns_records = {}
         self.whois_records = {}
 
     def dhcp(self, **kwargs) -> Result:
@@ -1529,56 +1541,6 @@ class ISPRouter(Router):
         else:
             # Failed for some reason (DHCP will give us our error)
             return dhcp_result
-
-    def add_dns_record(self, domain_name: str, ip: str) -> Result:
-        """
-        Add a new record to the given `ISPRouters` DNS records table
-
-        Args:
-            domain_name (str): The domain name of the record
-            ip (str): The IP address that the given `domain_name` should resolve to
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately.
-        """
-        if domain_name in self.dns_records.keys():
-            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
-
-        self.dns_records[domain_name] = ip
-        return Result(success=True)
-
-    def remove_dns_record(self, domain_name):
-        """
-        Remove an existing record from the given `ISPRouters` DNS records table
-
-        Args:
-            domain_name (str): The domain name of the record to be removed
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately.
-        """
-        if domain_name in self.dns_records.keys():
-            del self.dns_records[domain_name]
-            return Result(success=True)
-
-        return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-    def resolve_dns(self, domain_name: str) -> Result:
-        """
-        Find the IP address linked to the given `domain_name`
-
-        Args:
-            domain_name (str): The domain name to resolve
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the resolved IP address if found.
-        """
-        dns_record = self.dns_records.get(domain_name, None)
-        if dns_record:
-            return Result(success=True, data=dns_record)
-
-        # Failed to find
-        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     def add_whois(self, domain_name: str) -> None:
         self.whois_records[domain_name] = {"domain_name": domain_name.upper()}

@@ -9,6 +9,7 @@ from blackhat.services.sshserver import SSHServer
 from blackhat.services.webserver import WebServer
 from blackhat.session import Session
 from blackhat.shell import Shell
+from client.blackhat.services.dnsserver import DNSServer
 
 load_save_success = False
 
@@ -147,7 +148,8 @@ if not load_save_success:
         # Create a temporary root session for initializing stuff
         lan2_client2.sessions = [Session(0, lan2_client2.fs.files, 0)]
 
-        isp.add_dns_record("google.com", lan2.wan)
+        isp.services[53] = DNSServer(isp)
+        isp.services[53].add_dns_record("google.com", lan2.wan)
 
         # Setup our apt server
         # To setup an apt server, we need /var/www/html/repo
@@ -175,8 +177,9 @@ if not load_save_success:
         # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it
         # This has to happen after we add our apt server to /etc/apt/sources.list and after the network is fully inited
         # but before we remove our temporary root session
-        # comp.run_command("apt", ["install", "nmap"], False)
-        # comp.run_command("apt", ["install", "john"], False)
+        comp.run_command("apt", ["install", "nmap"], False)
+        comp.run_command("apt", ["install", "john"], False)
+        comp.run_command("touch", ["/usr/bin/ping"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user

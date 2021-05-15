@@ -34,6 +34,8 @@ class ResultMessages(Enum):
     """Something went wrong with the service or the connection on another machine. Similar to error http 500"""
     INVALID_ARGUMENT = 14
     """The argument given to the command was invalid for one reason or another"""
+    NOT_CONNECTED = 15
+    """The socket we're trying to write to isn't connected to anything"""
 
 
 class Result:

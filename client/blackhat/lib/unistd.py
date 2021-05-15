@@ -1,5 +1,6 @@
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 
+from .sys.socket import Socket
 from ..fs import FSBaseObject
 from ..helpers import Result, ResultMessages
 from ..session import Session
@@ -56,8 +57,8 @@ def read(filepath: str) -> Result:
     return computer.sys_read(filepath)
 
 
-def write(filepath: str, data: str) -> Result:
-    return computer.sys_write(filepath, data)
+def write(fd: Union[str, Socket], data: Union[str, dict]) -> Result:
+    return computer.sys_write(fd, data)
 
 
 def access(pathname: str, mode: int) -> Result:
