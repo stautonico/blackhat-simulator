@@ -1,5 +1,4 @@
 import importlib
-import ipaddress
 import os
 import pickle
 import sqlite3
@@ -14,7 +13,7 @@ from typing import Optional, Dict, Union, List, Literal
 
 from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
-from .lib import unistd, stdlib, dirent, fcntl, stdio, pwd
+from .lib import unistd, stdlib, dirent, fcntl, stdio, pwd, ifaddrs, netdb
 from .lib.arpa import inet
 from .lib.sys import time, stat, socket
 from .lib.sys.socket import Socket
@@ -88,7 +87,7 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
-        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd, socket]
+        libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd, socket, ifaddrs, netdb]
 
         for lib in libs:
             lib.update(self)
@@ -750,36 +749,39 @@ class Computer:
     # Networking #
     ##############
 
-    def handle_tcp_connection(self, host: str, port: int, args: dict) -> Result:
+    def resolve_dns(self, domain: str, dns_server: Optional[str] = None) -> Result:
         """
-        Route network traffic to a `Service` on the local `Computer`
+        Check all DNS servers in the /etc/resolv.conf unless a `dns_server` is specified
 
-        Args:
-            host (str): The IP of the `Computer`
-            port (int): The port the given `Service` in running on
-            args (dict): A map of arguments to pass to the given `Service`
+        args:
+            domain (str): The domain name to lookup
+            dns_server (str, optional) The DNS server to use to lookup the domain
 
         Returns:
-            SysCallMessage: A response generate by the `Service` or an error if no such `Service` exists.
+            Result: A `Result` object with the success and data flag set appropriately
         """
-        if port in self.services.keys():
-            return self.services[port].main(args)
+        if dns_server:
+            # We need to try to find the given dns server
+            dns_servers = [dns_server]
+        else:
+            find_resolv_conf = self.fs.find("/etc/resolv.conf")
+            dns_servers = []
+            if find_resolv_conf.success:
+                content = find_resolv_conf.data.content.split("\n")
+                for line in content:
+                    if line.startswith("nameserver "):
+                        dns_servers.append(line[11:])
 
-        return Result(success=False, message=ResultMessages.GENERIC_NETWORK)
+        for server in dns_servers:
+            # Establish that the server exists
+            server_obj = self.parent.find_client(server, 53)
+            if server_obj.success:
+                packet_result = server_obj.data.main({"domain": domain})
 
-    def send_tcp(self, host: str, port: int, args: dict) -> Result:
-        """
-        Pass a network connection to the router to route (either within the LAN or to an external LAN)
+                if packet_result.success:
+                    return Result(success=True, data=packet_result.data)
 
-        Args:
-            host (str): The IP address of the host to send the given `args` to
-            port (int): The port on the given `host` in which the `Service` runs on
-            args (dict): The data to send to the given `host` (processed by the `Service` on the other end)
-
-        Returns:
-            SysCallMessage: A response generate by the `Service` or an error if no such `Service` exists.
-        """
-        return self.parent.handle_tcp_connection(host, port, args)
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     ############
     # Syscalls #
@@ -804,13 +806,13 @@ class Computer:
     def sys_write(self, fd: Union[str, Socket], data: Union[str, dict]) -> Result:
         if type(fd) == Socket:
             # We're 'writing' to a network socket
-            if not fd.host:
+            if not fd.client:
                 return Result(success=False, message=ResultMessages.NOT_CONNECTED)
 
             if type(data) == str:
                 return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)
 
-            return self.handle_tcp_connection(fd.host, fd.port, data)
+            return fd.client.main(data)
         else:
             # We're writing to a file
             # Try to find the file
@@ -1290,98 +1292,37 @@ class Router(Computer):
         self.ip_pool[subnet].remove(ip)
         return Result(success=True, data=ip)
 
-    def find_local_client(self, ip: str) -> Result:
-        """
-        Finds a client (`Computer` object) in the local network by IP address
+    def find_client(self, host: str, port: int) -> Result:
+        # Check if the given `host` belongs to us or its in an external lan
+        prefix = ".".join(self.lan.split(".")[0:2]) + "."
+        subnet = host.split(".")[2]
 
-        Args:
-            ip (str): The "private" IP of the client `Computer` to find
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
-        """
-        subnet = ip.split(".")[2]
-        for client in self.clients[int(subnet)].values():
-            if client.lan == ip:
-                return Result(success=True, data=client)
-
-        return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-    def find_client(self, ip: str, port: Optional[int] = None) -> Result:
-        """
-        A more "general" version of the `find_local_client()` function. This function determines if the given router will
-        ask the `ISPRouter` for the given IP address or if the client is within the `Router`'s LAN
-
-        Args:
-            ip (str): The IP of the client `Computer` to find
-            port (int, optional): The open port on the given client (find `Computer` behind another `Router` in an external LAN)
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
-        """
-        # Check if the client belongs to ourselves (don't ask isp)
-        ip_split = self.lan.split(".")
-        network_prefix = f"{ip_split[0]}.{ip_split[1]}"
-
-        # First check if we're looking for one of our own hosts
-        if ip.startswith(network_prefix):
-            # We're looking for ourselves
-            if ip == self.lan:
-                return Result(success=True, data=self)
-            else:
-                client_ip_split = ip.split(".")
-                subnet = client_ip_split[2]
-                subnet_result = self.clients.get(int(subnet))
-                if subnet_result:
-                    client_result = next((x for x in subnet_result.values() if x.lan == ip), None)
-
-                    if client_result:
-                        return Result(success=True, data=client_result)
-
-                return Result(success=False, message=ResultMessages.NOT_FOUND)
-        else:
-
-            # If the given ip is our wan address, another router is asking for a client
-            if ip == self.wan:
-                # If there is no port, we want the router (ourselves)
-                if not port:
-                    return Result(success=True, data=self)
-                else:
-                    # We want a host at a specific open port
-                    return self.find_client_by_port(port)
-            # We're trying to find a client on another router, we do this by asking our router (the isp)
-            else:
-                # Ask the ISP for the router
-                wan_client = self.parent.find_client(ip, port)
-                if wan_client.success:
-                    # We found the other router
-                    # If there's no port, we're done (we wanted the router not a host behind the router)
-                    if not port:
-                        return Result(success=True, data=wan_client.data)
-                    else:
-                        # If there is a port, we want to ask the external router for the client behind that port
-                        # We can ask that router directly
-                        return wan_client.data.find_client_by_port(port)
-                else:
-                    # Even the ISP couldn't find that router, it must not exist
-                    return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-    def find_client_by_port(self, port: int) -> Result:
-        """
-        Find a client in the given `Router`'s LAN by open port.
-        Primarily used for finding the `Computer` hosting a given `Service` through an open port in the given `Router`
-
-        Args:
-            port (int): The port number (1-65535) of the given `Computer`
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
-        """
-        ip_to_find = self.port_forwarding.get(port, None)
-        if not ip_to_find:
+        if host == self.wan:
+            if port in self.port_forwarding.keys():
+                return Result(success=True, data=self.port_forwarding[port].services[port])
             return Result(success=False, message=ResultMessages.NOT_FOUND)
-        else:
-            return Result(success=True, data=ip_to_find)
+
+        # We're finding one of our own
+        if host.startswith(prefix):
+            # Quick check, if subnet is empty, we don't have the client
+            get_subnet = self.clients.get(int(subnet))
+            if not get_subnet:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+            # We can ignore the port because we don't need port forwarding in a lan
+            client_result = next((x for x in get_subnet.values() if x.lan == host), None)
+            if not client_result:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+            # Now we need to check if the client has a service on that port
+            # In real life, we wouldn't be able to make a connection if there is no service
+            # on the given port
+            if port not in client_result.services.keys():
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+            return Result(success=True, data=client_result.services.get(port))
+
+        # We need to get the client from another lan, ask the ISP to handle it
+        return self.parent.find_client(host, port)
 
     def add_new_client(self, client: Computer, subnet: int = 1) -> Result:
         """
@@ -1423,43 +1364,6 @@ class Router(Computer):
 
         return Result(success=True, data=client.lan)
 
-    def resolve_dns(self, domain_name: str) -> Result:
-        """
-        Ask the ISP to resolve a dns domain name to an IP address
-
-        Args:
-            domain_name (str): The domain name to resolve
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP of the given `domain_name` if found.
-        """
-        # Ask our parent (ISP router) to resolve a dns record
-        return self.parent.resolve_dns(domain_name)
-
-    def handle_tcp_connection(self, host: str, port: int, args: dict) -> Result:
-        """
-        Handle network traffic routing within the `Router`'s LAN and between LANs
-
-        Args:
-            host (str): The IP address of the host to send the given `args` to
-            port (int): The port on the given `host` in which the `Service` runs on
-            args (dict): The data to send to the given `host` (processed by the `Service` on the other end)
-
-        Returns:
-            Result: A `Result` instance containing results about the connection (successful or not) and a response from the `Service` (if successful)
-        """
-        # If we don't manually check for our own ip, we end up in an infinite loop of trying to handle tcp connections
-        if host == self.lan:
-            if port in self.services.keys():
-                return self.services[port].main(args)
-            else:
-                return Result(success=False, message=ResultMessages.GENERIC_NETWORK)
-        client = self.find_client(host, port)
-        if not client.success:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
-        else:
-            return client.data.handle_tcp_connection(host, port, args)
-
 
 class ISPRouter(Router):
     def __init__(self):
@@ -1467,7 +1371,7 @@ class ISPRouter(Router):
         An ISP router is just a router of routers
         """
         super().__init__()
-        # We're 1.1.1.1
+        self.wan = "1.1.1.1"
         self.used_ips = ["1.1.1.1"]
         self.whois_records = {}
 
@@ -1483,43 +1387,6 @@ class ISPRouter(Router):
             if ip not in self.used_ips:
                 self.used_ips.append(ip)
                 return Result(success=True, data=ip)
-
-    def find_client(self, ip: str, port: Optional[int] = None) -> Result:
-        """
-        Finds a client `Computer` in connected to the given `ISPRouter`
-
-        Args:
-            ip (str): The IP of the client `Computer` to find
-            port (int, optional): The open port on the given client (find `Computer` behind another `Router` in an external LAN)
-
-        Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `Computer` object if found.
-        """
-        # Check if the computer we're looking for is ourselves (isp)
-        if ip == self.lan:
-            return Result(success=True, data=self)
-
-        # Check if the client is an IP or a domain
-        try:
-            is_ipv4 = ipaddress.ip_address(ip)
-        except ValueError:
-            is_ipv4 = False
-
-        if not is_ipv4:
-            # Try to resolve the given dns record
-            dns_result = self.resolve_dns(ip)
-
-            if not dns_result.success:
-                return Result(success=False, message=ResultMessages.NOT_FOUND)
-            else:
-                ip = dns_result.data
-
-        find_client = next((x for x in self.clients.values() if x.wan == ip), None)
-        if find_client:
-            return Result(success=True, data=find_client)
-
-        # Client not found
-        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     def add_new_client(self, client: Router, **kwargs) -> Result:
         """
@@ -1561,3 +1428,15 @@ class ISPRouter(Router):
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         return Result(success=True, data=record)
+
+    def find_client(self, host: str, port: int) -> Result:
+        if host == self.wan:
+            if port in self.services.keys():
+                return Result(success=True, data=self.services.get(port))
+            else:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+        else:
+            find_client = next((x for x in self.clients.values() if x.wan == host), None)
+
+            if find_client:
+                return find_client.find_client(host, port)

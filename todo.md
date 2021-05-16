@@ -1,7 +1,7 @@
 ### REMOVE THIS FILE BEFORE SUBMITTING A PULL REQUEST SO IT DOESN'T END UP IN MASTER ###
 
 ## Internal System Stuff
-- [ ] Stop using system binaries to setup the machine. Instead, there should be internal functions for handling these function
+- [x] Stop using system binaries to setup the machine. Instead, there should be internal functions for handling these function
 
 
 ## FS
@@ -19,7 +19,7 @@
 
 
 ## Binaries
-- [ ] Stop relying on other binaries (like `adduser` calls the `cp` and `chmod` binary to create the new user's home folder)
+- [x] Stop relying on other binaries (like `adduser` calls the `cp` and `chmod` binary to create the new user's home folder)
 - [ ] Use Argparse for **all** binaries rather than *some*
 - [ ] Use system libraries and **ONLY** system libraries for doing stuff related to the fs and system (no way to enforce this lol)
 

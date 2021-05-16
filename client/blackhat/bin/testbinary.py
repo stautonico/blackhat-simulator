@@ -4,6 +4,7 @@ from ..lib import unistd, stdlib
 from ..lib.sys import stat
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.netdb import gethostbyname
 
 __COMMAND__ = "testbinary"
 __DESCRIPTION__ = ""
@@ -68,8 +69,14 @@ def main(args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        print(stat.chmod("/etc/passwd", 0o707))
-        print(stat.mkdir("/etc/oofer", 0o707))
-        stdlib.system("ls /etc/ -l")
+        # print(stat.chmod("/etc/passwd", 0o707))
+        # print(stat.mkdir("/etc/oofer", 0o707))
+        # stdlib.system("ls /etc/ -l")
+
+        gethostbyname("google.com")
+
+        # print(gethostbyname("google.com"))
+        # print(gethostbyname("google"))
+        # print(gethostbyname("porthub.com"))
 
         return output("", pipe)

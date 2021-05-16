@@ -4,7 +4,9 @@ from json import loads
 from ..helpers import Result
 from ..lib.fcntl import creat
 from ..lib.input import ArgParser
+from ..lib.netdb import gethostbyname
 from ..lib.output import output
+from ..lib.sys import socket
 from ..lib.sys.stat import stat
 from ..lib.unistd import read, write, getuid
 
@@ -105,12 +107,22 @@ def main(args: list, pipe: bool) -> Result:
 
                 host = split_server[0]
 
-                # ask_server_result = computer.send_tcp(host, port, {"packages": [x for x in outstanding_packages]})
-                # if ask_server_result.success:
-                #     if ask_server_result.data.get("have"):
-                #         for package in ask_server_result.data.get("have"):
-                #             if package in outstanding_packages:
-                #                 outstanding_packages.remove(package)
+                resolve_hostname = gethostbyname(host)
+
+                sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+                connection_result = socket.connect(sock, sock_addr)
+
+                if not connection_result.success:
+                    return output(f"{__COMMAND__}: Unable to connect to {host}", pipe, success=False)
+
+                ask_server_result = write(sock, {"packages": [x for x in outstanding_packages]})
+
+                if ask_server_result.success:
+                    if ask_server_result.data.get("have"):
+                        for package in ask_server_result.data.get("have"):
+                            if package in outstanding_packages:
+                                outstanding_packages.remove(package)
 
             arg_packages = {}
 

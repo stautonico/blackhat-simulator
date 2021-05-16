@@ -136,6 +136,10 @@ if not load_save_success:
         other_comp.services[80] = WebServer(other_comp)
         other_comp.services[22] = SSHServer(other_comp)
 
+        other_comp.sessions = [Session(0, other_comp.fs.files, 0)]
+        other_comp.run_command("touch", ["/var/www/html/index.html"], pipe=True)
+        other_comp.fs.find("/var/www/html/index.html").data.content = "<h1>Hello world!</h1>"
+
         lan2.sys_sethostname("google.com")
 
         lan2.services[2222] = SSHServer(lan2)
@@ -150,6 +154,7 @@ if not load_save_success:
 
         isp.services[53] = DNSServer(isp)
         isp.services[53].add_dns_record("google.com", lan2.wan)
+        isp.port_forwarding = {53: isp}
 
         # Setup our apt server
         # To setup an apt server, we need /var/www/html/repo
@@ -179,7 +184,12 @@ if not load_save_success:
         # but before we remove our temporary root session
         comp.run_command("apt", ["install", "nmap"], False)
         comp.run_command("apt", ["install", "john"], False)
-        comp.run_command("touch", ["/usr/bin/ping"], False)
+        # comp.run_command("touch", ["/usr/bin/ping"], False)
+        # comp.run_command("touch", ["/usr/bin/ifconfig"], False)
+        # comp.run_command("touch", ["/usr/bin/unshadow"], False)
+        # comp.run_command("touch", ["/usr/bin/john"], False)
+        # comp.run_command("touch", ["/usr/bin/dig"], False)
+        # comp.run_command("touch", ["/usr/bin/curl"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user

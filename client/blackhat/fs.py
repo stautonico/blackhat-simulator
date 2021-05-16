@@ -520,6 +520,7 @@ class StandardFS:
             <li>/etc/skel -  A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)</li>
             <li>/etc/sudoers - The file that contains all of the sudo permissions</li>
             <li>/etc/apt/sources.list - Contains urls of apt repo servers</li>
+            <li>/etc/resolv.conf - Contains the list of dns servers</li>
         </ul>
 
         Returns:
@@ -687,6 +688,10 @@ class StandardFS:
 
         sources_file: File = File("sources.list", "", apt_dir, 0, 0)
         apt_dir.add_file(sources_file)
+
+        # /etc/resolv.conf
+        resolv_conf: File = File("resolv.conf", "nameserver 1.1.1.1", etc_dir, 0, 0)
+        etc_dir.add_file(resolv_conf)
 
     def setup_proc(self) -> None:
         """

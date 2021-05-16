@@ -1,4 +1,3 @@
-import ipaddress
 from typing import Optional
 
 from client.blackhat.helpers import Result, ResultMessages
@@ -24,38 +23,29 @@ class SockAddr:
         self.port = port
         self.addr = addr
 
+    def __str__(self):
+        return f"SockAddr(family={self.family}, port={self.port}, addr={self.addr})"
+
 
 # This is stupid but realistic, so we'll gonna use it
 class Socket:
     def __init__(self, domain: int, type: int):
         self.domain = domain
         self.type = type
-        self.host = None
-        self.port = None
+
+        self.client = None
+
+    def __str__(self):
+        if self.client:
+            return f"Socket(domain={self.domain}, type={self.type}, connected={'True' if self.client else 'False'})"
 
 
 def connect(sockfd: Socket, addr: SockAddr) -> Result:
-
-    # See if we have to resolve a dns record or not
-    try:
-        is_ipv4 = ipaddress.ip_address(addr.addr)
-    except ValueError:
-        is_ipv4 = False
-
-    if not is_ipv4:
-        resolve_dns_result = computer.parent.parent.services[53].resolve_dns(addr.addr)
-
-        if not resolve_dns_result.success:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-        addr.addr = resolve_dns_result.data
-
     find_client = computer.parent.find_client(addr.addr, port=addr.port)
 
     if not find_client.success:
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    sockfd.host = addr.addr
-    sockfd.port = addr.port
+    sockfd.client = find_client.data
 
     return Result(success=True)

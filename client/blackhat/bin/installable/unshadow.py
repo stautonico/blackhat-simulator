@@ -1,7 +1,8 @@
-from ...computer import Computer
 from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.sys.stat import stat
+from ...lib.unistd import read
 
 __COMMAND__ = "unshadow"
 __DESCRIPTION__ = "Combines a passwd file and shadow file for cracking with john"
@@ -54,7 +55,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -69,8 +70,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
         # Try to open the given password and shadow file
-        find_password_file = computer.fs.find(args.password)
-        find_shadow_file = computer.fs.find(args.shadow)
+        find_password_file = stat(args.password)
+        find_shadow_file = stat(args.shadow)
 
         if not find_password_file.success:
             return output(f"{__COMMAND__}: {args.password}: No such file or directory", pipe, success=False)
@@ -78,8 +79,8 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if not find_shadow_file.success:
             return output(f"{__COMMAND__}: {args.shadow}: No such file or directory", pipe, success=False)
 
-        read_password_content = find_password_file.data.read(computer)
-        read_password_shadow = find_shadow_file.data.read(computer)
+        read_password_content = read(args.password)
+        read_password_shadow = read(args.shadow)
 
         if not read_password_content.success:
             return output(f"{__COMMAND__}: {args.password}: Permission denied", pipe, success=False)
