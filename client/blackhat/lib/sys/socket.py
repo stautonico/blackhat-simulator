@@ -35,6 +35,8 @@ class Socket:
 
         self.client = None
 
+        self.metadata = None
+
     def __str__(self):
         if self.client:
             return f"Socket(domain={self.domain}, type={self.type}, connected={'True' if self.client else 'False'})"
@@ -47,5 +49,6 @@ def connect(sockfd: Socket, addr: SockAddr) -> Result:
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     sockfd.client = find_client.data
+    sockfd.metadata = find_client.data.get_metadata()
 
     return Result(success=True)

@@ -87,6 +87,15 @@ class Computer:
         self.sync_user_and_group_files()
 
     def update_libs(self):
+        """
+        The system libraries need access to the given `Computer` object, so before a command runs, we pass a reference
+        to the current `Computer` object, so the binaries don't need `computer` in their arguments (prevents cheating in
+        binaries). If commands had access to a `Computer` object, they could just read files without permission, access
+        user passwords that they shouldn't, change current UID when they shouldn't, etc.
+
+        Returns:
+            None
+        """
         libs = [unistd, time, stat, stdlib, dirent, fcntl, inet, stdio, pwd, socket, ifaddrs, netdb]
 
         for lib in libs:
@@ -787,6 +796,16 @@ class Computer:
     # Syscalls #
     ############
     def sys_read(self, filepath: str) -> Result:
+        """
+        Try to read the content of the given `filepath`. Checks permissions
+
+        Args:
+            filepath (str): The path of the file to read
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly and the data flag containing the files
+            if read was successful
+        """
         # Try to find the file
         find_file = self.fs.find(filepath)
 
@@ -804,6 +823,18 @@ class Computer:
         return Result(success=True, data=try_read_file.data)
 
     def sys_write(self, fd: Union[str, Socket], data: Union[str, dict]) -> Result:
+        """
+        Try to write to a given file descriptor. If `fd` is a file path, this function will try to write to a file
+        (permission safe), however, if the fd is a `Socket`, this function will try to send the given `data` to the
+        respective `Socket`'s connected service (if connected).
+
+        Args:
+            fd (str or :obj:`Socket`): The filepath of the file or Socket to write to
+            data (str or dict): The data to write to the file (if fd == str) or data to send to the socket (if fd == Socket)
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         if type(fd) == Socket:
             # We're 'writing' to a network socket
             if not fd.client:
@@ -832,6 +863,20 @@ class Computer:
             return Result(success=True)
 
     def sys_chown(self, pathname: str, owner: int, group: int) -> Result:
+        """
+        Change the owner of the given `pathname` (if allowed)
+
+        Notes:
+            Only the owner or root is allowed to change the owner of a `File`/`Directory`
+
+        Args:
+            pathname (str): The file path of the `File`/`Directory` to change the owner of
+            owner (int): The UID of the new owner
+            group (int): The GID of the new owner
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         find_file = self.fs.find(pathname)
 
         if not find_file.success:
@@ -847,6 +892,15 @@ class Computer:
         return Result(success=True)
 
     def sys_chdir(self, pathname: str) -> Result:
+        """
+        Change the `current_dir` of the current `Session`
+
+        Args:
+            pathname (str): The file path of the directory to `cd` into
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         find_file = self.fs.find(pathname)
 
         if not find_file.success:
@@ -866,6 +920,7 @@ class Computer:
     def sys_getuid(self) -> int:
         """
         Returns the UID of the `Computer`'s current user
+
         Returns:
             int: UID of the `Computers`'s current user (from most recent session)
         """
@@ -875,6 +930,21 @@ class Computer:
         return self.sessions[-1].effective_uid
 
     def sys_setuid(self, uid: int) -> Result:
+        """
+        Change current `Session`'s effective UID to the given `UID`
+
+        Notes:
+            setuid() followed the current rules:
+                * If the "caller" uid is root, change the uid to whatever is given
+                * If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+                * If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
+
+        Args:
+            uid (int): The new UID to change to
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         # TODO: Implement a PROPER setuid
         # The way setuid should work:
         # If the "caller" uid is root, change the uid to whatever is given
@@ -890,6 +960,7 @@ class Computer:
     def sys_getgid(self) -> int:
         """
         Returns the (primary) GID of the `Computer`'s current user
+
         Returns:
             int: (primary) GID of the `Computers`'s current user (from most recent session)
         """
@@ -934,6 +1005,12 @@ class Computer:
         return Result(success=True)
 
     def sys_gethostname(self) -> str:
+        """
+        Gets the current system hostname (from internal var, not /etc/hostname)
+
+        Returns:
+            str: "localhost" if the hostname isn't set, otherwise, the current `Computer`'s hostname
+        """
         return "localhost" if not self.hostname else self.hostname
 
     def sys_getcwd(self) -> FSBaseObject:
@@ -941,7 +1018,7 @@ class Computer:
         Get current directory in the file system
 
         Returns:
-            FSBaseObjectSB: The  user's current directory
+            FSBaseObject: The  user's current directory
         """
         if len(self.sessions) == 0:
             return self.fs.files
@@ -949,6 +1026,21 @@ class Computer:
             return self.sessions[-1].current_dir
 
     def sys_access(self, pathname: str, mode: int) -> Result:
+        """
+        Check if the current effective UID has a given permission to the given `File`/`Directory`
+        Possible modes are:
+            * F_OK: File exists
+            * R_OK: Read permission
+            * W_OK: Write permissions
+            * X_OK: Execute permission
+
+        Args:
+            pathname (str): The file path of the given `File`/`Directory` to check
+            mode (int): Bitwise flags of the permissions to check
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         # We need to find the file no matter what we do, so lets just find it now
         find_file = self.fs.find(pathname)
 
@@ -974,6 +1066,12 @@ class Computer:
         return Result(success=success)
 
     def sys_gettimeofday(self) -> Result:
+        """
+        Get the current time (host systems time)
+
+        Returns:
+            timeval: A `timeval` struct containing the current time in seconds
+        """
         # TODO: Add get time by timezone
         timestamp = time()
         seconds = int(timestamp)
@@ -982,6 +1080,15 @@ class Computer:
         return Result(success=True, data=timeval(seconds, microseconds))
 
     def sys_stat(self, path: str) -> Result:
+        """
+        Get information about a given file
+
+        Args:
+            path (str): The path of the given `File`/`Directory` to get info about
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly and the data flag containing a `stat_struct` object if successful
+        """
         find_file = self.fs.find(path)
 
         if not find_file.success:
@@ -1035,6 +1142,16 @@ class Computer:
         return Result(success=True, data=stat_result)
 
     def sys_mkdir(self, pathname: str, mode: int) -> Result:
+        """
+        Make a directory
+
+        Args:
+            pathname (str): The path of the directory to make
+            mode (int): Octal permissions of the new `Directory`
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly and the data flag containing the new `Directory` object if successful
+        """
         # Make sure it doesn't already exist
         find_dir = self.fs.find(pathname)
 
@@ -1330,7 +1447,7 @@ class Router(Computer):
         Also, assign an IP address using the `dhcp()` function.
 
         Args:
-            client (Computer): The `Computer` instance to connect to the `Router`'s LAN
+            client (:obj:`Computer`): The `Computer` instance to connect to the `Router`'s LAN
             subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
@@ -1373,7 +1490,6 @@ class ISPRouter(Router):
         super().__init__()
         self.wan = "1.1.1.1"
         self.used_ips = ["1.1.1.1"]
-        self.whois_records = {}
 
     def dhcp(self, **kwargs) -> Result:
         """
@@ -1394,7 +1510,7 @@ class ISPRouter(Router):
         Also, assign an IP address using the `dhcp()` function.
 
         Args:
-            client (Computer): The `Computer` instance to connect to the `ISPRouter`
+            client (:obj:`Computer`): The `Computer` instance to connect to the `ISPRouter`
 
         Returns:
             Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
@@ -1408,26 +1524,6 @@ class ISPRouter(Router):
         else:
             # Failed for some reason (DHCP will give us our error)
             return dhcp_result
-
-    def add_whois(self, domain_name: str) -> None:
-        self.whois_records[domain_name] = {"domain_name": domain_name.upper()}
-
-    def get_whois(self, domain_name: str) -> Result:
-        """
-        Get a whois record (by domain name)
-
-        Args:
-            domain_name (str): The domain name to search
-
-        Returns:
-            Result: A `Result` object with the `success` flag appropriately and the `data` flag containing the fields if successful
-        """
-        record = self.whois_records.get(domain_name)
-
-        if not record:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
-
-        return Result(success=True, data=record)
 
     def find_client(self, host: str, port: int) -> Result:
         if host == self.wan:

@@ -10,6 +10,7 @@ from blackhat.services.webserver import WebServer
 from blackhat.session import Session
 from blackhat.shell import Shell
 from client.blackhat.services.dnsserver import DNSServer
+from client.blackhat.services.whoisserver import WhoIsServer
 
 load_save_success = False
 
@@ -154,6 +155,8 @@ if not load_save_success:
 
         isp.services[53] = DNSServer(isp)
         isp.services[53].add_dns_record("google.com", lan2.wan)
+        isp.services[43] = WhoIsServer(isp)
+        isp.services[43].add_whois("google.com")
         isp.port_forwarding = {53: isp}
 
         # Setup our apt server
@@ -184,6 +187,7 @@ if not load_save_success:
         # but before we remove our temporary root session
         comp.run_command("apt", ["install", "nmap"], False)
         comp.run_command("apt", ["install", "john"], False)
+        comp.run_command("apt", ["install", "whois"], False)
         # comp.run_command("touch", ["/usr/bin/ping"], False)
         # comp.run_command("touch", ["/usr/bin/ifconfig"], False)
         # comp.run_command("touch", ["/usr/bin/unshadow"], False)

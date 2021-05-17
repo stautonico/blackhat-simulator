@@ -885,6 +885,13 @@ class StandardFS:
         return Result(success=True, data=current_dir)
 
     def generate_manpages(self):
+        """
+        Loop through all available modules and import them. After, use the module.parse_args(doc=True) to generate
+        a manpage from the available help information.
+
+        Returns:
+            None
+        """
         find_man_dir = self.find("/usr/share/man")
 
         if not find_man_dir.success:
@@ -922,6 +929,18 @@ class StandardFS:
 
 
 def copy(computer, src_path: str, dst_path: str) -> Result:
+    """
+    A helper function to copy a file/directory from a given `src_path` to the given `dst_path`
+
+    Args:
+        computer (Computer): The computer to work on
+        src_path (str): The path of the `File`/`Directory` to copy
+        dst_path (str): The path to copy to. If the final item in the path doesn't exist, but the item one step up does,
+        the final item will be the new name of the `File`/`Directory`
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    """
     find_src = computer.fs.find(src_path)
 
     if not find_src.success:

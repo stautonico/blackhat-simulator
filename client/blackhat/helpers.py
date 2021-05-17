@@ -66,6 +66,9 @@ class Result:
 
 # Modes for access()
 class AccessMode(IntFlag):
+    """
+    Argument for the `sys_access` system call
+    """
     F_OK = 1 << 0  # Check for existence
     R_OK = 1 << 1  # Check read bit
     W_OK = 1 << 2  # Check write bit
@@ -73,16 +76,25 @@ class AccessMode(IntFlag):
 
 
 class RebootMode(IntFlag):
+    """
+    Argument for the `sys_reboot` system call
+    """
     LINUX_REBOOT_CMD_POWER_OFF = 1 << 0  # Shut down the computer
     LINUX_REBOOT_CMD_RESTART = 1 << 1    # Reboot the computer
 
 class timeval:
+    """
+    Struct for time related functions
+    """
     def __init__(self, tv_sec, tv_usec):
         self.tv_sec = tv_sec
         self.tv_usec = tv_usec
 
 
 class stat_struct:
+    """
+    Result of a stat()
+    """
     def __init__(self, st_isfile: bool, st_mode: int, st_nlink: int, st_uid: int, st_gid: int, st_size: float,
                  st_atime: int, st_mtime: int, st_ctime: int, st_path: str):
         self.st_isfile: bool = st_isfile  # Bool telling if file or is dir
@@ -116,6 +128,9 @@ class stat_struct:
 
 
 class passwd:
+    """
+    An entry in the systems users database
+    """
     def __init__(self, username: str, password: str, uid: int, gid: int, gecos: str = None, home_dir: str = None):
         self.pw_name = username
         self.pw_passwd = password

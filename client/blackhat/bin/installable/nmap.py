@@ -2,16 +2,62 @@ import ipaddress
 
 from tabulate import tabulate
 
-from ...computer import Computer
 from ...helpers import Result
 from ...lib.input import ArgParser
+from ...lib.netdb import gethostbyname
 from ...lib.output import output
 
 __COMMAND__ = "nmap"
-__VERSION__ = "1.1"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
+__VERSION__ = "1.2"
+
+from ...lib.sys import socket
+from ...lib.unistd import write
 
 
-def main(computer: Computer, args: list, pipe: bool) -> Result:
+def parse_args(args=[], doc=False):
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
+    parser.add_argument("host")
+    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+def main(args: list, pipe: bool) -> Result:
     """
     nmap - Network exploration tool and security / port scanner
 
@@ -19,12 +65,7 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add some of the flags that nmap has
 
-    parser = ArgParser(prog=__COMMAND__)
-
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
-    parser.add_argument("host")
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         # `host` argument is required unless we have --version
@@ -39,36 +80,44 @@ def main(computer: Computer, args: list, pipe: bool) -> Result:
         if not args:
             return output(f"", pipe)
         else:
-            # Lets try to find the computer by address
-            find_computer_result = computer.parent.find_client(args.host)
+            # Try to resolve the hostname
+            resolve_host = gethostbyname(args.host)
+            if not resolve_host.success:
+                return output(f"{__COMMAND__}: Could not resolve host: {args.host}", pipe, success=False)
 
-            if find_computer_result.success:
-                found_comp = find_computer_result.data
-                # Now, lets generate a table for outputting
-                # Table format is [[<PORT>/tcp, "open", <SERVICE_NAME>]]
-                headers = ["PORT", "STATE", "SERVICE"]
-                table = []
-                # Sort the results by port number (asc)
-                for key, value in sorted(found_comp.port_forwarding.items(), key=lambda item: int(item[0])):
-                    table.append([f"{key}/tcp", "open", value.services[key].name])
+            if resolve_host.data.h_addr != args.host:
+                domain_name = True
+            else:
+                domain_name = False
 
-                try:
-                    is_ipv4 = ipaddress.ip_address(args.host)
-                except ValueError:
-                    is_ipv4 = False
-                    # Try to resolve the domain to get the ip manually
-                    resolve_host = computer.parent.resolve_dns(args.host)
-                    if resolve_host.success:
-                        domain_ip_address = resolve_host.data
-                    else:
-                        domain_ip_address = "?"
+            # Lets try to find the connect by address
+            sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+            addr_struct = socket.SockAddr(socket.AF_INET, 0, resolve_host.data.h_addr)
+            connect = socket.connect(sock, addr_struct)
 
-                # Initial message is different depending on if we passed an ip address or domain name
-                if is_ipv4:
-                    output_text = f"Nmap scan report for {args.host}"
-                else:
-                    output_text = f"Nmap scan report for {args.host} ({domain_ip_address})"
+            if not connect:
+                return output(f"{__COMMAND__}: Failed to connect to {args.host}: Connection timed out", pipe, success=False)
 
-                output_text += "\n" + tabulate(table, headers=headers, tablefmt="plain")
+            # Now, lets generate a table for outputting
+            # Table format is [[<PORT>/tcp, "open", <SERVICE_NAME>]]
+            headers = ["PORT", "STATE", "SERVICE"]
+            table = []
+            # Loop through each port and try to connect
+            for x in range(1, 65535 + 1):
+                sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+                addr_struct = socket.SockAddr(socket.AF_INET, x, resolve_host.data.h_addr)
+                connect = socket.connect(sock, addr_struct)
 
-                return output(output_text, pipe)
+                if connect.success:
+                    table.append([f"{x}/tcp", "open", f"{sock.metadata.get('name')} {sock.metadata.get('version')}"])
+
+            # Initial message is different depending on if we passed an ip address or domain name
+            if domain_name:
+                output_text = f"Nmap scan report for {args.host} ({resolve_host.data.h_addr})"
+            else:
+                output_text = f"Nmap scan report for {args.host}"
+
+
+            output_text += "\n" + tabulate(table, headers=headers, tablefmt="plain")
+
+            return output(output_text, pipe)

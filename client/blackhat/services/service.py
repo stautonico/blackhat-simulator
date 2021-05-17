@@ -22,3 +22,11 @@ class Service:
         """int: The port that the give service runs on"""
         self.computer = computer
         """Computer: The computer the service is running on"""
+
+    def get_metadata(self):
+        return {
+            "name": self.name,
+            "brand": self.brand,
+            "version": self.version,
+            "description": self.description,
+        }
