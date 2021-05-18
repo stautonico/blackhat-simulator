@@ -8,6 +8,12 @@ from ..shell import Shell
 
 
 def init():
+    """
+    Setup the vars and systems required for the tests to run properly
+
+    Returns:
+        None
+    """
     computer = Computer()
     # Create a temporary root session for initializing stuff
     session = Session(0, computer.fs.files, 0)

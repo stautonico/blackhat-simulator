@@ -1,2 +1,0 @@
-http://linasm.sourceforge.net/docs/syscalls/filesystem.php
-https://www.linuxhowtos.org/manpages/

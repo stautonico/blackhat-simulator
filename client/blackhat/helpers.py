@@ -2,6 +2,7 @@ from enum import Enum
 from enum import IntFlag
 from typing import Union
 
+
 class ResultMessages(Enum):
     """
     Enum: Messages regarding the status of a syscall
@@ -39,17 +40,16 @@ class ResultMessages(Enum):
 
 
 class Result:
-    """
-    Class that contains status information about a "syscall"
-
-    Args:
-        success (bool): Success status of the "syscall"
-        message (ResultMessages, optional): Message regarding the status (successful or otherwise). May or may not be used. Changes on a case by case basis
-        data (str, optional): Data returned by the function. Changes on a case by case basis
-
-    """
-
     def __init__(self, success: bool, message: Union[ResultMessages, None] = None, data=None):
+        """
+        A class that standardized the way a function returns information
+
+        Args:
+            success (bool): Success status of the function
+            message (ResultMessages, optional): Message regarding the status (successful or otherwise). May or may not be used. Changes on a case by case basis
+            data (str, optional): Data returned by the function. Changes on a case by case basis
+
+        """
         self.success = success
         self.message = message
         self.data = data
@@ -80,23 +80,40 @@ class RebootMode(IntFlag):
     Argument for the `sys_reboot` system call
     """
     LINUX_REBOOT_CMD_POWER_OFF = 1 << 0  # Shut down the computer
-    LINUX_REBOOT_CMD_RESTART = 1 << 1    # Reboot the computer
+    LINUX_REBOOT_CMD_RESTART = 1 << 1  # Reboot the computer
+
 
 class timeval:
-    """
-    Struct for time related functions
-    """
     def __init__(self, tv_sec, tv_usec):
+        """
+        Struct for time related functions
+
+        Args:
+            tv_sec (int): The current unix timestamp (seconds)
+            tv_usec (float): The current unix timestamp (miliseconds)
+        """
         self.tv_sec = tv_sec
         self.tv_usec = tv_usec
 
 
 class stat_struct:
-    """
-    Result of a stat()
-    """
     def __init__(self, st_isfile: bool, st_mode: int, st_nlink: int, st_uid: int, st_gid: int, st_size: float,
                  st_atime: int, st_mtime: int, st_ctime: int, st_path: str):
+        """
+        A 'struct' object containing info about a `File`/`Directory`
+
+        Args:
+            st_isfile (bool): If the item is a file
+            st_mode (int): The octal of a files permissions
+            st_nlink (int): The number of links to the item
+            st_uid (int): The UID of the owner of the file
+            st_gid (int): The GID of the group owner of the file
+            st_size (float): The size of the item in bytes
+            st_atime (int): The unix timestamp of the last time the item was accessed
+            st_mtime (int): The unix timestamp of the last time the item's content was modified
+            st_ctime (int): The unix timestamp of the last time the item was modified in any way (content, metadata, perms, etc)
+            st_path (str): The full path of the item in the file system
+        """
         self.st_isfile: bool = st_isfile  # Bool telling if file or is dir
         self.st_mode: int = st_mode  # chmod mode
         self.st_nlink: int = st_nlink  # How many links
@@ -128,10 +145,18 @@ class stat_struct:
 
 
 class passwd:
-    """
-    An entry in the systems users database
-    """
     def __init__(self, username: str, password: str, uid: int, gid: int, gecos: str = None, home_dir: str = None):
+        """
+        An entry in the systems users database
+
+        Args:
+            username (str): The user's username
+            password (str): The user's password hash (MD5)
+            uid (int): The UID of the user
+            gid (int): The GID of the user
+            gecos (str): Extra information about the user (first name, last name, office number, etc)
+            home_dir (str): The path of the users home directory
+        """
         self.pw_name = username
         self.pw_passwd = password
         self.pw_uid = uid
@@ -149,6 +174,3 @@ class passwd:
         output += f"    pw_dir: {self.pw_dir}\n"
         output += "}"
         return output
-
-
-

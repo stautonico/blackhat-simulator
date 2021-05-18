@@ -13,6 +13,16 @@ __DESCRIPTION_LONG__ = """Echo the STRING(s) to standard output
 __VERSION__ = "1.2"
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("string", nargs="+")
     parser.add_argument("-n", dest="nonewline", action="store_true", help="do not output the trailing newline")

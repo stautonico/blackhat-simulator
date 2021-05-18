@@ -288,7 +288,7 @@ class Computer:
                         plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
         Returns:
-            Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the new users UID if successful.
+            Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
         """
         if self.get_user(username=username).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
@@ -340,7 +340,7 @@ class Computer:
             username (str): The username of the user to delete
 
         Returns:
-            Result: A `Result` instance with the `success` flag set appropriately.
+            Result: A `Result` instance with the `success` flag set accordingly.
         """
         if self.get_user(username=username).success:
             self.database.execute("DELETE FROM blackhat_user WHERE computer_id=? and username=?", (self.id, username))
@@ -425,7 +425,7 @@ class Computer:
             gid (int, optional): The GID of the new user
 
         Returns:
-            Result: A `Result` instance with the `success` flag set appropriately. The `data` flag contains the GID if successful.
+            Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
         """
         if self.get_group(name=name).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
@@ -464,7 +464,7 @@ class Computer:
             name (str): The name of the group to delete
 
         Returns:
-            Result: A `Result` instance with the `success` flag set appropriately.
+            Result: A `Result` instance with the `success` flag set accordingly.
         """
         if self.get_group(name=name).success:
             self.database.execute("DELETE FROM blackhat_group WHERE computer_id=? and name=?", (self.id, name))
@@ -767,7 +767,7 @@ class Computer:
             dns_server (str, optional) The DNS server to use to lookup the domain
 
         Returns:
-            Result: A `Result` object with the success and data flag set appropriately
+            Result: A `Result` object with the success and data flag set accordingly
         """
         if dns_server:
             # We need to try to find the given dns server
@@ -983,7 +983,7 @@ class Computer:
             hostname (str): The `Computer`'s new hostname
 
         Returns:
-            Result: A `Result` instance with the `success` flag set appropriately.
+            Result: A `Result` instance with the `success` flag set accordingly.
         """
         # Try to find the hostname file
         if self.sys_getuid() != 0:
@@ -1189,6 +1189,16 @@ class Computer:
         return Result(success=True, data=new_dir)
 
     def sys_chmod(self, pathname: str, mode: int) -> Result:
+        """
+        Change the permission mode of a `File`/`Directory`
+
+        Args:
+            pathname (str): File path of the `File`/`Directory` to change mode of
+            mode (int): Octal permissions of the given pathname
+
+        Returns:
+            Result: A `Result` instance with the `success` flag set accordingly.
+        """
         find_file = self.fs.find(pathname)
 
         if not find_file.success:
@@ -1223,6 +1233,16 @@ class Computer:
         return Result(success=True)
 
     def sys_creat(self, pathname: str, mode: int) -> Result:
+        """
+        Make a file
+
+        Args:
+            pathname (str): The path of the file to make
+            mode (int): Octal permissions of the new `File`
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         # Try to resolve the path
         find_file = self.fs.find(pathname)
 
@@ -1253,6 +1273,16 @@ class Computer:
         return Result(success=True)
 
     def sys_rename(self, oldpath: str, newpath: str) -> Result:
+        """
+        Rename or move a file or directory
+
+        Args:
+            oldpath (str): The original file/directory path to rename
+            newpath (str): The new path of the file/directory
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         find_old = self.fs.find(oldpath)
 
         if not find_old.success:
@@ -1275,6 +1305,16 @@ class Computer:
         return Result(success=True)
 
     def sys_exit(self, force=False) -> None:
+        """
+        Exit a session and return to the previous session. If a previous computer exists and no sessions exist,
+        return to the previous computer. If no previous computer exists, exit the game.
+
+        Args:
+            force (bool): If a prev computer exists, exit to previous computer regardless of previous sessions. If no previous computers exist, exit the game.
+
+        Returns:
+            None
+        """
         if force:
             if len(self.shell.computers) == 1:
                 self.save()
@@ -1293,6 +1333,15 @@ class Computer:
                 self.shell.computers.pop()
 
     def sys_reboot(self, mode: int) -> Result:
+        """
+        Simulate a computer reboot. Clear all sessions and re-initialize the machine
+
+        Args:
+            mode (int: Bitwise flags of the operation to take
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         if self.sys_getuid() != 0:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
@@ -1314,6 +1363,15 @@ class Computer:
         return Result(success=True)
 
     def sys_rmdir(self, pathname: str) -> Result:
+        """
+        Remove an empty directory
+
+        Args:
+            pathname (str): The file path of the empty `Directory` to remove
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
         find_result = self.fs.find(pathname)
 
         if not find_result.success:
@@ -1333,6 +1391,16 @@ class Computer:
         return Result(success=True)
 
     def sys_execv(self, pathname: str, argv: list) -> Result:
+        """
+        Execute a file
+
+        Args:
+            pathname (str): The path name of the binary to execute
+            argv (list): A list of arguments to pass to the binary
+
+        Returns:
+            Result: A `Result` arguments containing the output from the binary
+        """
         find_result = self.fs.find(pathname)
 
         if not find_result.success:
@@ -1344,9 +1412,29 @@ class Computer:
         return self.run_command(pathname.split("/")[-1], argv, False)
 
     def sys_execvp(self, command: str, argv: list) -> Result:
+        """
+        Execute a command using the PATH rather than the full binary path. Does exactly what the system shell does.
+
+        Args:
+            command (str): The command to run
+            argv (list): A list of arguments to pass to the binary
+
+        Returns:
+            Result: A `Result` arguments containing the output from the binary
+        """
         return self.run_command(command, argv, False)
 
     def sys_unlink(self, pathname: str) -> Result:
+        """
+        Removes a link to a file. If there are no links left, the file is removed.
+
+        Args:
+            pathname (str): The file path of the `File` to unlink
+
+        Returns:
+            Result: A `Result` arguments containing the output from the binary
+
+        """
         find_result = self.fs.find(pathname)
 
         if not find_result.success:
@@ -1384,7 +1472,7 @@ class Router(Computer):
             subnet (int): subnet id to assign the client to
 
         Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the IP to assign to a given client.
         """
         # Split the router's IP to get the first 16 bits
         ip_split = self.lan.split(".")
@@ -1451,7 +1539,7 @@ class Router(Computer):
             subnet (int, optional): The subnet id to assign the given `Computer` to
 
         Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the `client`'s newly assigned IP address if successful.
         """
         # Generate an IP for the client
         generate_ip_status = self.dhcp(subnet)
@@ -1496,7 +1584,7 @@ class ISPRouter(Router):
         Distributes IP addresses to clients on the network
 
         Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the IP to assign to a given client.
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the IP to assign to a given client.
         """
         while True:
             ip = ".".join(str(choice([x for x in range(1, 256) if x not in [192, 168]])) for _ in range(4))
@@ -1513,7 +1601,7 @@ class ISPRouter(Router):
             client (:obj:`Computer`): The `Computer` instance to connect to the `ISPRouter`
 
         Returns:
-            Result: A `Result` with the `success` flag set appropriately. The `data` flag contains the `client`'s newly assigned IP address if successful.
+            Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the `client`'s newly assigned IP address if successful.
         """
         dhcp_result = self.dhcp()
         if dhcp_result.success:

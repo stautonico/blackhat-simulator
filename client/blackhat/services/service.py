@@ -24,6 +24,12 @@ class Service:
         """Computer: The computer the service is running on"""
 
     def get_metadata(self):
+        """
+        Get extra information about a service like service name and version
+
+        Returns:
+            dict: A dict containing the service name, brand, version, and a brief description
+        """
         return {
             "name": self.name,
             "brand": self.brand,

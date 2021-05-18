@@ -8,6 +8,16 @@ computer: Optional["Computer"] = None
 
 
 def update(comp: "Computer"):
+    """
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    """
     global computer
     computer = comp
 
@@ -16,6 +26,16 @@ passwd = passwd_internal
 
 
 def getpwent(username: str = None, uid: int = None) -> Result:
+    """
+    Get an entry from the passwd file
+
+    Args:
+        username (str, optional): The username of the user to find
+        uid (int, optional): The UID of the user to find
+
+    Returns:
+        Result: A `Result` object containing a `passwd` object if successful
+    """
     if not username and not uid:
         users = []
 
@@ -38,6 +58,15 @@ def getpwent(username: str = None, uid: int = None) -> Result:
 
 # TODO: Maybe implement putspent for shadow file
 def putpwent(entry: passwd) -> Result:
+    """
+    Add an entry to the passwd file
+
+    Args:
+        entry (:obj:`passwd`): The `passwd` object containing the info to add to the passwd file
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    """
     if computer.sys_getuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 

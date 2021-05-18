@@ -6,6 +6,16 @@ computer: Optional["Computer"] = None
 
 
 def update(comp: "Computer"):
+    """
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    """
     global computer
     computer = comp
 
