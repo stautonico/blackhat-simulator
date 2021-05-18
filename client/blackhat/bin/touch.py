@@ -1,70 +1,94 @@
-from ..computer import Computer
-from ..fs import File
-from ..helpers import SysCallStatus
+from ..helpers import Result, ResultMessages
+from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, getgid, getcwd
 
 __COMMAND__ = "touch"
-__VERSION__ = "1.1"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
+__VERSION__ = "1.0"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def parse_args(args=[], doc=False):
     """
-    # TODO: Add docstring for manpage
-    """
-    parser = ArgParser(prog=__COMMAND__)
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("files", nargs="+")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.files:
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            elif item.nargs == "+":
+                SYNOPSIS += f"[{item.dest.upper()}]... "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -> Result:
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         output_text = ""
 
         at_least_one_failed = False
 
         for filename in args.files:
-            new_filename = None
-            dir_to_write_to = None
+            result = creat(filename)
 
-            if "/" in filename:
-                # We try to find the entire path at first (we expect this to fail)
-                result = computer.fs.find(filename)
-                if not result.success:
-                    # We want to try one more time, but remove what we expect to be the filename
-                    result = computer.fs.find("/".join(filename.split("/")[:-1]))
-                    # If this fails, we can assume that the directory the user entered is bad
-                    if not result.success:
-                        at_least_one_failed = True
-                        output_text += f"{__COMMAND__}: cannot touch '{filename}': No such file or directory\n"
-                    # Success!
-                    new_filename = filename.split("/")[-1]
-                    dir_to_write_to = result.data
-            else:
-                if filename not in getcwd().files:
-                    new_filename = filename
-                    dir_to_write_to = getcwd()
-                else:
-                    return output("", pipe, success=False)
-
-            # Make sure that we have write permissions of the dir
-            if dir_to_write_to.check_perm("write", computer).success:
-                newfile = File(new_filename, "", dir_to_write_to, getuid(), getgid())
-                dir_to_write_to.add_file(newfile)
-            else:
+            if not result.success:
                 at_least_one_failed = True
-                output_text += f"{__COMMAND__}: cannot touch '{filename}': Permission denied\n"
+                if result.message == ResultMessages.NOT_FOUND:
+                    output_text += f"{__COMMAND__}: cannot touch '{filename}': No such file or directory\n"
+                elif result.message == ResultMessages.NOT_ALLOWED:
+                    output_text += f"{__COMMAND__}: cannot touch '{filename}': Permission denied\n"
 
         return output(output_text, pipe, success=not at_least_one_failed)

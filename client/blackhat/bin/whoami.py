@@ -1,8 +1,7 @@
-from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
+from ..lib.unistd import getuid, get_user
 
 __COMMAND__ = "whoami"
 __DESCRIPTION__ = "print effective userid"
@@ -10,6 +9,16 @@ __DESCRIPTION_LONG__ = "Print the user name associated with the current effectiv
 __VERSION__ = "1.2"
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
@@ -51,7 +60,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -67,10 +76,10 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        lookup_result: SysCallStatus = computer.find_user(getuid())
+        lookup_result: Result = get_user(uid=getuid())
 
         if lookup_result.success:
             return output(lookup_result.data.username, pipe)
         else:
             return output(f"{__COMMAND__}: failed to find username for uid {getuid()}", pipe, success=False,
-                          success_message=SysCallMessages.NOT_FOUND)
+                          success_message=ResultMessages.NOT_FOUND)

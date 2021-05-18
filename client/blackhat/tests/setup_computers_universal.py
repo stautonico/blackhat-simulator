@@ -8,6 +8,12 @@ from ..shell import Shell
 
 
 def init():
+    """
+    Setup the vars and systems required for the tests to run properly
+
+    Returns:
+        None
+    """
     computer = Computer()
     # Create a temporary root session for initializing stuff
     session = Session(0, computer.fs.files, 0)
@@ -30,7 +36,7 @@ def init():
 
     computer.sessions.append(session)
 
-    computer.update_user_and_group_files()
+    computer.sync_user_and_group_files()
 
     computer.run_current_user_shellrc()
     computer.run_command("cd", ["~"], False)

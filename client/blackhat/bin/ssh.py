@@ -2,7 +2,7 @@ from getpass import getpass
 from hashlib import md5
 
 from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -12,7 +12,7 @@ __VERSION__ = "1.1"
 from ..session import Session
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -54,7 +54,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                           success=False)
 
         # Try to get the user from the remote computer
-        user_result = computer_result.data.find_user(username=username)
+        user_result = computer_result.data.get_user(username=username)
 
         # If we found the host, let's try to authenticate with the given host
         for x in range(3):

@@ -1,7 +1,8 @@
-from ...computer import Computer
-from ...helpers import SysCallStatus
+from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.sys.stat import stat
+from ...lib.unistd import read
 
 __COMMAND__ = "unshadow"
 __DESCRIPTION__ = "Combines a passwd file and shadow file for cracking with john"
@@ -10,6 +11,16 @@ __VERSION__ = "1.0"
 
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("password", help="File containing usernames, usually /etc/passwd")
     parser.add_argument("shadow", help="File containing usernames and password hashes, usually /etc/shadow")
@@ -54,7 +65,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -69,8 +80,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
         # Try to open the given password and shadow file
-        find_password_file = computer.fs.find(args.password)
-        find_shadow_file = computer.fs.find(args.shadow)
+        find_password_file = stat(args.password)
+        find_shadow_file = stat(args.shadow)
 
         if not find_password_file.success:
             return output(f"{__COMMAND__}: {args.password}: No such file or directory", pipe, success=False)
@@ -78,8 +89,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if not find_shadow_file.success:
             return output(f"{__COMMAND__}: {args.shadow}: No such file or directory", pipe, success=False)
 
-        read_password_content = find_password_file.data.read(computer)
-        read_password_shadow = find_shadow_file.data.read(computer)
+        read_password_content = read(args.password)
+        read_password_shadow = read(args.shadow)
 
         if not read_password_content.success:
             return output(f"{__COMMAND__}: {args.password}: Permission denied", pipe, success=False)

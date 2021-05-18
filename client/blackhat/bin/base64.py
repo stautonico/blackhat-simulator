@@ -1,18 +1,27 @@
 from base64 import b64decode, b64encode
 from binascii import Error
 
-from ..computer import Computer
-from ..fs import File
-from ..helpers import SysCallStatus
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = "base64"
 __DESCRIPTION__ = "base64 encode/decode data and print to standard output"
-__VERSION__ = "1.2"
+__VERSION__ = "2.0"
 
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("files", nargs="+")
     parser.add_argument("-d", "--decode", action="store_true", help="decode data")
@@ -57,7 +66,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -77,25 +86,22 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
         output_text = ""
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f"{__COMMAND__}: {filename}: No such file or directory\n"
-            else:
-                file: File = find_file_result.data
-                if file.is_directory():
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f"{__COMMAND__}: {filename}: No such file or directory\n"
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f"{__COMMAND__}: {filename}: Permission denied\n"
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
                     output_text += f"{__COMMAND__}: {filename}: Is a directory\n"
-                else:
-                    # We need read perms!
-                    if not file.check_perm("read", computer).success:
-                        output_text += f"{__COMMAND__}: {filename}: Permission denied\n"
-                    else:
-                        if args.decode:
-                            try:
-                                output_text += f"{file.name}: \n\n{b64decode(file.content.encode()).decode()}\n"
-                            except Error:
-                                output_text += f"{__COMMAND__}: {filename}: invalid input\n"
-                        else:
-                            output_text += f"{file.name}: \n\n{b64encode(file.content.encode()).decode()}\n"
+
+            if args.decode:
+                try:
+                    output_text += f"{filename}: \n\n{b64decode(find_file_result.data.encode()).decode()}\n"
+                except Error:
+                    output_text += f"{__COMMAND__}: {filename}: invalid input\n"
+            else:
+                output_text += f"{filename}: \n\n{b64encode(find_file_result.data.encode()).decode()}\n"
 
         if args.wrap:
             if args.wrap == 0:

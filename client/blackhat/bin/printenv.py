@@ -1,7 +1,7 @@
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import get_env
 
 __COMMAND__ = "printenv"
 __DESCRIPTION__ = "print all or part of environment"
@@ -10,9 +10,18 @@ __VERSION__ = "1.2"
 
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
-    parser.add_argument("variable", nargs="?")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
@@ -53,12 +62,13 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
+
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
@@ -66,17 +76,9 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        if args.variable:
-            var = computer.get_env(args.variable.upper())
-
-            if not var:
-                return output("", pipe)
-            else:
-                return output(f"{var}", pipe)
-
         output_text = ""
 
-        for key, value in computer.sessions[-1].env.items():
+        for key, value in get_env().items():
             output_text += f"{key}={value}\n"
 
         return output(output_text, pipe)

@@ -1,9 +1,9 @@
 import codecs
 
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import get_env
 
 __COMMAND__ = "echo"
 __DESCRIPTION__ = "display a line of text"
@@ -13,6 +13,16 @@ __DESCRIPTION_LONG__ = """Echo the STRING(s) to standard output
 __VERSION__ = "1.2"
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("string", nargs="+")
     parser.add_argument("-n", dest="nonewline", action="store_true", help="do not output the trailing newline")
@@ -57,8 +67,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
-    # TODO: Add -e flag
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -77,7 +86,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         # If the output starts with $, read from env vars
         for arg in args.string:
             if arg.startswith("$"):
-                env_var = computer.get_env(arg.replace("$", ""))
+                env_var = get_env(arg.replace("$", ""))
                 if env_var:
                     clean_args.append(env_var)
             else:

@@ -1,15 +1,13 @@
-from ..computer import Computer
-from ..fs import Directory
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, getgid, getcwd
+from ..lib.sys.stat import mkdir
 
 __COMMAND__ = "mkdir"
-__VERSION__ = "1.1"
+__VERSION__ = "1.0"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
@@ -32,32 +30,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         return output("", pipe)
     else:
         for filename in args.directories:
-            new_filename = None
-            dir_to_write_to = None
-            if "/" in filename:
-                # We try to find the entire path at first (we expect this to fail)
-                result = computer.fs.find(filename)
-                if not result.success:
-                    # We want to try one more time, but remove what we expect to be the filename
-                    result = computer.fs.find("/".join(filename.split("/")[:-1]))
-                    # If this fails, we can assume that the directory the user entered is bad
-                    if not result.success:
-                        continue
-                    # Success!
-                    new_filename = filename.split("/")[-1]
-                    dir_to_write_to = result.data
-            else:
-                if filename not in getcwd().files:
-                    new_filename = filename
-                    dir_to_write_to = getcwd()
-                else:
-                    continue
-
-            # Make sure that we have write permissions of the dir
-            if dir_to_write_to.check_perm("write", computer).success:
-                newfile = Directory(new_filename, dir_to_write_to, getuid(), getgid())
-                dir_to_write_to.add_file(newfile)
-                continue
-            else:
-                continue
+            result = mkdir(filename)
+            if not result.success:
+                print(f"{__COMMAND__}: Error: {result.message}")
     return output("", pipe)

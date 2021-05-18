@@ -256,3 +256,5 @@ systems.db
 writeup.md
 
 client/blackhat/blackhat.db
+
+*.db-journal

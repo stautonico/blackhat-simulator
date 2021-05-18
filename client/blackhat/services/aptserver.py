@@ -1,24 +1,32 @@
 from .service import Service
 from ..fs import Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 
 
 class AptServer(Service):
-    """
-    Apt repository server that handles requests for installing packages
-
-    NOTE: I have no clue how apt repos work, so this is my best guess from what I read in a medium article 🤷‍♂️
-    # TODO: Create ability to install specific version of a package with apt install nmap=1.1
-    """
-
     def __init__(self, computer):
+        """
+        Apt repository server that handles requests for installing packages
+
+        NOTE: I have no clue how apt repos work, so this is my best guess from what I read in a medium article 🤷‍♂️
+        # TODO: Create ability to install specific version of a package with apt install nmap=1.1
+        """
         super().__init__("AptServer", 80, computer)
 
-    def main(self, args: dict) -> SysCallStatus:
+    def main(self, args: dict) -> Result:
+        """
+        Function that runs when the service is 'connected to'
+
+        Args:
+            args (dict): A dict of arguments that is given to the service to process
+
+        Returns:
+            Result: A `Result` object containing the success status and resulting data of the service
+        """
         find_var_www_html_repo = self.computer.fs.find("/var/www/html/repo/")
 
         if not find_var_www_html_repo.success:
-            return SysCallStatus(success=True, data={})
+            return Result(success=True, data={})
         else:
             repo_dir: Directory = find_var_www_html_repo.data
             if args.get("packages"):
@@ -36,6 +44,6 @@ class AptServer(Service):
                     else:
                         packages_we_dont_have.append(package)
 
-                return SysCallStatus(success=True, data={"have": packages_we_have, "dont_have": packages_we_dont_have})
+                return Result(success=True, data={"have": packages_we_have, "dont_have": packages_we_dont_have})
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+                return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)

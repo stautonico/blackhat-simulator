@@ -1,7 +1,7 @@
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.stdlib import unsetenv, get_env
 
 __COMMAND__ = "unset"
 __DESCRIPTION__ = "unset values and attributes of variables and functions"
@@ -10,6 +10,16 @@ __VERSION__ = "1.2"
 
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("vars", nargs="+")
 
@@ -52,7 +62,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -64,7 +74,8 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         for arg in args.vars:
             if arg.startswith("$"):
                 arg = arg[1:]
-            if arg in computer.sessions[-1].env.keys():
-                del computer.sessions[-1].env[arg]
+
+            if get_env(arg):
+                unsetenv(arg)
 
         return output("", pipe)

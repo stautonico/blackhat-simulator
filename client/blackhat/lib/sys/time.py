@@ -1,26 +1,36 @@
-from time import time
 from typing import Optional
 
-from ...helpers import SysCallStatus
+from ...helpers import Result
+from ...helpers import timeval as timevalinternal
 
 computer: Optional["Computer"] = None
 
 
 def update(comp: "Computer"):
+    """
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    """
     global computer
     computer = comp
 
 
-class timeval:
-    def __init__(self, tv_sec, tv_usec):
-        self.tv_sec = tv_sec
-        self.tv_usec = tv_usec
+# This is here so we can `from sys.time import timeval`
+# And also so we dont have to have two declarations of the same thing
+timeval = timevalinternal
 
 
-def gettimeofday() -> SysCallStatus:
-    # TODO: Add get time by timezone
-    timestamp = time()
-    seconds = int(timestamp)
-    microseconds = int(str(timestamp - seconds).replace("0.", ""))
+def gettimeofday() -> Result:
+    """
+    Get the current time (host systems time)
 
-    return SysCallStatus(success=True, data=timeval(seconds, microseconds))
+    Returns:
+        timeval: A `timeval` struct containing the current time in seconds
+    """
+    return computer.sys_gettimeofday()

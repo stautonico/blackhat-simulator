@@ -1,9 +1,7 @@
-import os
-
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import save
 
 __COMMAND__ = "save"
 __DESCRIPTION__ = "save the game to a file"
@@ -11,6 +9,16 @@ __VERSION__ = "1.2"
 
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("file", nargs="?")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
@@ -52,7 +60,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -68,14 +76,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
     else:
         output_file = args.file if args.file else "blackhat.save"
 
-        # We're going to temporarily disable debug mode (for manual saving)
-        prev_debug_mode = os.environ.get("DEBUGMODE", "false")
-        os.environ["DEBUGMODE"] = "false"
-        save_result = computer.save(output_file)
-        # Restore to what it was before after saving
-        os.environ["DEBUGMODE"] = prev_debug_mode
-
-        if not save_result:
+        if not save(output_file):
             return output(f"{__COMMAND__}: Failed to save!", pipe, success=False)
 
         return output(f"{__COMMAND__}: Successfully saved to {output_file}!", pipe)

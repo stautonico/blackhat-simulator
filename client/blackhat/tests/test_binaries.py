@@ -4,7 +4,7 @@ from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 
 from .setup_computers_universal import init
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 from ..session import Session
 from ..user import User
 
@@ -22,20 +22,27 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("adduser", ["--version"], True)
         self.computer.run_command("adduser", ["--help"], True)
 
+        fail_bc_not_root_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
+        expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED, data="adduser: Only root can add new users!\n")
+
+        self.assertEqual(fail_bc_not_root_result, expected_fail_bc_not_root_result)
+
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+
         create_new_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
-        expected_create_new_user_result = SysCallStatus(success=True, message=None, data=None)
+        expected_create_new_user_result = Result(success=True, message=None, data=None)
         create_duplicate_user_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
-        expected_create_duplicate_user_result = SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS,
-                                                              data="adduser: The user 'testuser' already exists.\n")
+        expected_create_duplicate_user_result = Result(success=False, message=ResultMessages.ALREADY_EXISTS,
+                                                       data="adduser: The user 'testuser' already exists.\n")
 
         self.assertEqual(create_new_user_result, expected_create_new_user_result)
         self.assertEqual(create_duplicate_user_result, expected_create_duplicate_user_result)
 
         # Now confirm that the user was actually added
-        find_user_result = self.computer.find_user(username="testuser")
-        expected_find_user_result = SysCallStatus(success=True, message=None,
-                                                  data=User(1001, "testuser", md5("password".encode()).hexdigest()))
-        self.assertEqual(find_user_result, expected_find_user_result)
+        get_user_result = self.computer.get_user(username="testuser")
+        expected_get_user_result = Result(success=True, message=None,
+                                          data=User(1001, "testuser", md5("password".encode()).hexdigest()))
+        self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
         self.computer.run_command("base32", ["--version"], True)
@@ -67,15 +74,15 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("cd", ["--version"], True)
         self.computer.run_command("cd", ["--help"], True)
 
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home/steve")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
         self.computer.run_command("cd", [".."], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home")
         self.computer.run_command("cd", ["..."], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/")
         self.computer.run_command("cd", ["/etc/skel/Desktop"], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/etc/skel/Desktop")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/etc/skel/Desktop")
         self.computer.run_command("cd", ["~"], True)
-        self.assertEqual(self.computer.get_pwd().pwd(), "/home/steve")
+        self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
 
     def test_chown(self):
         self.computer.run_command("chown", ["--version"], True)
@@ -167,7 +174,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command("hostname", ["localhost"], True)
-        expected_set_hostname_result = SysCallStatus(success=False,
+        expected_set_hostname_result = Result(success=False,
                                                      data="hostname: you must be root to change the host name")
 
         set_hostname_result.data = set_hostname_result.data.strip("\n")
@@ -212,17 +219,24 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(id_result, "steve")
 
     def test_ls(self):
+        import re
         self.computer.run_command("ls", ["--version"], True)
         self.computer.run_command("ls", ["--help"], True)
 
         # In the user's home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command("ls", ["--no-color"], True)
-        expected_ls_result = SysCallStatus(success=True, message=None,
-                                           data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
+        expected_ls_result = Result(success=True, message=None,
+                                    data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
 
         ls_result.data = ls_result.data.strip("\n")
 
-        self.assertEqual(ls_result, expected_ls_result)
+        print(ls_result)
+        print(expected_ls_result)
+
+        color_filter = re.compile(r'\x1b[^m]*m')
+        stripped_color = color_filter.sub('', ls_result.data)
+
+        self.assertEqual(stripped_color, expected_ls_result.data)
         # Make sure .shellrc isn't there (as -a isn't specified)
         self.assertNotIn(".shellrc", ls_result.data)
 
@@ -388,7 +402,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("touch", ["--help"], True)
 
         touch_result = self.computer.run_command("touch", ["testfile"], True)
-        expected_touch_result = SysCallStatus(success=True)
+        expected_touch_result = Result(success=True)
 
         # We should double check that the file exists in our home directory
         self.assertIn("testfile", self.computer.run_command("ls", [], True).data)
@@ -519,4 +533,4 @@ class TestInstallableBinaries(unittest.TestCase):
 
     def setUp(self) -> None:
         self.computer = init()
-        
+

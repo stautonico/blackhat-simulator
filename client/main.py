@@ -9,6 +9,8 @@ from blackhat.services.sshserver import SSHServer
 from blackhat.services.webserver import WebServer
 from blackhat.session import Session
 from blackhat.shell import Shell
+from client.blackhat.services.dnsserver import DNSServer
+from client.blackhat.services.whoisserver import WhoIsServer
 
 load_save_success = False
 
@@ -135,7 +137,11 @@ if not load_save_success:
         other_comp.services[80] = WebServer(other_comp)
         other_comp.services[22] = SSHServer(other_comp)
 
-        lan2.set_hostname("google.com")
+        other_comp.sessions = [Session(0, other_comp.fs.files, 0)]
+        other_comp.run_command("touch", ["/var/www/html/index.html"], pipe=True)
+        other_comp.fs.find("/var/www/html/index.html").data.content = "<h1>Hello world!</h1>"
+
+        lan2.sys_sethostname("google.com")
 
         lan2.services[2222] = SSHServer(lan2)
 
@@ -147,7 +153,11 @@ if not load_save_success:
         # Create a temporary root session for initializing stuff
         lan2_client2.sessions = [Session(0, lan2_client2.fs.files, 0)]
 
-        isp.add_dns_record("google.com", lan2.wan)
+        isp.services[53] = DNSServer(isp)
+        isp.services[53].add_dns_record("google.com", lan2.wan)
+        isp.services[43] = WhoIsServer(isp)
+        isp.services[43].add_whois("google.com")
+        isp.port_forwarding = {53: isp}
 
         # Setup our apt server
         # To setup an apt server, we need /var/www/html/repo
@@ -177,6 +187,13 @@ if not load_save_success:
         # but before we remove our temporary root session
         comp.run_command("apt", ["install", "nmap"], False)
         comp.run_command("apt", ["install", "john"], False)
+        comp.run_command("apt", ["install", "whois"], False)
+        # comp.run_command("touch", ["/usr/bin/ping"], False)
+        # comp.run_command("touch", ["/usr/bin/ifconfig"], False)
+        # comp.run_command("touch", ["/usr/bin/unshadow"], False)
+        # comp.run_command("touch", ["/usr/bin/john"], False)
+        # comp.run_command("touch", ["/usr/bin/dig"], False)
+        # comp.run_command("touch", ["/usr/bin/curl"], False)
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
@@ -186,7 +203,7 @@ if not load_save_success:
         # comp.sessions.append(session)
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
-            computer.update_user_and_group_files()
+            computer.sync_user_and_group_files()
 
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)

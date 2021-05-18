@@ -1,10 +1,10 @@
 from typing import Optional
 
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 
 
 def output(text: str, pipe: bool, success: bool = True,
-           success_message: Optional[SysCallMessages] = None) -> SysCallStatus:
+           success_message: Optional[ResultMessages] = None) -> Result:
     """
     Handle output from binaries and system commands properly with pipe
     If pipe is `True` (we're passing the output of a command into the input of another), we don't want to print the output
@@ -13,10 +13,10 @@ def output(text: str, pipe: bool, success: bool = True,
         text (str): The text to output/pass to the next command
         pipe (bool): If we're going to use pipe for the next command
         success (bool): If the command was successful or not
-        success_message (SysCallMessages, optional): An extra parameter to give additional information about the result of a command
+        success_message (ResultMessages, optional): An extra parameter to give additional information about the result of a command
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with information about the status of a command (success, success message, etc)
+        Result: A `Result` object with information about the status of a command (success, success message, etc)
     """
     # If we're piping the output, we don't want to print the output
     # This function will handle all the logic for pipe/output
@@ -32,4 +32,4 @@ def output(text: str, pipe: bool, success: bool = True,
     if text == "":
         text = None
 
-    return SysCallStatus(success=success, message=success_message, data=text)
+    return Result(success=success, message=success_message, data=text)

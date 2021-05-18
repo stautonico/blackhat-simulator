@@ -1,49 +1,109 @@
+import os
 from getpass import getpass
 
-from ..computer import Computer
-from ..fs import Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
+from ..lib.dirent import readdir
+from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import stat, mkdir
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid
 
 __COMMAND__ = "adduser"
-__VERSION__ = "1.1"
+__DESCRIPTION__ = ""
+__DESCRIPTION_LONG__ = ""
+__VERSION__ = "1.0"
 
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def parse_args(args=[], doc=False):
     """
-    # TODO: Add docstring for manpage
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument("username")
-    parser.add_argument("-p", dest="password")
-    parser.add_argument("-n", dest="noninteractive", action="store_false")
-    parser.add_argument("--version", action="store_true", help=f"output version information and exit")
+    parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
+    parser.add_argument("username", help="Username of the new user to add")
+    parser.add_argument("-p", dest="password", help="Password for the new user")
+    parser.add_argument("-n", dest="noninteractive", action="store_false", help="Don't ask for user input")
+    parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.username:
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f"**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}"
+    SYNOPSIS = f"**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... "
+    DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == "?":
+                SYNOPSIS += f"[{item.dest.upper()}] "
+            elif item.nargs == "+":
+                SYNOPSIS += f"[{item.dest.upper()}]... "
+            else:
+                SYNOPSIS += f"{item.dest.upper()} "
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\t{item.help}\n\n"
+                else:
+                    DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/\n\t\t{item.help}\n\n"
+            elif item.nargs == "+":
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n"
+            else:
+                DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
+
+    if doc:
+        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -> Result:
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        if computer.find_user(username=args.username).success:
+        if getuid() != 0:
+            return output(f"{__COMMAND__}: Only root can add new users!", pipe, success=False,
+                          success_message=ResultMessages.NOT_ALLOWED)
+
+        if get_user(username=args.username).success:
             return output(f"{__COMMAND__}: The user '{args.username}' already exists.", pipe, success=False,
-                          success_message=SysCallMessages.ALREADY_EXISTS)
+                          success_message=ResultMessages.ALREADY_EXISTS)
 
-        prev_uid = computer.get_all_users().data[-1].uid
+        prev_uid = get_all_users().data[-1].uid
 
         if prev_uid == 0:
             next_uid = 1000
         else:
             next_uid = prev_uid + 1
+            user_with_next_uid = get_user(uid=next_uid)
+
+            while user_with_next_uid.success:
+                next_uid += 1
+                user_with_next_uid = get_user(uid=next_uid)
 
         if not args.password:
             if args.noninteractive:
@@ -74,24 +134,15 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
         else:
             password = args.password
 
-        user_result = computer.add_user(args.username, password)
-        group_result = computer.add_group(args.username)
+        user_result = add_user(args.username, password)
+        group_result = add_group(args.username)
         # Find the user object and its its group to the new group
-        computer.add_user_to_group(user_result.data, group_result.data, membership_type="primary")
-
-        update_passwd_result = computer.update_user_and_group_files()
-        update_group_result = computer.update_user_and_group_files()
-
-        if not update_passwd_result.success:
-            return output("passwd: Failed to update password", pipe, success=False)
-
-        if not update_group_result.success:
-            return output(f"passwd: Failed to update groups", pipe, success=False)
+        add_user_to_group(user_result.data, group_result.data, membership_type="primary")
 
         # Create the users home directory (from /etc/skel)
 
-        home_folder_find = computer.fs.find("/home")
-        skel_dir_find = computer.fs.find("/etc/skel")
+        home_folder_find = stat("/home")
+        skel_dir_find = stat("/etc/skel")
 
         if not home_folder_find.success:
             return output(f"{__COMMAND__}: /home is missing, unable to create user's home folder", pipe, success=False)
@@ -100,34 +151,32 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
             return output(f"{__COMMAND__}: /etc/skel is missing, unable to create user's home folder", pipe,
                           success=False)
 
-        home_folder: Directory = home_folder_find.data
-        skel_dir: Directory = skel_dir_find.data
+        mkdir(f"/home/{args.username}", 0o700)
 
-        new_user_folder: Directory = Directory(args.username, home_folder, user_result.data, group_result.data)
-        home_folder.add_file(new_user_folder)
+        # Just make sure we can read /etc/skel (even tho we should be root)
+        skel_read = readdir("/etc/skel")
 
-        # Copy the contents of /etc/skel to the new users folder
-        for file in skel_dir.files.values():
-            computer.run_command("cp", [f"/etc/skel/{file.name}", f"/home/{args.username}/{file.name}", "-r"], pipe)
+        if not skel_read.success:
+            print(f"{__COMMAND__}: Failed to read /etc/skel, unable to create user's home folder")
+        else:
 
-            computer.run_command("chmod", ["a-rwx", f"/home/{args.username}/{file.name}"], pipe)
-            computer.run_command("chmod", ["u+rwx", f"/home/{args.username}/{file.name}"], pipe)
-            # # Locate the new file and update the permissions
-            # TODO: Replace this with the -R flag in chmod (recursive)
-            new_file_find = computer.fs.find(f"/home/{args.username}/{file.name}")
-            if new_file_find.success:
-                computer.run_command("chmod", ["a-rwx", new_file_find.data.pwd()], pipe=False)
-                computer.run_command("chmod", ["u+rwx", new_file_find.data.pwd()], pipe=False)
+            # Copy the contents of /etc/skel to the new users folder
+            for file in skel_read.data:
+                stat_file = stat(os.path.join("/etc/skel", file)).data
+                if stat_file.st_isfile:
+                    creat(f"/home/{args.username}/{file}", 0o700)
+                else:
+                    mkdir(f"/home/{args.username}/{file}", 0o700)
 
-                # Change the file's owner (user and group)
-                computer.run_command("chown",
-                                     [f"{args.username}:{args.username}", f"/home/{args.username}/{file.name}"], pipe)
+                chown(f"/home/{args.username}/{file}", next_uid, next_uid)
 
-        # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
-        new_shellrc_result = computer.fs.find(f"/home/{args.username}/.shellrc")
+            chown(f"/home/{args.username}", next_uid, next_uid)
 
-        if new_shellrc_result.success:
-            new_shellrc_result.data.write(f"export PATH=/bin:\nexport HOME=/home/{args.username}", computer)
+            # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
+            new_shellrc_result = stat(f"/home/{args.username}/.shellrc")
+
+            if new_shellrc_result.success:
+                write(f"/home/{args.username}/.shellrc", f"export PATH=/bin:\nexport HOME=/home/{args.username}")
 
         # Check if we should ask the user for Full name, etc
         if args.noninteractive:
@@ -148,10 +197,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
                     # computer.users[user_result.data].other = other
                     break
 
-        if not update_passwd_result.success:
-            passwd_file = computer.fs.find("/etc/passwd")
-
-            if not passwd_file.success:
+            if not stat("/etc/passwd").success:
                 return output(f"{__COMMAND__}: /etc/passwd file missing! Cannot add new user", pipe, success=False)
 
         return output("", pipe)

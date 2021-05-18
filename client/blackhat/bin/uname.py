@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import gethostname
 
 __COMMAND__ = "uname"
 __DESCRIPTION__ = "print system information"
@@ -11,6 +11,16 @@ __DESCRIPTION_LONG__ = "Print certain system information.  With no OPTION, same 
 __VERSION__ = "1.2"
 
 def parse_args(args=[], doc=False):
+    """
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("-a", "--all", action="store_true",
                         help="print all information, in the following order, except omit -p and -i if unknown:")
@@ -66,7 +76,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
-def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
+def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -83,7 +93,7 @@ def main(computer: Computer, args: list, pipe: bool) -> SysCallStatus:
 
         uname = SimpleNamespace(**{
             "kernel_name": "Linux",
-            "nodename": computer.hostname,
+            "nodename": gethostname(),
             "kernel_release": "1.1",
             "kernel_version": "v1",
             "machine": "x86_64",
