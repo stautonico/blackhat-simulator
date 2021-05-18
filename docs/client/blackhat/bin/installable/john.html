@@ -28,10 +28,12 @@
 </summary>
 <pre><code class="python">from hashlib import md5
 
-from ...computer import Computer
-from ...helpers import SysCallStatus
+from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.sys.stat import stat
+from ...lib.unistd import read, write
+from ...lib.fcntl import creat
 
 __COMMAND__ = &#34;john&#34;
 __DESCRIPTION__ = &#34;&#34;
@@ -40,6 +42,16 @@ __VERSION__ = &#34;1.0&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;password&#34;, help=&#34;The unshadowed file to crack&#34;)
     parser.add_argument(&#34;--wordlist&#34;, help=&#34;The wordlist to use when brute-forcing the passwords&#34;, required=True)
@@ -85,7 +97,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Add ability for john to crack more than just user passwords
     args, parser = parse_args(args)
 
@@ -100,8 +112,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        find_password_file = computer.fs.find(args.password)
-        find_wordlist_file = computer.fs.find(args.wordlist)
+        find_password_file = stat(args.password)
+        find_wordlist_file = stat(args.wordlist)
 
         if not find_password_file.success:
             return output(f&#34;{__COMMAND__}: {args.password}: No such file or directory&#34;, pipe, success=False)
@@ -109,8 +121,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not find_wordlist_file.success:
             return output(f&#34;{__COMMAND__}: {args.wordlist}: No such file or directory&#34;, pipe, success=False)
 
-        try_read_password_file = find_password_file.data.read(computer)
-        try_read_wordlist_file = find_wordlist_file.data.read(computer)
+        try_read_password_file = read(args.password)
+        try_read_wordlist_file = read(args.wordlist)
 
         if not try_read_password_file.success:
             return output(f&#34;{__COMMAND__}: {args.password}: Permission denied&#34;, pipe, success=False)
@@ -165,18 +177,18 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # If we&#39;re outputting, we should try to find the file to write to.
         if args.output:
-            find_output_file = computer.fs.find(args.output)
+            find_output_file = stat(args.output)
             if find_output_file.success:
-                write_result = find_output_file.data.write(output_text, computer)
+                write_result = write(find_output_file.data.st_path, output_text)
             else:
                 # Create the file
-                touch_output = computer.run_command(&#34;touch&#34;, [args.output], pipe)
-                if not touch_output.success:
+                touch_result = creat(args.output)
+                if not touch_result.success:
                     return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
                                   success=False)
-                find_output_file = computer.fs.find(args.output)
+                find_output_file = stat(args.output)
                 if find_output_file.success:
-                    write_result = find_output_file.data.write(output_text, computer)
+                    write_result = write(find_output_file.data.st_path, output_text)
                 else:
                     return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
                                   success=False)
@@ -196,7 +208,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.installable.john.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -204,7 +216,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Add ability for john to crack more than just user passwords
     args, parser = parse_args(args)
 
@@ -219,8 +231,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        find_password_file = computer.fs.find(args.password)
-        find_wordlist_file = computer.fs.find(args.wordlist)
+        find_password_file = stat(args.password)
+        find_wordlist_file = stat(args.wordlist)
 
         if not find_password_file.success:
             return output(f&#34;{__COMMAND__}: {args.password}: No such file or directory&#34;, pipe, success=False)
@@ -228,8 +240,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if not find_wordlist_file.success:
             return output(f&#34;{__COMMAND__}: {args.wordlist}: No such file or directory&#34;, pipe, success=False)
 
-        try_read_password_file = find_password_file.data.read(computer)
-        try_read_wordlist_file = find_wordlist_file.data.read(computer)
+        try_read_password_file = read(args.password)
+        try_read_wordlist_file = read(args.wordlist)
 
         if not try_read_password_file.success:
             return output(f&#34;{__COMMAND__}: {args.password}: Permission denied&#34;, pipe, success=False)
@@ -284,18 +296,18 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # If we&#39;re outputting, we should try to find the file to write to.
         if args.output:
-            find_output_file = computer.fs.find(args.output)
+            find_output_file = stat(args.output)
             if find_output_file.success:
-                write_result = find_output_file.data.write(output_text, computer)
+                write_result = write(find_output_file.data.st_path, output_text)
             else:
                 # Create the file
-                touch_output = computer.run_command(&#34;touch&#34;, [args.output], pipe)
-                if not touch_output.success:
+                touch_result = creat(args.output)
+                if not touch_result.success:
                     return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
                                   success=False)
-                find_output_file = computer.fs.find(args.output)
+                find_output_file = stat(args.output)
                 if find_output_file.success:
-                    write_result = find_output_file.data.write(output_text, computer)
+                    write_result = write(find_output_file.data.st_path, output_text)
                 else:
                     return output(f&#34;{__COMMAND__}: cannot open &#39;{args.output}&#39; for writing: Permission denied&#34;, pipe,
                                   success=False)
@@ -311,12 +323,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;password&#34;, help=&#34;The unshadowed file to crack&#34;)
     parser.add_argument(&#34;--wordlist&#34;, help=&#34;The wordlist to use when brute-forcing the passwords&#34;, required=True)

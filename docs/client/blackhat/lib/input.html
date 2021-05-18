@@ -30,22 +30,41 @@
 
 
 class ArgParser(argparse.ArgumentParser):
-    &#34;&#34;&#34;
-    Custom version of `argparse.ArgumentParser` that disable exiting when an error occurs
-
-    This customer parser works exactly as the standard one does.
-    The only difference is that `ArgParser.error_message` will exist if an error occurs.
-    This variable should be checked for errors
-    &#34;&#34;&#34;
     def __init__(self, *args, **kwargs):
+        &#34;&#34;&#34;
+        Custom version of `argparse.ArgumentParser` that disable exiting when an error occurs
+
+        This customer parser works exactly as the standard one does.
+        The only difference is that `ArgParser.error_message` will exist if an error occurs.
+        This variable should be checked for errors
+        &#34;&#34;&#34;
         super(ArgParser, self).__init__(*args, **kwargs)
 
         self.error_message = &#39;&#39;
 
     def error(self, message):
+        &#34;&#34;&#34;
+        Override `error` method to prevent `ArgParser` from exiting on failure
+
+        Args:
+            message:
+
+        Returns:
+
+        &#34;&#34;&#34;
         self.error_message = message
 
     def parse_args(self, *args, **kwargs):
+        &#34;&#34;&#34;
+        Override `parse_args` method to prevent `ArgParser` from exiting on failure
+
+        Args:
+            *args:
+            **kwargs:
+
+        Returns:
+
+        &#34;&#34;&#34;
         # catch SystemExit exception to prevent closing the application
         result = None
         try:
@@ -69,7 +88,24 @@ class ArgParser(argparse.ArgumentParser):
 <span>(</span><span>*args, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Custom version of <code>argparse.ArgumentParser</code> that disable exiting when an error occurs</p>
+<div class="desc"><p>Object for parsing command line strings into Python objects.</p>
+<p>Keyword Arguments:
+- prog &ndash; The name of the program (default: sys.argv[0])
+- usage &ndash; A usage message (default: auto-generated from arguments)
+- description &ndash; A description of what the program does
+- epilog &ndash; Text following the argument descriptions
+- parents &ndash; Parsers whose arguments should be copied into this one
+- formatter_class &ndash; HelpFormatter class for printing help messages
+- prefix_chars &ndash; Characters that prefix optional arguments
+- fromfile_prefix_chars &ndash; Characters that prefix files containing
+additional arguments
+- argument_default &ndash; The default value for all arguments
+- conflict_handler &ndash; String indicating how to handle conflicts
+- add_help &ndash; Add a -h/-help option
+- allow_abbrev &ndash; Allow long options to be abbreviated unambiguously
+- exit_on_error &ndash; Determines whether or not ArgumentParser exits with
+error info when an error occurs</p>
+<p>Custom version of <code>argparse.ArgumentParser</code> that disable exiting when an error occurs</p>
 <p>This customer parser works exactly as the standard one does.
 The only difference is that <code>ArgParser.error_message</code> will exist if an error occurs.
 This variable should be checked for errors</p></div>
@@ -78,22 +114,41 @@ This variable should be checked for errors</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class ArgParser(argparse.ArgumentParser):
-    &#34;&#34;&#34;
-    Custom version of `argparse.ArgumentParser` that disable exiting when an error occurs
-
-    This customer parser works exactly as the standard one does.
-    The only difference is that `ArgParser.error_message` will exist if an error occurs.
-    This variable should be checked for errors
-    &#34;&#34;&#34;
     def __init__(self, *args, **kwargs):
+        &#34;&#34;&#34;
+        Custom version of `argparse.ArgumentParser` that disable exiting when an error occurs
+
+        This customer parser works exactly as the standard one does.
+        The only difference is that `ArgParser.error_message` will exist if an error occurs.
+        This variable should be checked for errors
+        &#34;&#34;&#34;
         super(ArgParser, self).__init__(*args, **kwargs)
 
         self.error_message = &#39;&#39;
 
     def error(self, message):
+        &#34;&#34;&#34;
+        Override `error` method to prevent `ArgParser` from exiting on failure
+
+        Args:
+            message:
+
+        Returns:
+
+        &#34;&#34;&#34;
         self.error_message = message
 
     def parse_args(self, *args, **kwargs):
+        &#34;&#34;&#34;
+        Override `parse_args` method to prevent `ArgParser` from exiting on failure
+
+        Args:
+            *args:
+            **kwargs:
+
+        Returns:
+
+        &#34;&#34;&#34;
         # catch SystemExit exception to prevent closing the application
         result = None
         try:
@@ -114,16 +169,24 @@ This variable should be checked for errors</p></div>
 <span>def <span class="ident">error</span></span>(<span>self, message)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>error(message: string)</p>
-<p>Prints a usage message incorporating the message to stderr and
-exits.</p>
-<p>If you override this in a subclass, it should not return &ndash; it
-should either exit or raise an exception.</p></div>
+<div class="desc"><p>Override <code>error</code> method to prevent <code><a title="client.blackhat.lib.input.ArgParser" href="#client.blackhat.lib.input.ArgParser">ArgParser</a></code> from exiting on failure</p>
+<h2 id="args">Args</h2>
+<p>message:
+Returns:</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def error(self, message):
+    &#34;&#34;&#34;
+    Override `error` method to prevent `ArgParser` from exiting on failure
+
+    Args:
+        message:
+
+    Returns:
+
+    &#34;&#34;&#34;
     self.error_message = message</code></pre>
 </details>
 </dd>
@@ -131,12 +194,26 @@ should either exit or raise an exception.</p></div>
 <span>def <span class="ident">parse_args</span></span>(<span>self, *args, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Override <code>parse_args</code> method to prevent <code><a title="client.blackhat.lib.input.ArgParser" href="#client.blackhat.lib.input.ArgParser">ArgParser</a></code> from exiting on failure</p>
+<h2 id="args">Args</h2>
+<p><em>args:
+</em>*kwargs:
+Returns:</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(self, *args, **kwargs):
+    &#34;&#34;&#34;
+    Override `parse_args` method to prevent `ArgParser` from exiting on failure
+
+    Args:
+        *args:
+        **kwargs:
+
+    Returns:
+
+    &#34;&#34;&#34;
     # catch SystemExit exception to prevent closing the application
     result = None
     try:

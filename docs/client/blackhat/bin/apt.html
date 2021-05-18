@@ -29,60 +29,107 @@
 <pre><code class="python">import os
 from json import loads
 
-from ..computer import Computer
-from ..fs import File, Directory
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result
+from ..lib.fcntl import creat
 from ..lib.input import ArgParser
+from ..lib.netdb import gethostbyname
 from ..lib.output import output
+from ..lib.sys import socket
+from ..lib.sys.stat import stat
+from ..lib.unistd import read, write, getuid
 
 __COMMAND__ = &#34;apt&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
+__VERSION__ = &#34;1.0&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;command&#34;)
     parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.command and not args.packages:
-            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -&gt; Result:
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if getuid() != 0:
+            return output(f&#34;{__COMMAND__}: error: you cannot perform this operation unless you are root.&#34;, pipe,
+                          success=False)
         # Read the packages.json file to substitute packages with a list of their subpackages (if they have)
         with open(&#34;packages.json&#34;, &#34;r&#34;) as f:
             all_packages = loads(f.read())
         if args.command == &#34;install&#34;:
             # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
-            find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
-            find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-            find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
-            if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
+            read_usr_bin = stat(&#34;/usr/bin&#34;)
+            read_usr_lib_dpkg_status = read(&#34;/var/lib/dpkg/status&#34;)
+            read_apt_sources = read(&#34;/etc/apt/sources.list&#34;)
+            if not read_usr_bin.success or not read_usr_lib_dpkg_status.success or not read_apt_sources.success:
                 # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
                 return output(
-                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
+                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/*&#34;,
                     pipe,
                     success=False)
 
-            usr_bin: Directory = find_usr_bin.data
-            status_file: File = find_usr_lib_dpkg_status.data
-            sources_file: File = find_apt_sources.data
-
             # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
-            servers = sources_file.content.split(&#34;\n&#34;)
+            servers = read_apt_sources.data.split(&#34;\n&#34;)
 
             while &#34;&#34; in servers:
                 servers.remove(&#34;&#34;)
@@ -98,7 +145,17 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
                 host = split_server[0]
 
-                ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
+                resolve_hostname = gethostbyname(host)
+
+                sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+                connection_result = socket.connect(sock, sock_addr)
+
+                if not connection_result.success:
+                    return output(f&#34;{__COMMAND__}: Unable to connect to {host}&#34;, pipe, success=False)
+
+                ask_server_result = write(sock, {&#34;packages&#34;: [x for x in outstanding_packages]})
+
                 if ask_server_result.success:
                     if ask_server_result.data.get(&#34;have&#34;):
                         for package in ask_server_result.data.get(&#34;have&#34;):
@@ -128,11 +185,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             for pkg_group, packages in arg_packages.items():
                 for pkg in packages:
                     # Create a list of already installed packages to determine if we should install it again
-                    installed_packages = status_file.read(computer)
-                    if installed_packages.success:
-                        installed_packages = installed_packages.data.split(&#34;\n&#34;)
-                    else:
-                        installed_packages = []
+                    installed_packages = read_usr_lib_dpkg_status.data.split(&#34;\n&#34;)
+
+                    while &#34;&#34; in installed_packages:
+                        installed_packages.remove(&#34;&#34;)
 
                     if pkg not in exists or pkg in outstanding_packages:
                         print(f&#34;Unable to locate package {pkg}&#34;)
@@ -146,57 +202,53 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                             else:
                                 continue
                         # Add the file to /usr/bin
-                        current_file = File(pkg, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
-                        usr_bin.add_file(current_file)
+                        current_file = creat(f&#34;/usr/bin/{pkg}&#34;, 0o755)
+                        write(f&#34;/usr/bin/{pkg}&#34;, &#34;[BINARY DATA]&#34;)
                         # We only want to store the package name if its not a subpackage
                         if pkg_group == &#34;other&#34;:
-                            status_file.append(pkg + &#34;\n&#34;, computer)
                             print(f&#34;Successfully installed package {pkg}&#34;)
 
                 else:
                     if pkg_group != &#34;other&#34;:
-                        status_file.append(pkg_group + &#34;\n&#34;, computer)
                         print(f&#34;Successfully installed package {pkg_group}&#34;)
 
-            computer.fs.generate_manpages()
             return output(&#34;&#34;, pipe)
-
-        elif args.command == &#34;remove&#34;:
-            find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-            if not find_status_file.success:
-                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-            status_file = find_status_file.data
-
-            read_status = status_file.read(computer)
-
-            if not read_status.success:
-                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-            installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
-
-            # Make sure all the packages we&#39;re trying to remove are actually installed
-            for to_remove in args.packages:
-                if to_remove not in installed_packages:
-                    return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
-                                  success=False)
-
-            for to_remove in args.packages:
-                # Check if the package we&#39;re trying to remove has subpackages
-                subpackages = all_packages.get(to_remove)
-                if subpackages:
-                    for subpkg in subpackages:
-                        computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
-                else:
-                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
-                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
-                installed_packages.remove(to_remove)
-
-            # Update the content of /var/lib/dpkg/status
-            status_file.write(&#34;\n&#34;.join(installed_packages), computer)
-
-            return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
-
+        #
+        # elif args.command == &#34;remove&#34;:
+        #     find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+        #     if not find_status_file.success:
+        #         return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+        #
+        #     status_file = find_status_file.data
+        #
+        #     read_status = status_file.read(computer)
+        #
+        #     if not read_status.success:
+        #         return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+        #
+        #     installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
+        #
+        #     # Make sure all the packages we&#39;re trying to remove are actually installed
+        #     for to_remove in args.packages:
+        #         if to_remove not in installed_packages:
+        #             return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
+        #                           success=False)
+        #
+        #     for to_remove in args.packages:
+        #         # Check if the package we&#39;re trying to remove has subpackages
+        #         subpackages = all_packages.get(to_remove)
+        #         if subpackages:
+        #             for subpkg in subpackages:
+        #                 computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
+        #         else:
+        #             computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+        #             computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
+        #         installed_packages.remove(to_remove)
+        #
+        #     # Update the content of /var/lib/dpkg/status
+        #     status_file.write(&#34;\n&#34;.join(installed_packages), computer)
+        #
+        #     return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
 
         else:
             return output(f&#34;{__COMMAND__}: invalid operation: {args.command}&#34;, pipe, success=False)</code></pre>
@@ -210,58 +262,45 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.apt.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;command&#34;)
-    parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
+    args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
-        if not args.version and not args.command and not args.packages:
-            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if getuid() != 0:
+            return output(f&#34;{__COMMAND__}: error: you cannot perform this operation unless you are root.&#34;, pipe,
+                          success=False)
         # Read the packages.json file to substitute packages with a list of their subpackages (if they have)
         with open(&#34;packages.json&#34;, &#34;r&#34;) as f:
             all_packages = loads(f.read())
         if args.command == &#34;install&#34;:
             # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
-            find_usr_bin = computer.fs.find(&#34;/usr/bin&#34;)
-            find_usr_lib_dpkg_status = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-            find_apt_sources = computer.fs.find(&#34;/etc/apt/sources.list&#34;)
-            if not find_usr_bin.success or not find_usr_lib_dpkg_status.success or not find_apt_sources.success:
+            read_usr_bin = stat(&#34;/usr/bin&#34;)
+            read_usr_lib_dpkg_status = read(&#34;/var/lib/dpkg/status&#34;)
+            read_apt_sources = read(&#34;/etc/apt/sources.list&#34;)
+            if not read_usr_bin.success or not read_usr_lib_dpkg_status.success or not read_apt_sources.success:
                 # In reality, a snap error will occur but we don&#39;t have snap so just throw general error
                 return output(
-                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/&#34;,
+                    f&#34;{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/*&#34;,
                     pipe,
                     success=False)
 
-            usr_bin: Directory = find_usr_bin.data
-            status_file: File = find_usr_lib_dpkg_status.data
-            sources_file: File = find_apt_sources.data
-
             # Now we need to contact each server in our sources.list and ask each server if they have the package we&#39;re looking for
-            servers = sources_file.content.split(&#34;\n&#34;)
+            servers = read_apt_sources.data.split(&#34;\n&#34;)
 
             while &#34;&#34; in servers:
                 servers.remove(&#34;&#34;)
@@ -277,7 +316,17 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
                 host = split_server[0]
 
-                ask_server_result = computer.send_tcp(host, port, {&#34;packages&#34;: [x for x in outstanding_packages]})
+                resolve_hostname = gethostbyname(host)
+
+                sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+                connection_result = socket.connect(sock, sock_addr)
+
+                if not connection_result.success:
+                    return output(f&#34;{__COMMAND__}: Unable to connect to {host}&#34;, pipe, success=False)
+
+                ask_server_result = write(sock, {&#34;packages&#34;: [x for x in outstanding_packages]})
+
                 if ask_server_result.success:
                     if ask_server_result.data.get(&#34;have&#34;):
                         for package in ask_server_result.data.get(&#34;have&#34;):
@@ -307,11 +356,10 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             for pkg_group, packages in arg_packages.items():
                 for pkg in packages:
                     # Create a list of already installed packages to determine if we should install it again
-                    installed_packages = status_file.read(computer)
-                    if installed_packages.success:
-                        installed_packages = installed_packages.data.split(&#34;\n&#34;)
-                    else:
-                        installed_packages = []
+                    installed_packages = read_usr_lib_dpkg_status.data.split(&#34;\n&#34;)
+
+                    while &#34;&#34; in installed_packages:
+                        installed_packages.remove(&#34;&#34;)
 
                     if pkg not in exists or pkg in outstanding_packages:
                         print(f&#34;Unable to locate package {pkg}&#34;)
@@ -325,60 +373,129 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                             else:
                                 continue
                         # Add the file to /usr/bin
-                        current_file = File(pkg, &#34;[BINARY DATA]&#34;, usr_bin, 0, 0)
-                        usr_bin.add_file(current_file)
+                        current_file = creat(f&#34;/usr/bin/{pkg}&#34;, 0o755)
+                        write(f&#34;/usr/bin/{pkg}&#34;, &#34;[BINARY DATA]&#34;)
                         # We only want to store the package name if its not a subpackage
                         if pkg_group == &#34;other&#34;:
-                            status_file.append(pkg + &#34;\n&#34;, computer)
                             print(f&#34;Successfully installed package {pkg}&#34;)
 
                 else:
                     if pkg_group != &#34;other&#34;:
-                        status_file.append(pkg_group + &#34;\n&#34;, computer)
                         print(f&#34;Successfully installed package {pkg_group}&#34;)
 
-            computer.fs.generate_manpages()
             return output(&#34;&#34;, pipe)
-
-        elif args.command == &#34;remove&#34;:
-            find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
-            if not find_status_file.success:
-                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-            status_file = find_status_file.data
-
-            read_status = status_file.read(computer)
-
-            if not read_status.success:
-                return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
-
-            installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
-
-            # Make sure all the packages we&#39;re trying to remove are actually installed
-            for to_remove in args.packages:
-                if to_remove not in installed_packages:
-                    return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
-                                  success=False)
-
-            for to_remove in args.packages:
-                # Check if the package we&#39;re trying to remove has subpackages
-                subpackages = all_packages.get(to_remove)
-                if subpackages:
-                    for subpkg in subpackages:
-                        computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
-                else:
-                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
-                    computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
-                installed_packages.remove(to_remove)
-
-            # Update the content of /var/lib/dpkg/status
-            status_file.write(&#34;\n&#34;.join(installed_packages), computer)
-
-            return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
-
+        #
+        # elif args.command == &#34;remove&#34;:
+        #     find_status_file = computer.fs.find(&#34;/var/lib/dpkg/status&#34;)
+        #     if not find_status_file.success:
+        #         return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+        #
+        #     status_file = find_status_file.data
+        #
+        #     read_status = status_file.read(computer)
+        #
+        #     if not read_status.success:
+        #         return output(f&#34;{__COMMAND__}: Unable to remove packages&#34;, pipe, success=False)
+        #
+        #     installed_packages = [x for x in read_status.data.split(&#34;\n&#34;)]
+        #
+        #     # Make sure all the packages we&#39;re trying to remove are actually installed
+        #     for to_remove in args.packages:
+        #         if to_remove not in installed_packages:
+        #             return output(f&#34;{__COMMAND__}: Package &#39;{to_remove}&#39; is not installed, so not removed&#34;, pipe,
+        #                           success=False)
+        #
+        #     for to_remove in args.packages:
+        #         # Check if the package we&#39;re trying to remove has subpackages
+        #         subpackages = all_packages.get(to_remove)
+        #         if subpackages:
+        #             for subpkg in subpackages:
+        #                 computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{subpkg}&#34;], pipe)
+        #         else:
+        #             computer.run_command(&#34;rm&#34;, [f&#34;/usr/bin/{to_remove}&#34;], pipe)
+        #             computer.run_command(&#34;rm&#34;, [f&#34;/usr/share/man/{to_remove}&#34;], pipe)
+        #         installed_packages.remove(to_remove)
+        #
+        #     # Update the content of /var/lib/dpkg/status
+        #     status_file.write(&#34;\n&#34;.join(installed_packages), computer)
+        #
+        #     return output(f&#34;{__COMMAND__}: Successfully removed packages: {&#39; &#39;.join(args.packages)}&#34;, pipe)
 
         else:
             return output(f&#34;{__COMMAND__}: invalid operation: {args.command}&#34;, pipe, success=False)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.apt.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;command&#34;)
+    parser.add_argument(&#34;packages&#34;, nargs=&#34;+&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -400,6 +517,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.apt.main" href="#client.blackhat.bin.apt.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.apt.parse_args" href="#client.blackhat.bin.apt.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

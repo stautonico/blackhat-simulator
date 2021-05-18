@@ -26,32 +26,42 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from time import time
-from typing import Optional
+<pre><code class="python">from typing import Optional
 
-from ...helpers import SysCallStatus
+from ...helpers import Result
+from ...helpers import timeval as timevalinternal
 
 computer: Optional[&#34;Computer&#34;] = None
 
 
 def update(comp: &#34;Computer&#34;):
+    &#34;&#34;&#34;
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     global computer
     computer = comp
 
 
-class timeval:
-    def __init__(self, tv_sec, tv_usec):
-        self.tv_sec = tv_sec
-        self.tv_usec = tv_usec
+# This is here so we can `from sys.time import timeval`
+# And also so we dont have to have two declarations of the same thing
+timeval = timevalinternal
 
 
-def gettimeofday() -&gt; SysCallStatus:
-    # TODO: Add get time by timezone
-    timestamp = time()
-    seconds = int(timestamp)
-    microseconds = int(str(timestamp - seconds).replace(&#34;0.&#34;, &#34;&#34;))
+def gettimeofday() -&gt; Result:
+    &#34;&#34;&#34;
+    Get the current time (host systems time)
 
-    return SysCallStatus(success=True, data=timeval(seconds, microseconds))</code></pre>
+    Returns:
+        timeval: A `timeval` struct containing the current time in seconds
+    &#34;&#34;&#34;
+    return computer.sys_gettimeofday()</code></pre>
 </details>
 </section>
 <section>
@@ -62,33 +72,54 @@ def gettimeofday() -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.lib.sys.time.gettimeofday"><code class="name flex">
-<span>def <span class="ident">gettimeofday</span></span>(<span>) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">gettimeofday</span></span>(<span>) ‑> <a title="client.blackhat.helpers.Result" href="../../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Get the current time (host systems time)</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>timeval</code></dt>
+<dd>A <code>timeval</code> struct containing the current time in seconds</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def gettimeofday() -&gt; SysCallStatus:
-    # TODO: Add get time by timezone
-    timestamp = time()
-    seconds = int(timestamp)
-    microseconds = int(str(timestamp - seconds).replace(&#34;0.&#34;, &#34;&#34;))
+<pre><code class="python">def gettimeofday() -&gt; Result:
+    &#34;&#34;&#34;
+    Get the current time (host systems time)
 
-    return SysCallStatus(success=True, data=timeval(seconds, microseconds))</code></pre>
+    Returns:
+        timeval: A `timeval` struct containing the current time in seconds
+    &#34;&#34;&#34;
+    return computer.sys_gettimeofday()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.sys.time.update"><code class="name flex">
 <span>def <span class="ident">update</span></span>(<span>comp: Computer)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Store a reference to the games current <code>Computer</code> object as a global variable so methods can reference it without
+requiring it as an argument</p>
+<h2 id="args">Args</h2>
+<p>comp (:obj:<code>Computer</code>): The games current <code>Computer</code> object</p>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def update(comp: &#34;Computer&#34;):
+    &#34;&#34;&#34;
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     global computer
     computer = comp</code></pre>
 </details>
@@ -96,25 +127,6 @@ def gettimeofday() -&gt; SysCallStatus:
 </dl>
 </section>
 <section>
-<h2 class="section-title" id="header-classes">Classes</h2>
-<dl>
-<dt id="client.blackhat.lib.sys.time.timeval"><code class="flex name class">
-<span>class <span class="ident">timeval</span></span>
-<span>(</span><span>tv_sec, tv_usec)</span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class timeval:
-    def __init__(self, tv_sec, tv_usec):
-        self.tv_sec = tv_sec
-        self.tv_usec = tv_usec</code></pre>
-</details>
-</dd>
-</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -132,13 +144,6 @@ def gettimeofday() -&gt; SysCallStatus:
 <ul class="">
 <li><code><a title="client.blackhat.lib.sys.time.gettimeofday" href="#client.blackhat.lib.sys.time.gettimeofday">gettimeofday</a></code></li>
 <li><code><a title="client.blackhat.lib.sys.time.update" href="#client.blackhat.lib.sys.time.update">update</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-classes">Classes</a></h3>
-<ul>
-<li>
-<h4><code><a title="client.blackhat.lib.sys.time.timeval" href="#client.blackhat.lib.sys.time.timeval">timeval</a></code></h4>
-</li>
 </ul>
 </li>
 </ul>

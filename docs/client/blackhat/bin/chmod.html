@@ -26,12 +26,14 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import chmod, stat
 
 __COMMAND__ = &#34;chmod&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
 __VERSION__ = &#34;1.1&#34;
 
 
@@ -92,6 +94,7 @@ def parse_characters(chars, current_perms):
     # DATE: 3/15/2021
     # DATE: 3/19/2021
     # DATE: 4/14/2021
+    # DATE: 5/4/2021
     # Now lets apply the new permissions
     if mode == &#34;remove&#34;:
         for mode in [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;]:
@@ -114,16 +117,66 @@ def parse_characters(chars, current_perms):
     return True
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;umask&#34;)
     parser.add_argument(&#34;file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -&gt; Result:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -137,30 +190,37 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         return output(&#34;&#34;, pipe)
     else:
         # Try to find the target file
-        find_file_response = computer.fs.find(args.file)
+        find_file_response = stat(args.file)
 
         if not find_file_response.success:
             return output(f&#34;{__COMMAND__}: cannot access &#39;{args.file}&#39;: No such file or directory&#34;, pipe,
                           success=False)
 
-        file_to_update = find_file_response.data
+        # TODO: Make the ability to use a+rwx to change permissions instead of octals
+        chmod_result = chmod(args.file, int(args.umask))
 
-        # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
+
+        if not chmod_result.success:
+            if chmod_result.message == ResultMessages.NOT_ALLOWED:
+                return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
+                              pipe,
+                              success=False)
+            else:
+
+                return output(f&#34;{__COMMAND__}: Failed to change permissions of &#39;{args.file}&#39;: Generic Error&#34;,
+                              pipe,
+                              success=False)
 
         # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-        if file_to_update.check_owner(computer):
-            new_perms = parse_characters(args.umask, file_to_update.permissions)
-
-            if not new_perms:
-                return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
-
-            # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
-            file_to_update.handle_event(&#34;change_perm&#34;)
-            return output(&#34;&#34;, pipe)
-        else:
-            return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
-                          pipe,
-                          success=False)</code></pre>
+        # if file_to_update.check_owner(computer):
+        #     new_perms = parse_characters(args.umask, file_to_update.permissions)
+        #
+        #     if not new_perms:
+        #         return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
+        #
+        #     # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
+        #     file_to_update.handle_event(&#34;change_perm&#34;)
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -171,7 +231,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.chmod.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
@@ -179,16 +239,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;umask&#34;)
-    parser.add_argument(&#34;file&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -202,30 +257,110 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         return output(&#34;&#34;, pipe)
     else:
         # Try to find the target file
-        find_file_response = computer.fs.find(args.file)
+        find_file_response = stat(args.file)
 
         if not find_file_response.success:
             return output(f&#34;{__COMMAND__}: cannot access &#39;{args.file}&#39;: No such file or directory&#34;, pipe,
                           success=False)
 
-        file_to_update = find_file_response.data
+        # TODO: Make the ability to use a+rwx to change permissions instead of octals
+        chmod_result = chmod(args.file, int(args.umask))
 
-        # TODO: Make the ability to use octals (chmod 777 file) to change permissions instead of ascii
+
+        if not chmod_result.success:
+            if chmod_result.message == ResultMessages.NOT_ALLOWED:
+                return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
+                              pipe,
+                              success=False)
+            else:
+
+                return output(f&#34;{__COMMAND__}: Failed to change permissions of &#39;{args.file}&#39;: Generic Error&#34;,
+                              pipe,
+                              success=False)
 
         # I can&#39;t figure out how to pass by value so imma just do this so it prevents the permissions from being changed
-        if file_to_update.check_owner(computer):
-            new_perms = parse_characters(args.umask, file_to_update.permissions)
+        # if file_to_update.check_owner(computer):
+        #     new_perms = parse_characters(args.umask, file_to_update.permissions)
+        #
+        #     if not new_perms:
+        #         return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
+        #
+        #     # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
+        #     file_to_update.handle_event(&#34;change_perm&#34;)
+        return output(&#34;&#34;, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.chmod.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
-            if not new_perms:
-                return output(f&#34;{__COMMAND__}: invalid mode: &#39;{args.umask}&#39;&#34;, pipe, success=False)
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
 
-            # TODO: Find a way to move this out of a binary and into the FSBaseObject itself
-            file_to_update.handle_event(&#34;change_perm&#34;)
-            return output(&#34;&#34;, pipe)
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;umask&#34;)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
         else:
-            return output(f&#34;{__COMMAND__}: changing permissions of &#39;{args.file}&#39;: Operation not permitted&#34;,
-                          pipe,
-                          success=False)</code></pre>
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.bin.chmod.parse_characters"><code class="name flex">
@@ -294,6 +429,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # DATE: 3/15/2021
     # DATE: 3/19/2021
     # DATE: 4/14/2021
+    # DATE: 5/4/2021
     # Now lets apply the new permissions
     if mode == &#34;remove&#34;:
         for mode in [&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;]:
@@ -335,6 +471,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.chmod.main" href="#client.blackhat.bin.chmod.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.chmod.parse_args" href="#client.blackhat.bin.chmod.parse_args">parse_args</a></code></li>
 <li><code><a title="client.blackhat.bin.chmod.parse_characters" href="#client.blackhat.bin.chmod.parse_characters">parse_characters</a></code></li>
 </ul>
 </li>

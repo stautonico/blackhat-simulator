@@ -26,24 +26,27 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from enum import IntFlag
-from typing import Optional
+<pre><code class="python">from typing import Optional, Literal, Union
 
+from .sys.socket import Socket
 from ..fs import FSBaseObject
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
+from ..session import Session
 
 computer: Optional[&#34;Computer&#34;] = None
 
 
-# Modes for access()
-class AccessMode(IntFlag):
-    F_OK = 1 &lt;&lt; 0  # Check for existence
-    R_OK = 1 &lt;&lt; 1  # Check read bit
-    W_OK = 1 &lt;&lt; 2  # Check write bit
-    X_OK = 1 &lt;&lt; 3  # Check execute bit
-
-
 def update(comp: &#34;Computer&#34;):
+    &#34;&#34;&#34;
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     global computer
     computer = comp
 
@@ -54,7 +57,7 @@ def getuid() -&gt; int:
     Returns:
         int: UID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
-    return computer.sessions[-1].effective_uid
+    return computer.sys_getuid()
 
 
 def getgid() -&gt; int:
@@ -63,17 +66,7 @@ def getgid() -&gt; int:
     Returns:
         int: (primary) GID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
-    current_uid = getuid()
-    result = computer.database.execute(
-        &#34;SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?&#34;,
-        (computer.id, current_uid, &#34;primary&#34;)).fetchone()
-
-    if result:
-        return result[0]
-    else:
-        # NOTE: possible exploit, but maybe we leave it here on purpose?
-        # TODO: Write proof of concept exploit to exploit this exploit
-        return 0
+    return computer.sys_getgid()
 
 
 def getcwd() -&gt; FSBaseObject:
@@ -83,129 +76,355 @@ def getcwd() -&gt; FSBaseObject:
     Returns:
         FSBaseObjectSB: The  user&#39;s current directory
     &#34;&#34;&#34;
-    if len(computer.sessions) == 0:
-        return computer.fs.files
-    else:
-        return computer.sessions[-1].current_dir
+    return computer.sys_getcwd()
 
 
-def setuid(uid: int) -&gt; SysCallStatus:
-    # TODO: Implement a PROPER setuid
-    # The way setuid should work:
-    # If the &#34;caller&#34; uid is root, change the uid to whatever is given
-    # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
-    # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+def setuid(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Change current `Session`&#39;s effective UID to the given `UID`
 
-    if computer.get_uid() == 0:
-        computer.sessions[-1].effective_uid = uid
-        return SysCallStatus(success=True)
-    else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+    Notes:
+        setuid() followed the current rules:
+            * If the &#34;caller&#34; uid is root, change the uid to whatever is given
+            * If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+            * If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+    Args:
+        uid (int): The new UID to change to
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_setuid(uid)
 
 
 def gethostname() -&gt; str:
-    return &#34;localhost&#34; if not computer.hostname else computer.hostname
+    &#34;&#34;&#34;
+    Gets the current system hostname (from internal var, not /etc/hostname)
+
+    Returns:
+        str: &#34;localhost&#34; if the hostname isn&#39;t set, otherwise, the current `Computer`&#39;s hostname
+    &#34;&#34;&#34;
+    return computer.sys_gethostname()
 
 
-def sethostname(hostname: str) -&gt; SysCallStatus:
-    # Only root can change the system hostname
-    if computer.get_uid() == 0:
-        computer.hostname = hostname
-        return SysCallStatus(success=True)
+def sethostname(hostname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    An easy function to update the hostname (also updates /etc/hostname)
+    Args:
+        hostname (str): The `Computer`&#39;s new hostname
 
-    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
-
-
-def read(filepath: str) -&gt; SysCallStatus:
-    # Try to find the file
-    find_file = computer.fs.find(filepath)
-
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    if find_file.data.is_directory():
-        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
-
-    try_read_file = find_file.data.read(computer)
-
-    if not try_read_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-
-    return SysCallStatus(success=True, data=try_read_file.data)
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    return computer.sys_sethostname(hostname)
 
 
-def write(filepath: str, data: str) -&gt; SysCallStatus:
-    # Try to find the file
-    find_file = computer.fs.find(filepath)
+def read(filepath: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Try to read the content of the given `filepath`. Checks permissions
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Args:
+        filepath (str): The path of the file to read
 
-    if find_file.data.is_directory():
-        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
-
-    try_write_file = find_file.data.write(data, computer)
-
-    if not try_write_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-
-    return SysCallStatus(success=True)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly and the data flag containing the files
+        if read was successful
+    &#34;&#34;&#34;
+    return computer.sys_read(filepath)
 
 
-def access(pathname: str, mode: int) -&gt; SysCallStatus:
-    # We need to find the file no matter what we do, so lets just find it now
-    find_file = computer.fs.find(pathname)
+def write(fd: Union[str, Socket], data: Union[str, dict]) -&gt; Result:
+    &#34;&#34;&#34;
+    Try to write to a given file descriptor. If `fd` is a file path, this function will try to write to a file
+    (permission safe), however, if the fd is a `Socket`, this function will try to send the given `data` to the
+    respective `Socket`&#39;s connected service (if connected).
 
-    success = True
+    Args:
+        fd (str or :obj:`Socket`): The filepath of the file or Socket to write to
+        data (str or dict): The data to write to the file (if fd == str) or data to send to the socket (if fd == Socket)
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-    file = find_file.data
-
-    if AccessMode.R_OK in mode:
-        if not file.check_perm(&#34;read&#34;, computer).success:
-            success = False
-
-    if AccessMode.W_OK in mode:
-        if not file.check_perm(&#34;write&#34;, computer).success:
-            success = False
-
-    if AccessMode.X_OK in mode:
-        if not file.check_perm(&#34;execute&#34;, computer).success:
-            success = False
-
-    return SysCallStatus(success=success)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_write(fd, data)
 
 
-def chown(pathname: str, owner: int, group: int) -&gt; SysCallStatus:
-    find_file = computer.fs.find(pathname)
+def access(pathname: str, mode: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Check if the current effective UID has a given permission to the given `File`/`Directory`
+    Possible modes are:
+        * F_OK: File exists
+        * R_OK: Read permission
+        * W_OK: Write permissions
+        * X_OK: Execute permission
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Args:
+        pathname (str): The file path of the given `File`/`Directory` to check
+        mode (int): Bitwise flags of the permissions to check
 
-    file = find_file.data
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_access(pathname, mode)
 
-    change_perms = file.change_owner(computer, owner, group)
 
-    if not change_perms.success:
-        return SysCallStatus(success=False, message=change_perms.message)
+def chown(pathname: str, owner: int, group: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Change the owner of the given `pathname` (if allowed)
 
-    return SysCallStatus(success=True)
+    Notes:
+        Only the owner or root is allowed to change the owner of a `File`/`Directory`
 
-def chdir(pathname: str) -&gt; SysCallStatus:
-    find_file = computer.fs.find(pathname)
+    Args:
+        pathname (str): The file path of the `File`/`Directory` to change the owner of
+        owner (int): The UID of the new owner
+        group (int): The GID of the new owner
 
-    if not find_file.success:
-        return SysCallStatus(success=False)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_chown(pathname, owner, group)
 
-    # We need executable permissions to cd (???)
-    check_perm = find_file.data.check_perm(&#34;execute&#34;, computer)
-    if not check_perm.success or getuid() != 0:
-        return SysCallStatus(success=False)
 
-    computer.sessions[-1].current_dir = find_file.data
-    return SysCallStatus(success=True)</code></pre>
+def chdir(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Change the `current_dir` of the current `Session`
+
+    Args:
+        pathname (str): The file path of the directory to `cd` into
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_chdir(pathname)
+
+
+# TODO: Replace the `get_` functions with something related to pwd.h
+
+def add_user(username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a new user to the system (permission safe).
+    This function also generates the UID for the new user (unless manually specified)
+
+    Args:
+        username (str): The username for the new user
+        password (str): The plaintext password for the new user
+        uid (int, optional): The UID of the new user
+                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_user(username, password, uid, plaintext)
+
+
+def get_user(uid: Optional[int] = None, username: Optional[str] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Find a user in the database by UID or username
+    Args:
+        uid (int, optional): The UID of the user to find
+        username (str, optional): The username of the user to find
+
+    Returns:
+        Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+    &#34;&#34;&#34;
+    return computer.get_user(uid, username)
+
+
+def get_all_users() -&gt; Result:
+    &#34;&#34;&#34;
+    Get all users that exist in the given system in the given format:
+
+    Returns:
+        Result: A `Result` with the `data` flag containing the array of `User`s
+    &#34;&#34;&#34;
+    return computer.get_all_users()
+
+
+def add_group(name: str, gid: Optional[int] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a new group to the system (permission safe).
+    This function also generates the GID for the new group (unless manually specified)
+
+    Args:
+        name (str): The name for the new group
+        gid (int, optional): The GID of the new user
+
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_group(name, gid)
+
+
+def get_group(gid: Optional[int] = None, name: Optional[str] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Find a group in the database by GID or name or both
+    Args:
+        gid (int, optional): The GID of the group to find
+        name (str, optional): The name of the group to find
+
+    Returns:
+        Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+    &#34;&#34;&#34;
+    return computer.get_group(gid, name)
+
+
+def add_user_to_group(uid: int, gid: int,
+                      membership_type: Literal[&#34;primary&#34;, &#34;secondary&#34;] = &#34;secondary&#34;) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a user to a group (by uid and gid) (permission safe)
+
+    Args:
+        uid (int): The UID of the user
+        gid (int): The GID of the group to add the user to
+        membership_type (str): The type of group relationship (primary, secondary)
+
+    Returns:
+        Result: A `Result` object with the `success` flag set accordingly
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_user_to_group(uid, gid, membership_type)
+
+
+def get_user_primary_group(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Get the `Group` GID&#39;s that is the `User`s primary `Group` (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        Result: A `Result` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    return computer.get_user_primary_group(uid)
+
+
+def get_user_groups(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        Result: A `Result` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    return computer.get_user_groups(uid)
+
+
+# NOTE: Temporary until I get a realistic version working
+def get_sessions() -&gt; Result:
+    &#34;&#34;&#34;
+    Get all the current open sessions in the computer
+
+    Returns:
+        Result: A `Result` object containing a list of all the `Computer`s open session
+    &#34;&#34;&#34;
+    return Result(success=True, data=computer.sessions)
+
+
+def reboot(mode: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Simulate a computer reboot. Clear all sessions and re-initialize the machine
+
+    Args:
+        mode (int: Bitwise flags of the operation to take
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_reboot(mode)
+
+
+def rmdir(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Remove an empty directory
+
+    Args:
+        pathname (str): The file path of the empty `Directory` to remove
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_rmdir(pathname)
+
+
+def save(file: Optional[str]) -&gt; bool:
+    &#34;&#34;&#34;
+    Serialize and dump the current `Computer` (and everything that&#39;s connected to it (`StandardFS`, `File`s, etc)) to a file
+    Args:
+        output_file (str, optional): The file to dump the contents to
+
+    Returns:
+        bool: `True` if the dump/save was successful, otherwise `False`
+    &#34;&#34;&#34;
+    return computer.save(file)
+
+
+def execv(pathname: str, argv: list) -&gt; Result:
+    &#34;&#34;&#34;
+    Execute a file
+
+    Args:
+        pathname (str): The path name of the binary to execute
+        argv (list): A list of arguments to pass to the binary
+
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+    &#34;&#34;&#34;
+    return computer.sys_execv(pathname, argv)
+
+
+def execvp(command: str, argv: list) -&gt; Result:
+    &#34;&#34;&#34;
+    Execute a command using the PATH rather than the full binary path. Does exactly what the system shell does.
+
+    Args:
+        command (str): The command to run
+        argv (list): A list of arguments to pass to the binary
+
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+    &#34;&#34;&#34;
+    return computer.sys_execvp(command, argv)
+
+
+def new_session(uid: int) -&gt; None:
+    &#34;&#34;&#34;
+    Temporary function: Open a new session in the current `Computer`
+
+    Args:
+        uid (int): The real UID of the user in the new `Session`
+
+    Returns:
+        None
+    &#34;&#34;&#34;
+    # TODO: Make this more realistic since I have no clue how it works in real life
+    current_session: Session = computer.sessions[-1]
+    # Create a new session
+    new_session = Session(uid, current_session.current_dir, current_session.id + 1)
+    computer.sessions.append(new_session)
+    computer.run_current_user_shellrc()
+
+
+def unlink(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Removes a link to a file. If there are no links left, the file is removed.
+
+    Args:
+        pathname (str): The file path of the `File` to unlink
+
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+
+    &#34;&#34;&#34;
+    return computer.sys_unlink(pathname)</code></pre>
 </details>
 </section>
 <section>
@@ -216,87 +435,497 @@ def chdir(pathname: str) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.lib.unistd.access"><code class="name flex">
-<span>def <span class="ident">access</span></span>(<span>pathname: str, mode: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">access</span></span>(<span>pathname: str, mode: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Check if the current effective UID has a given permission to the given <code>File</code>/<code>Directory</code>
+Possible modes are:
+* F_OK: File exists
+* R_OK: Read permission
+* W_OK: Write permissions
+* X_OK: Execute permission</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The file path of the given <code>File</code>/<code>Directory</code> to check</dd>
+<dt><strong><code>mode</code></strong> :&ensp;<code>int</code></dt>
+<dd>Bitwise flags of the permissions to check</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def access(pathname: str, mode: int) -&gt; SysCallStatus:
-    # We need to find the file no matter what we do, so lets just find it now
-    find_file = computer.fs.find(pathname)
+<pre><code class="python">def access(pathname: str, mode: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Check if the current effective UID has a given permission to the given `File`/`Directory`
+    Possible modes are:
+        * F_OK: File exists
+        * R_OK: Read permission
+        * W_OK: Write permissions
+        * X_OK: Execute permission
 
-    success = True
+    Args:
+        pathname (str): The file path of the given `File`/`Directory` to check
+        mode (int): Bitwise flags of the permissions to check
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_access(pathname, mode)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.add_group"><code class="name flex">
+<span>def <span class="ident">add_group</span></span>(<span>name: str, gid: Optional[int] = None) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Add a new group to the system (permission safe).
+This function also generates the GID for the new group (unless manually specified)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>name</code></strong> :&ensp;<code>str</code></dt>
+<dd>The name for the new group</dd>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The GID of the new user</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> instance with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the GID if successful.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_group(name: str, gid: Optional[int] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a new group to the system (permission safe).
+    This function also generates the GID for the new group (unless manually specified)
 
-    file = find_file.data
+    Args:
+        name (str): The name for the new group
+        gid (int, optional): The GID of the new user
 
-    if AccessMode.R_OK in mode:
-        if not file.check_perm(&#34;read&#34;, computer).success:
-            success = False
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_group(name, gid)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.add_user"><code class="name flex">
+<span>def <span class="ident">add_user</span></span>(<span>username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Add a new user to the system (permission safe).
+This function also generates the UID for the new user (unless manually specified)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>username</code></strong> :&ensp;<code>str</code></dt>
+<dd>The username for the new user</dd>
+<dt><strong><code>password</code></strong> :&ensp;<code>str</code></dt>
+<dd>The plaintext password for the new user</dd>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The UID of the new user
+plaintext (bool): If the given <code>new_password</code> is plain text or an MD5 hash</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> instance with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the new users UID if successful.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_user(username: str, password: str, uid: Optional[int] = None, plaintext: bool = True) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a new user to the system (permission safe).
+    This function also generates the UID for the new user (unless manually specified)
 
-    if AccessMode.W_OK in mode:
-        if not file.check_perm(&#34;write&#34;, computer).success:
-            success = False
+    Args:
+        username (str): The username for the new user
+        password (str): The plaintext password for the new user
+        uid (int, optional): The UID of the new user
+                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
 
-    if AccessMode.X_OK in mode:
-        if not file.check_perm(&#34;execute&#34;, computer).success:
-            success = False
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_user(username, password, uid, plaintext)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.add_user_to_group"><code class="name flex">
+<span>def <span class="ident">add_user_to_group</span></span>(<span>uid: int, gid: int, membership_type: Literal['primary', 'secondary'] = 'secondary') ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Add a user to a group (by uid and gid) (permission safe)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user</dd>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the group to add the user to</dd>
+<dt><strong><code>membership_type</code></strong> :&ensp;<code>str</code></dt>
+<dd>The type of group relationship (primary, secondary)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_user_to_group(uid: int, gid: int,
+                      membership_type: Literal[&#34;primary&#34;, &#34;secondary&#34;] = &#34;secondary&#34;) -&gt; Result:
+    &#34;&#34;&#34;
+    Add a user to a group (by uid and gid) (permission safe)
 
-    return SysCallStatus(success=success)</code></pre>
+    Args:
+        uid (int): The UID of the user
+        gid (int): The GID of the group to add the user to
+        membership_type (str): The type of group relationship (primary, secondary)
+
+    Returns:
+        Result: A `Result` object with the `success` flag set accordingly
+    &#34;&#34;&#34;
+    if computer.sys_getuid() != 0:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    return computer.add_user_to_group(uid, gid, membership_type)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.chdir"><code class="name flex">
-<span>def <span class="ident">chdir</span></span>(<span>pathname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">chdir</span></span>(<span>pathname: str) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Change the <code>current_dir</code> of the current <code>Session</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The file path of the directory to <code>cd</code> into</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def chdir(pathname: str) -&gt; SysCallStatus:
-    find_file = computer.fs.find(pathname)
+<pre><code class="python">def chdir(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Change the `current_dir` of the current `Session`
 
-    if not find_file.success:
-        return SysCallStatus(success=False)
+    Args:
+        pathname (str): The file path of the directory to `cd` into
 
-    # We need executable permissions to cd (???)
-    check_perm = find_file.data.check_perm(&#34;execute&#34;, computer)
-    if not check_perm.success or getuid() != 0:
-        return SysCallStatus(success=False)
-
-    computer.sessions[-1].current_dir = find_file.data
-    return SysCallStatus(success=True)</code></pre>
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_chdir(pathname)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.chown"><code class="name flex">
-<span>def <span class="ident">chown</span></span>(<span>pathname: str, owner: int, group: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">chown</span></span>(<span>pathname: str, owner: int, group: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Change the owner of the given <code>pathname</code> (if allowed)</p>
+<h2 id="notes">Notes</h2>
+<p>Only the owner or root is allowed to change the owner of a <code>File</code>/<code>Directory</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The file path of the <code>File</code>/<code>Directory</code> to change the owner of</dd>
+<dt><strong><code>owner</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the new owner</dd>
+<dt><strong><code>group</code></strong> :&ensp;<code>int</code></dt>
+<dd>The GID of the new owner</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def chown(pathname: str, owner: int, group: int) -&gt; SysCallStatus:
-    find_file = computer.fs.find(pathname)
+<pre><code class="python">def chown(pathname: str, owner: int, group: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Change the owner of the given `pathname` (if allowed)
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Notes:
+        Only the owner or root is allowed to change the owner of a `File`/`Directory`
 
-    file = find_file.data
+    Args:
+        pathname (str): The file path of the `File`/`Directory` to change the owner of
+        owner (int): The UID of the new owner
+        group (int): The GID of the new owner
 
-    change_perms = file.change_owner(computer, owner, group)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_chown(pathname, owner, group)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.execv"><code class="name flex">
+<span>def <span class="ident">execv</span></span>(<span>pathname: str, argv: list) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Execute a file</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The path name of the binary to execute</dd>
+<dt><strong><code>argv</code></strong> :&ensp;<code>list</code></dt>
+<dd>A list of arguments to pass to the binary</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> arguments containing the output from the binary</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def execv(pathname: str, argv: list) -&gt; Result:
+    &#34;&#34;&#34;
+    Execute a file
 
-    if not change_perms.success:
-        return SysCallStatus(success=False, message=change_perms.message)
+    Args:
+        pathname (str): The path name of the binary to execute
+        argv (list): A list of arguments to pass to the binary
 
-    return SysCallStatus(success=True)</code></pre>
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+    &#34;&#34;&#34;
+    return computer.sys_execv(pathname, argv)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.execvp"><code class="name flex">
+<span>def <span class="ident">execvp</span></span>(<span>command: str, argv: list) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Execute a command using the PATH rather than the full binary path. Does exactly what the system shell does.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>command</code></strong> :&ensp;<code>str</code></dt>
+<dd>The command to run</dd>
+<dt><strong><code>argv</code></strong> :&ensp;<code>list</code></dt>
+<dd>A list of arguments to pass to the binary</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> arguments containing the output from the binary</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def execvp(command: str, argv: list) -&gt; Result:
+    &#34;&#34;&#34;
+    Execute a command using the PATH rather than the full binary path. Does exactly what the system shell does.
+
+    Args:
+        command (str): The command to run
+        argv (list): A list of arguments to pass to the binary
+
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+    &#34;&#34;&#34;
+    return computer.sys_execvp(command, argv)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_all_users"><code class="name flex">
+<span>def <span class="ident">get_all_users</span></span>(<span>) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get all users that exist in the given system in the given format:</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>data</code> flag containing the array of <code>User</code>s</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_all_users() -&gt; Result:
+    &#34;&#34;&#34;
+    Get all users that exist in the given system in the given format:
+
+    Returns:
+        Result: A `Result` with the `data` flag containing the array of `User`s
+    &#34;&#34;&#34;
+    return computer.get_all_users()</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_group"><code class="name flex">
+<span>def <span class="ident">get_group</span></span>(<span>gid: Optional[int] = None, name: Optional[str] = None) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Find a group in the database by GID or name or both</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>gid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The GID of the group to find</dd>
+<dt><strong><code>name</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>The name of the group to find</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the group dict if found</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_group(gid: Optional[int] = None, name: Optional[str] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Find a group in the database by GID or name or both
+    Args:
+        gid (int, optional): The GID of the group to find
+        name (str, optional): The name of the group to find
+
+    Returns:
+        Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the group dict if found
+    &#34;&#34;&#34;
+    return computer.get_group(gid, name)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_sessions"><code class="name flex">
+<span>def <span class="ident">get_sessions</span></span>(<span>) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get all the current open sessions in the computer</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object containing a list of all the <code>Computer</code>s open session</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_sessions() -&gt; Result:
+    &#34;&#34;&#34;
+    Get all the current open sessions in the computer
+
+    Returns:
+        Result: A `Result` object containing a list of all the `Computer`s open session
+    &#34;&#34;&#34;
+    return Result(success=True, data=computer.sessions)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_user"><code class="name flex">
+<span>def <span class="ident">get_user</span></span>(<span>uid: Optional[int] = None, username: Optional[str] = None) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Find a user in the database by UID or username</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The UID of the user to find</dd>
+<dt><strong><code>username</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>The username of the user to find</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly. The <code>data</code> flag contains the user dict if found</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_user(uid: Optional[int] = None, username: Optional[str] = None) -&gt; Result:
+    &#34;&#34;&#34;
+    Find a user in the database by UID or username
+    Args:
+        uid (int, optional): The UID of the user to find
+        username (str, optional): The username of the user to find
+
+    Returns:
+        Result: A `Result` with the `success` flag set accordingly. The `data` flag contains the user dict if found
+    &#34;&#34;&#34;
+    return computer.get_user(uid, username)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_user_groups"><code class="name flex">
+<span>def <span class="ident">get_user_groups</span></span>(<span>uid: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the list of <code>Group</code> GID's that the <code>User</code> belongs to (by UID)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user to lookup</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>data</code> flag containing a list of GIDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_user_groups(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Get the list of `Group` GID&#39;s that the `User` belongs to (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        Result: A `Result` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    return computer.get_user_groups(uid)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.get_user_primary_group"><code class="name flex">
+<span>def <span class="ident">get_user_primary_group</span></span>(<span>uid: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the <code>Group</code> GID's that is the <code>User</code>s primary <code>Group</code> (by UID)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The UID of the user to lookup</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>data</code> flag containing a list of GIDs</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_user_primary_group(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Get the `Group` GID&#39;s that is the `User`s primary `Group` (by UID)
+
+    Args:
+        uid (int): The UID of the user to lookup
+
+    Returns:
+        Result: A `Result` with the `data` flag containing a list of GIDs
+    &#34;&#34;&#34;
+    return computer.get_user_primary_group(uid)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.getcwd"><code class="name flex">
@@ -321,10 +950,7 @@ user's current directory</dd>
     Returns:
         FSBaseObjectSB: The  user&#39;s current directory
     &#34;&#34;&#34;
-    if len(computer.sessions) == 0:
-        return computer.fs.files
-    else:
-        return computer.sessions[-1].current_dir</code></pre>
+    return computer.sys_getcwd()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.getgid"><code class="name flex">
@@ -347,30 +973,31 @@ user's current directory</dd>
     Returns:
         int: (primary) GID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
-    current_uid = getuid()
-    result = computer.database.execute(
-        &#34;SELECT group_gid FROM group_membership WHERE computer_id=? AND user_uid=? AND membership_type=?&#34;,
-        (computer.id, current_uid, &#34;primary&#34;)).fetchone()
-
-    if result:
-        return result[0]
-    else:
-        # NOTE: possible exploit, but maybe we leave it here on purpose?
-        # TODO: Write proof of concept exploit to exploit this exploit
-        return 0</code></pre>
+    return computer.sys_getgid()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.gethostname"><code class="name flex">
 <span>def <span class="ident">gethostname</span></span>(<span>) ‑> str</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Gets the current system hostname (from internal var, not /etc/hostname)</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>"localhost" if the hostname isn't set, otherwise, the current <code>Computer</code>'s hostname</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def gethostname() -&gt; str:
-    return &#34;localhost&#34; if not computer.hostname else computer.hostname</code></pre>
+    &#34;&#34;&#34;
+    Gets the current system hostname (from internal var, not /etc/hostname)
+
+    Returns:
+        str: &#34;localhost&#34; if the hostname isn&#39;t set, otherwise, the current `Computer`&#39;s hostname
+    &#34;&#34;&#34;
+    return computer.sys_gethostname()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.getuid"><code class="name flex">
@@ -393,167 +1020,346 @@ user's current directory</dd>
     Returns:
         int: UID of the `Computers`&#39;s current user (from most recent session)
     &#34;&#34;&#34;
-    return computer.sessions[-1].effective_uid</code></pre>
+    return computer.sys_getuid()</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.new_session"><code class="name flex">
+<span>def <span class="ident">new_session</span></span>(<span>uid: int) ‑> NoneType</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Temporary function: Open a new session in the current <code>Computer</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The real UID of the user in the new <code>Session</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def new_session(uid: int) -&gt; None:
+    &#34;&#34;&#34;
+    Temporary function: Open a new session in the current `Computer`
+
+    Args:
+        uid (int): The real UID of the user in the new `Session`
+
+    Returns:
+        None
+    &#34;&#34;&#34;
+    # TODO: Make this more realistic since I have no clue how it works in real life
+    current_session: Session = computer.sessions[-1]
+    # Create a new session
+    new_session = Session(uid, current_session.current_dir, current_session.id + 1)
+    computer.sessions.append(new_session)
+    computer.run_current_user_shellrc()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.read"><code class="name flex">
-<span>def <span class="ident">read</span></span>(<span>filepath: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">read</span></span>(<span>filepath: str) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Try to read the content of the given <code>filepath</code>. Checks permissions</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>filepath</code></strong> :&ensp;<code>str</code></dt>
+<dd>The path of the file to read</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly and the data flag containing the files</dd>
+</dl>
+<p>if read was successful</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def read(filepath: str) -&gt; SysCallStatus:
-    # Try to find the file
-    find_file = computer.fs.find(filepath)
+<pre><code class="python">def read(filepath: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Try to read the content of the given `filepath`. Checks permissions
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Args:
+        filepath (str): The path of the file to read
 
-    if find_file.data.is_directory():
-        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly and the data flag containing the files
+        if read was successful
+    &#34;&#34;&#34;
+    return computer.sys_read(filepath)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.reboot"><code class="name flex">
+<span>def <span class="ident">reboot</span></span>(<span>mode: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Simulate a computer reboot. Clear all sessions and re-initialize the machine</p>
+<h2 id="args">Args</h2>
+<p>mode (int: Bitwise flags of the operation to take</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def reboot(mode: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Simulate a computer reboot. Clear all sessions and re-initialize the machine
 
-    try_read_file = find_file.data.read(computer)
+    Args:
+        mode (int: Bitwise flags of the operation to take
 
-    if not try_read_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_reboot(mode)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.rmdir"><code class="name flex">
+<span>def <span class="ident">rmdir</span></span>(<span>pathname: str) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Remove an empty directory</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The file path of the empty <code>Directory</code> to remove</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rmdir(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Remove an empty directory
 
-    return SysCallStatus(success=True, data=try_read_file.data)</code></pre>
+    Args:
+        pathname (str): The file path of the empty `Directory` to remove
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_rmdir(pathname)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.save"><code class="name flex">
+<span>def <span class="ident">save</span></span>(<span>file: Optional[str]) ‑> bool</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Serialize and dump the current <code>Computer</code> (and everything that's connected to it (<code>StandardFS</code>, <code>File</code>s, etc)) to a file</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>output_file</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>The file to dump the contents to</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>bool</code></dt>
+<dd><code>True</code> if the dump/save was successful, otherwise <code>False</code></dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def save(file: Optional[str]) -&gt; bool:
+    &#34;&#34;&#34;
+    Serialize and dump the current `Computer` (and everything that&#39;s connected to it (`StandardFS`, `File`s, etc)) to a file
+    Args:
+        output_file (str, optional): The file to dump the contents to
+
+    Returns:
+        bool: `True` if the dump/save was successful, otherwise `False`
+    &#34;&#34;&#34;
+    return computer.save(file)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.sethostname"><code class="name flex">
-<span>def <span class="ident">sethostname</span></span>(<span>hostname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">sethostname</span></span>(<span>hostname: str) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>An easy function to update the hostname (also updates /etc/hostname)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>hostname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The <code>Computer</code>'s new hostname</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> instance with the <code>success</code> flag set accordingly.</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def sethostname(hostname: str) -&gt; SysCallStatus:
-    # Only root can change the system hostname
-    if computer.get_uid() == 0:
-        computer.hostname = hostname
-        return SysCallStatus(success=True)
+<pre><code class="python">def sethostname(hostname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    An easy function to update the hostname (also updates /etc/hostname)
+    Args:
+        hostname (str): The `Computer`&#39;s new hostname
 
-    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+    Returns:
+        Result: A `Result` instance with the `success` flag set accordingly.
+    &#34;&#34;&#34;
+    return computer.sys_sethostname(hostname)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.setuid"><code class="name flex">
-<span>def <span class="ident">setuid</span></span>(<span>uid: int) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">setuid</span></span>(<span>uid: int) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Change current <code>Session</code>'s effective UID to the given <code>UID</code></p>
+<h2 id="notes">Notes</h2>
+<p>setuid() followed the current rules:
+* If the "caller" uid is root, change the uid to whatever is given
+* If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+* If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The new UID to change to</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def setuid(uid: int) -&gt; SysCallStatus:
-    # TODO: Implement a PROPER setuid
-    # The way setuid should work:
-    # If the &#34;caller&#34; uid is root, change the uid to whatever is given
-    # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
-    # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+<pre><code class="python">def setuid(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Change current `Session`&#39;s effective UID to the given `UID`
 
-    if computer.get_uid() == 0:
-        computer.sessions[-1].effective_uid = uid
-        return SysCallStatus(success=True)
-    else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+    Notes:
+        setuid() followed the current rules:
+            * If the &#34;caller&#34; uid is root, change the uid to whatever is given
+            * If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+            * If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+    Args:
+        uid (int): The new UID to change to
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_setuid(uid)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.lib.unistd.unlink"><code class="name flex">
+<span>def <span class="ident">unlink</span></span>(<span>pathname: str) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Removes a link to a file. If there are no links left, the file is removed.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>pathname</code></strong> :&ensp;<code>str</code></dt>
+<dd>The file path of the <code>File</code> to unlink</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> arguments containing the output from the binary</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def unlink(pathname: str) -&gt; Result:
+    &#34;&#34;&#34;
+    Removes a link to a file. If there are no links left, the file is removed.
+
+    Args:
+        pathname (str): The file path of the `File` to unlink
+
+    Returns:
+        Result: A `Result` arguments containing the output from the binary
+
+    &#34;&#34;&#34;
+    return computer.sys_unlink(pathname)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.update"><code class="name flex">
 <span>def <span class="ident">update</span></span>(<span>comp: Computer)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Store a reference to the games current <code>Computer</code> object as a global variable so methods can reference it without
+requiring it as an argument</p>
+<h2 id="args">Args</h2>
+<p>comp (:obj:<code>Computer</code>): The games current <code>Computer</code> object</p>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def update(comp: &#34;Computer&#34;):
+    &#34;&#34;&#34;
+    Store a reference to the games current `Computer` object as a global variable so methods can reference it without
+    requiring it as an argument
+    
+    Args:
+        comp (:obj:`Computer`): The games current `Computer` object
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     global computer
     computer = comp</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.lib.unistd.write"><code class="name flex">
-<span>def <span class="ident">write</span></span>(<span>filepath: str, data: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">write</span></span>(<span>fd: Union[str, <a title="client.blackhat.lib.sys.socket.Socket" href="sys/socket.html#client.blackhat.lib.sys.socket.Socket">Socket</a>], data: Union[str, dict]) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Try to write to a given file descriptor. If <code>fd</code> is a file path, this function will try to write to a file
+(permission safe), however, if the fd is a <code>Socket</code>, this function will try to send the given <code>data</code> to the
+respective <code>Socket</code>'s connected service (if connected).</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt>fd (str or :obj:<code>Socket</code>): The filepath of the file or Socket to write to</dt>
+<dt><strong><code>data</code></strong> :&ensp;<code>str</code> or <code>dict</code></dt>
+<dd>The data to write to the file (if fd == str) or data to send to the socket (if fd == Socket)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def write(filepath: str, data: str) -&gt; SysCallStatus:
-    # Try to find the file
-    find_file = computer.fs.find(filepath)
+<pre><code class="python">def write(fd: Union[str, Socket], data: Union[str, dict]) -&gt; Result:
+    &#34;&#34;&#34;
+    Try to write to a given file descriptor. If `fd` is a file path, this function will try to write to a file
+    (permission safe), however, if the fd is a `Socket`, this function will try to send the given `data` to the
+    respective `Socket`&#39;s connected service (if connected).
 
-    if not find_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+    Args:
+        fd (str or :obj:`Socket`): The filepath of the file or Socket to write to
+        data (str or dict): The data to write to the file (if fd == str) or data to send to the socket (if fd == Socket)
 
-    if find_file.data.is_directory():
-        return SysCallStatus(success=False, message=SysCallMessages.IS_DIRECTORY)
-
-    try_write_file = find_file.data.write(data, computer)
-
-    if not try_write_file.success:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-
-    return SysCallStatus(success=True)</code></pre>
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    return computer.sys_write(fd, data)</code></pre>
 </details>
 </dd>
 </dl>
 </section>
 <section>
-<h2 class="section-title" id="header-classes">Classes</h2>
-<dl>
-<dt id="client.blackhat.lib.unistd.AccessMode"><code class="flex name class">
-<span>class <span class="ident">AccessMode</span></span>
-<span>(</span><span>value, names=None, *, module=None, qualname=None, type=None, start=1)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>An enumeration.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class AccessMode(IntFlag):
-    F_OK = 1 &lt;&lt; 0  # Check for existence
-    R_OK = 1 &lt;&lt; 1  # Check read bit
-    W_OK = 1 &lt;&lt; 2  # Check write bit
-    X_OK = 1 &lt;&lt; 3  # Check execute bit</code></pre>
-</details>
-<h3>Ancestors</h3>
-<ul class="hlist">
-<li>enum.IntFlag</li>
-<li>builtins.int</li>
-<li>enum.Flag</li>
-<li>enum.Enum</li>
-</ul>
-<h3>Class variables</h3>
-<dl>
-<dt id="client.blackhat.lib.unistd.AccessMode.F_OK"><code class="name">var <span class="ident">F_OK</span></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="client.blackhat.lib.unistd.AccessMode.R_OK"><code class="name">var <span class="ident">R_OK</span></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="client.blackhat.lib.unistd.AccessMode.W_OK"><code class="name">var <span class="ident">W_OK</span></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="client.blackhat.lib.unistd.AccessMode.X_OK"><code class="name">var <span class="ident">X_OK</span></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-</dl>
-</dd>
-</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -568,32 +1374,35 @@ user's current directory</dd>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="two-column">
+<ul class="">
 <li><code><a title="client.blackhat.lib.unistd.access" href="#client.blackhat.lib.unistd.access">access</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.add_group" href="#client.blackhat.lib.unistd.add_group">add_group</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.add_user" href="#client.blackhat.lib.unistd.add_user">add_user</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.add_user_to_group" href="#client.blackhat.lib.unistd.add_user_to_group">add_user_to_group</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.chdir" href="#client.blackhat.lib.unistd.chdir">chdir</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.chown" href="#client.blackhat.lib.unistd.chown">chown</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.execv" href="#client.blackhat.lib.unistd.execv">execv</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.execvp" href="#client.blackhat.lib.unistd.execvp">execvp</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_all_users" href="#client.blackhat.lib.unistd.get_all_users">get_all_users</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_group" href="#client.blackhat.lib.unistd.get_group">get_group</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_sessions" href="#client.blackhat.lib.unistd.get_sessions">get_sessions</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_user" href="#client.blackhat.lib.unistd.get_user">get_user</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_user_groups" href="#client.blackhat.lib.unistd.get_user_groups">get_user_groups</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.get_user_primary_group" href="#client.blackhat.lib.unistd.get_user_primary_group">get_user_primary_group</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getcwd" href="#client.blackhat.lib.unistd.getcwd">getcwd</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getgid" href="#client.blackhat.lib.unistd.getgid">getgid</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.gethostname" href="#client.blackhat.lib.unistd.gethostname">gethostname</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.getuid" href="#client.blackhat.lib.unistd.getuid">getuid</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.new_session" href="#client.blackhat.lib.unistd.new_session">new_session</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.read" href="#client.blackhat.lib.unistd.read">read</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.reboot" href="#client.blackhat.lib.unistd.reboot">reboot</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.rmdir" href="#client.blackhat.lib.unistd.rmdir">rmdir</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.save" href="#client.blackhat.lib.unistd.save">save</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.sethostname" href="#client.blackhat.lib.unistd.sethostname">sethostname</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.setuid" href="#client.blackhat.lib.unistd.setuid">setuid</a></code></li>
+<li><code><a title="client.blackhat.lib.unistd.unlink" href="#client.blackhat.lib.unistd.unlink">unlink</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.update" href="#client.blackhat.lib.unistd.update">update</a></code></li>
 <li><code><a title="client.blackhat.lib.unistd.write" href="#client.blackhat.lib.unistd.write">write</a></code></li>
-</ul>
-</li>
-<li><h3><a href="#header-classes">Classes</a></h3>
-<ul>
-<li>
-<h4><code><a title="client.blackhat.lib.unistd.AccessMode" href="#client.blackhat.lib.unistd.AccessMode">AccessMode</a></code></h4>
-<ul class="">
-<li><code><a title="client.blackhat.lib.unistd.AccessMode.F_OK" href="#client.blackhat.lib.unistd.AccessMode.F_OK">F_OK</a></code></li>
-<li><code><a title="client.blackhat.lib.unistd.AccessMode.R_OK" href="#client.blackhat.lib.unistd.AccessMode.R_OK">R_OK</a></code></li>
-<li><code><a title="client.blackhat.lib.unistd.AccessMode.W_OK" href="#client.blackhat.lib.unistd.AccessMode.W_OK">W_OK</a></code></li>
-<li><code><a title="client.blackhat.lib.unistd.AccessMode.X_OK" href="#client.blackhat.lib.unistd.AccessMode.X_OK">X_OK</a></code></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>

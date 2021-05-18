@@ -36,6 +36,12 @@ from ..shell import Shell
 
 
 def init():
+    &#34;&#34;&#34;
+    Setup the vars and systems required for the tests to run properly
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     computer = Computer()
     # Create a temporary root session for initializing stuff
     session = Session(0, computer.fs.files, 0)
@@ -58,7 +64,7 @@ def init():
 
     computer.sessions.append(session)
 
-    computer.update_user_and_group_files()
+    computer.sync_user_and_group_files()
 
     computer.run_current_user_shellrc()
     computer.run_command(&#34;cd&#34;, [&#34;~&#34;], False)
@@ -78,12 +84,20 @@ def init():
 <span>def <span class="ident">init</span></span>(<span>)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Setup the vars and systems required for the tests to run properly</p>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def init():
+    &#34;&#34;&#34;
+    Setup the vars and systems required for the tests to run properly
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     computer = Computer()
     # Create a temporary root session for initializing stuff
     session = Session(0, computer.fs.files, 0)
@@ -106,7 +120,7 @@ def init():
 
     computer.sessions.append(session)
 
-    computer.update_user_and_group_files()
+    computer.sync_user_and_group_files()
 
     computer.run_current_user_shellrc()
     computer.run_command(&#34;cd&#34;, [&#34;~&#34;], False)

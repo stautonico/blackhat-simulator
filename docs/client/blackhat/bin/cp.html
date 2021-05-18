@@ -26,141 +26,29 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from typing import Union
-
-from ..computer import Computer
-from ..fs import File, Directory
-from ..helpers import SysCallStatus, SysCallMessages
+<pre><code class="python">from ..helpers import Result, ResultMessages
+from ..lib.fcntl import copy
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, getgid
 
 __COMMAND__ = &#34;cp&#34;
-__VERSION__ = &#34;1.1.1&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
+__VERSION__ = &#34;1.1&#34;
 
 
-# TODO: This is old code from the original demo, this will be re-written soon
-
-def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserve_permissions: bool,
-         verbose: bool) -&gt; SysCallStatus:
-    # Handle file copying
-    if src.is_file():
-        # If the path is in the local dir
-        if &#34;/&#34; not in dst_path:
-            dst_path = &#34;./&#34; + dst_path
-
-        try_find_dst = computer.fs.find(dst_path)
-
-        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
-        if not try_find_dst.success:
-            # Try to find the destination file parent folder
-            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
-            if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        to_write: Union[Directory, File] = try_find_dst.data
-
-        # If we found the parent folder, set the filename to the parent folder
-        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
-            new_file_name = dst_path.split(&#34;/&#34;)[-1]
-            if new_file_name == &#34;&#34;:
-                new_file_name = src.name
-        else:
-            new_file_name = src.name
-
-        if to_write.is_file():
-            # If its a file, we&#39;re overwriting
-            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
-            # Check read first (split for error messages)
-            if not src.check_perm(&#34;read&#34;, computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    to_write.write(src.content, computer)
-                    to_write.owner = getuid()
-                    to_write.group_owner = getgid()
-        else:
-            # If we have the parent dir, we need to create a new file
-            if not src.check_perm(&#34;read&#34;, computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    new_filename = new_file_name
-                    new_file = File(new_filename, src.content, to_write, getuid(), getgid())
-                    new_file.events = src.events
-                    to_write.add_file(new_file)
-                    # We have to do this so the permissions work no matter if we&#39;re overwriting or not
-                    to_write = new_file
-
-        if preserve_permissions:
-            to_write.permissions = src.permissions
-
-        to_write.handle_event(&#34;move&#34;)
-        return SysCallStatus(success=True)
-    # Handle directory copying
-    else:
-        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
-        # If the path is in the local dir
-        if &#34;/&#34; not in dst_path:
-            dst_path = &#34;./&#34; + dst_path
-
-        try_find_dst = computer.fs.find(dst_path)
-
-        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
-        if not try_find_dst.success:
-            # Try to find the destination file parent folder
-            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
-            if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        to_write: Union[Directory, File] = try_find_dst.data
-
-        # If we found the parent folder, set the filename to the parent folder
-        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
-            new_file_name = dst_path.split(&#34;/&#34;)[-1]
-        else:
-            new_file_name = src.name
-
-        if new_file_name not in to_write.files:
-            if not src.check_perm(&#34;read&#34;, computer):
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    new_dir = Directory(new_file_name, to_write, getuid(), getgid())
-                    new_dir.events = to_write.events
-                    to_write.add_file(new_dir)
-                    # Set a temporary write permission no matter what the new dir&#39;s permissions were so we can add its children
-                    new_dir.permissions[&#34;write&#34;] = [&#34;owner&#34;]
-                    # Go through all the source&#39;s files and copy them into the new dir
-                    for file in src.files.values():
-                        response = copy(computer, file, new_dir.pwd(), preserve_permissions, verbose)
-
-                        if not response.success:
-                            if response.message == SysCallMessages.NOT_ALLOWED_READ:
-                                print(f&#34;{__COMMAND__}: cannot open &#39;{file.pwd()}&#39; for reading: Permission denied&#34;)
-                            elif response.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                                print(f&#34;{__COMMAND__}: cannot open &#39;{file.pwd()}&#39; for writing: Permission denied&#34;)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-
-        if preserve_permissions:
-            new_dir.permissions = src.permissions
-
-        new_dir.handle_event(&#34;move&#34;)
-        return SysCallStatus(success=True)
-
-
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;source&#34;)
     parser.add_argument(&#34;destination&#34;)
     parser.add_argument(&#34;-r&#34;, dest=&#34;recursive&#34;, action=&#34;store_true&#34;)
@@ -170,54 +58,84 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.source and not args.destination:
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -&gt; Result:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        # Try to find the source file/directory
-        find_src_result = computer.fs.find(args.source)
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        if not find_src_result.success:
-            return output(f&#34;{__COMMAND__}: cannot find &#39;{args.source}&#39;: No such file or directory&#34;, pipe,
-                          success=False)
-        # The source file exists
-        else:
-            # Error for trying to copy a directory with the `-r` flag
-            if find_src_result.data.is_directory() and not args.recursive:
-                return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{args.source}&#39;&#34;, pipe,
+        result = copy(args.source, args.destination)
+
+        if not result.success:
+            if result.message == ResultMessages.NOT_FOUND:
+                return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;, pipe,
                               success=False)
-            else:
-                # Try to copy the item
-                copy_result = copy(computer, find_src_result.data, args.destination, args.preserve_permissions,
-                                   args.verbose)
 
-                # Output the proper message
-                if not copy_result.success:
-                    if copy_result.message == SysCallMessages.NOT_FOUND:
-                        return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;,
-                                      pipe,
-                                      success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;,
-                                      pipe,
-                                      success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                        return output(
-                            f&#34;{__COMMAND__}: cannot open &#39;{args.destination} for writing: Permission denied&#34;, pipe,
-                            success=False)
-                    elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
-                        return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;,
-                                      pipe,
-                                      success=False)
+            elif result.message == ResultMessages.NOT_ALLOWED:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39;: Permission denied&#34;, pipe,
+                              success=False)
 
-            return output(&#34;&#34;, pipe, success=True)</code></pre>
+            elif result.message == ResultMessages.NOT_ALLOWED_READ:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.NOT_ALLOWED_WRITE:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for writing: Permission denied&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.ALREADY_EXISTS:
+                return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;, pipe,
+                              success=False)
+
+        return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -227,132 +145,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="client.blackhat.bin.cp.copy"><code class="name flex">
-<span>def <span class="ident">copy</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, src: Union[<a title="client.blackhat.fs.File" href="../fs.html#client.blackhat.fs.File">File</a>, <a title="client.blackhat.fs.Directory" href="../fs.html#client.blackhat.fs.Directory">Directory</a>], dst_path: str, preserve_permissions: bool, verbose: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
-</code></dt>
-<dd>
-<div class="desc"></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def copy(computer: Computer, src: Union[File, Directory], dst_path: str, preserve_permissions: bool,
-         verbose: bool) -&gt; SysCallStatus:
-    # Handle file copying
-    if src.is_file():
-        # If the path is in the local dir
-        if &#34;/&#34; not in dst_path:
-            dst_path = &#34;./&#34; + dst_path
-
-        try_find_dst = computer.fs.find(dst_path)
-
-        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
-        if not try_find_dst.success:
-            # Try to find the destination file parent folder
-            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
-            if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        to_write: Union[Directory, File] = try_find_dst.data
-
-        # If we found the parent folder, set the filename to the parent folder
-        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
-            new_file_name = dst_path.split(&#34;/&#34;)[-1]
-            if new_file_name == &#34;&#34;:
-                new_file_name = src.name
-        else:
-            new_file_name = src.name
-
-        if to_write.is_file():
-            # If its a file, we&#39;re overwriting
-            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
-            # Check read first (split for error messages)
-            if not src.check_perm(&#34;read&#34;, computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    to_write.write(src.content, computer)
-                    to_write.owner = getuid()
-                    to_write.group_owner = getgid()
-        else:
-            # If we have the parent dir, we need to create a new file
-            if not src.check_perm(&#34;read&#34;, computer).success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    new_filename = new_file_name
-                    new_file = File(new_filename, src.content, to_write, getuid(), getgid())
-                    new_file.events = src.events
-                    to_write.add_file(new_file)
-                    # We have to do this so the permissions work no matter if we&#39;re overwriting or not
-                    to_write = new_file
-
-        if preserve_permissions:
-            to_write.permissions = src.permissions
-
-        to_write.handle_event(&#34;move&#34;)
-        return SysCallStatus(success=True)
-    # Handle directory copying
-    else:
-        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
-        # If the path is in the local dir
-        if &#34;/&#34; not in dst_path:
-            dst_path = &#34;./&#34; + dst_path
-
-        try_find_dst = computer.fs.find(dst_path)
-
-        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
-        if not try_find_dst.success:
-            # Try to find the destination file parent folder
-            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
-            if not try_find_dst.success:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
-
-        to_write: Union[Directory, File] = try_find_dst.data
-
-        # If we found the parent folder, set the filename to the parent folder
-        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
-            new_file_name = dst_path.split(&#34;/&#34;)[-1]
-        else:
-            new_file_name = src.name
-
-        if new_file_name not in to_write.files:
-            if not src.check_perm(&#34;read&#34;, computer):
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_READ)
-            else:
-                if not to_write.check_perm(&#34;write&#34;, computer).success:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED_WRITE)
-                else:
-                    new_dir = Directory(new_file_name, to_write, getuid(), getgid())
-                    new_dir.events = to_write.events
-                    to_write.add_file(new_dir)
-                    # Set a temporary write permission no matter what the new dir&#39;s permissions were so we can add its children
-                    new_dir.permissions[&#34;write&#34;] = [&#34;owner&#34;]
-                    # Go through all the source&#39;s files and copy them into the new dir
-                    for file in src.files.values():
-                        response = copy(computer, file, new_dir.pwd(), preserve_permissions, verbose)
-
-                        if not response.success:
-                            if response.message == SysCallMessages.NOT_ALLOWED_READ:
-                                print(f&#34;{__COMMAND__}: cannot open &#39;{file.pwd()}&#39; for reading: Permission denied&#34;)
-                            elif response.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                                print(f&#34;{__COMMAND__}: cannot open &#39;{file.pwd()}&#39; for writing: Permission denied&#34;)
-        else:
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
-
-        if preserve_permissions:
-            new_dir.permissions = src.permissions
-
-        new_dir.handle_event(&#34;move&#34;)
-        return SysCallStatus(success=True)</code></pre>
-</details>
-</dd>
 <dt id="client.blackhat.bin.cp.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
@@ -360,11 +154,79 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
+    args, parser = parse_args(args)
+
+    if parser.error_message:
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+
+    # If we specific -h/--help, args will be empty, so exit gracefully
+    if not args:
+        return output(&#34;&#34;, pipe)
+    else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
+        result = copy(args.source, args.destination)
+
+        if not result.success:
+            if result.message == ResultMessages.NOT_FOUND:
+                return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.NOT_ALLOWED:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39;: Permission denied&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.NOT_ALLOWED_READ:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.NOT_ALLOWED_WRITE:
+                return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for writing: Permission denied&#34;, pipe,
+                              success=False)
+
+            elif result.message == ResultMessages.ALREADY_EXISTS:
+                return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;, pipe,
+                              success=False)
+
+        return output(&#34;&#34;, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.cp.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;source&#34;)
     parser.add_argument(&#34;destination&#34;)
     parser.add_argument(&#34;-r&#34;, dest=&#34;recursive&#34;, action=&#34;store_true&#34;)
@@ -374,54 +236,41 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
     args = parser.parse_args(args)
 
-    if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+    arg_helps_with_dups = parser._actions
 
-        if not args.version and not args.source and not args.destination:
-            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
 
-    # If we specific -h/--help, args will be empty, so exit gracefully
-    if not args:
-        return output(&#34;&#34;, pipe)
-    else:
-        # Try to find the source file/directory
-        find_src_result = computer.fs.find(args.source)
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
 
-        if not find_src_result.success:
-            return output(f&#34;{__COMMAND__}: cannot find &#39;{args.source}&#39;: No such file or directory&#34;, pipe,
-                          success=False)
-        # The source file exists
-        else:
-            # Error for trying to copy a directory with the `-r` flag
-            if find_src_result.data.is_directory() and not args.recursive:
-                return output(f&#34;{__COMMAND__}: -r not specified; omitting directory &#39;{args.source}&#39;&#34;, pipe,
-                              success=False)
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
             else:
-                # Try to copy the item
-                copy_result = copy(computer, find_src_result.data, args.destination, args.preserve_permissions,
-                                   args.verbose)
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
 
-                # Output the proper message
-                if not copy_result.success:
-                    if copy_result.message == SysCallMessages.NOT_FOUND:
-                        return output(f&#34;{__COMMAND__}: cannot find &#39;{args.destination}&#39;: No such file or directory&#34;,
-                                      pipe,
-                                      success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_READ:
-                        return output(f&#34;{__COMMAND__}: cannot open &#39;{args.source}&#39; for reading: Permission denied&#34;,
-                                      pipe,
-                                      success=False)
-                    elif copy_result.message == SysCallMessages.NOT_ALLOWED_WRITE:
-                        return output(
-                            f&#34;{__COMMAND__}: cannot open &#39;{args.destination} for writing: Permission denied&#34;, pipe,
-                            success=False)
-                    elif copy_result.message == SysCallMessages.ALREADY_EXISTS:
-                        return output(f&#34;{__COMMAND__}: cannot write &#39;{args.destination}: Directory already exists&#34;,
-                                      pipe,
-                                      success=False)
-
-            return output(&#34;&#34;, pipe, success=True)</code></pre>
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -442,8 +291,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="client.blackhat.bin.cp.copy" href="#client.blackhat.bin.cp.copy">copy</a></code></li>
 <li><code><a title="client.blackhat.bin.cp.main" href="#client.blackhat.bin.cp.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.cp.parse_args" href="#client.blackhat.bin.cp.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

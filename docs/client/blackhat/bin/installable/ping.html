@@ -26,64 +26,105 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">import ipaddress
-from random import randint
+<pre><code class="python">from random import randint
 from time import sleep
 
-from ...computer import Computer
-from ...helpers import SysCallStatus
+from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output
+from ...lib.sys import socket
+from ...lib.unistd import write
 
 __COMMAND__ = &#34;ping&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
+__VERSION__ = &#34;1.2&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;host&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;host&#34;)
-    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, &#34;-v&#34;, action=&#34;store_true&#34;,
-                        help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     if args.version:
-        return output(f&#34;ping from blackhat netutils 1.1&#34;, pipe)
+        return output(f&#34;ping from blackhat netutils {__VERSION__}&#34;, pipe)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        # See if we have to resolve a dns record or not
-        try:
-            is_ipv4 = ipaddress.ip_address(args.host)
-        except ValueError:
-            is_ipv4 = False
-
-        if not is_ipv4:
-            # Resolve the DNS record
-            dns_result = computer.parent.resolve_dns(args.host)
-            if not dns_result.success:
-                # We couldn&#39;t resolve the DNS address, show failure message
-                return output(f&#34;{__COMMAND__}: {args.host}: Name or service not known&#34;, pipe, success=False)
-            else:
-                to_ping = dns_result.data
-        else:
-            to_ping = args.host
-
         # Try to find the given client
-        find_client = computer.parent.find_client(to_ping)
+        sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr_struct = socket.SockAddr(socket.AF_INET, 0, args.host)
+        dns_sock = socket.connect(sock, addr_struct)
+        ping_result = write(sock, {})
+
+        if not dns_sock.success:
+            # We couldn&#39;t resolve the DNS address, show failure message
+            return output(f&#34;{__COMMAND__}: {args.host}: Name or service not known&#34;, pipe, success=False)
+
+        to_ping = sock.host
 
         print(f&#34;PING {args.host} ({to_ping}) 56(84) bytes of data.&#34;)
 
-        if not find_client.success:
+        if not ping_result.success:
             # Pretend to connect to the host, even tho we already know its dead (for realism)
             sleep(randint(1, 3))
             return output(f&#34;From {to_ping} icmp_seq=1 Destination Host Unreachable&#34;, pipe, success=False)
@@ -101,7 +142,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.installable.ping.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
@@ -109,51 +150,38 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;host&#34;)
-    parser.add_argument(&#34;--version&#34;, &#34;-V&#34;, &#34;-v&#34;, action=&#34;store_true&#34;,
-                        help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     if args.version:
-        return output(f&#34;ping from blackhat netutils 1.1&#34;, pipe)
+        return output(f&#34;ping from blackhat netutils {__VERSION__}&#34;, pipe)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
-        # See if we have to resolve a dns record or not
-        try:
-            is_ipv4 = ipaddress.ip_address(args.host)
-        except ValueError:
-            is_ipv4 = False
-
-        if not is_ipv4:
-            # Resolve the DNS record
-            dns_result = computer.parent.resolve_dns(args.host)
-            if not dns_result.success:
-                # We couldn&#39;t resolve the DNS address, show failure message
-                return output(f&#34;{__COMMAND__}: {args.host}: Name or service not known&#34;, pipe, success=False)
-            else:
-                to_ping = dns_result.data
-        else:
-            to_ping = args.host
-
         # Try to find the given client
-        find_client = computer.parent.find_client(to_ping)
+        sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr_struct = socket.SockAddr(socket.AF_INET, 0, args.host)
+        dns_sock = socket.connect(sock, addr_struct)
+        ping_result = write(sock, {})
+
+        if not dns_sock.success:
+            # We couldn&#39;t resolve the DNS address, show failure message
+            return output(f&#34;{__COMMAND__}: {args.host}: Name or service not known&#34;, pipe, success=False)
+
+        to_ping = sock.host
 
         print(f&#34;PING {args.host} ({to_ping}) 56(84) bytes of data.&#34;)
 
-        if not find_client.success:
+        if not ping_result.success:
             # Pretend to connect to the host, even tho we already know its dead (for realism)
             sleep(randint(1, 3))
             return output(f&#34;From {to_ping} icmp_seq=1 Destination Host Unreachable&#34;, pipe, success=False)
@@ -161,6 +189,76 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             return output(
                 f&#34;64 bytes from {args.host} ({to_ping}): icmp_seq=1 ttl=116 time={randint(5, 15)}.{randint(0, 9)} ms&#34;,
                 pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.installable.ping.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;host&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -182,6 +280,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.installable.ping.main" href="#client.blackhat.bin.installable.ping.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.installable.ping.parse_args" href="#client.blackhat.bin.installable.ping.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

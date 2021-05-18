@@ -28,9 +28,7 @@
 </summary>
 <pre><code class="python">from hashlib import sha256
 
-from ..computer import Computer
-from ..fs import File
-from ..helpers import SysCallStatus
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -39,8 +37,20 @@ __DESCRIPTION__ = &#34;compute and check SHA256 message digest&#34;
 __DESCRIPTION_LONG__ = &#34;Print or check SHA256 (256-bit) checksums.&#34;
 __VERSION__ = &#34;1.2&#34;
 
+from ..lib.unistd import read
+
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;--tag&#34;, action=&#34;store_true&#34;, help=&#34;create a BSD-style checksum&#34;)
@@ -86,7 +96,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -103,24 +113,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         output_text = &#34;&#34;
 
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f&#34;{filename}: No such file or directory\n&#34;
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Is a directory\n&#34;
+
+            to_hash = find_file_result.data[:-1] if find_file_result.data.endswith(
+                &#34;\n&#34;) and args.zero else find_file_result.data
+            hash = sha256(to_hash.encode()).hexdigest()
+            if args.tag:
+                output_text += f&#34;SHA256 ({filename}) = {hash}\n&#34;
             else:
-                file: File = find_file_result.data
-                if file.is_directory():
-                    output_text += f&#34;{filename}: Is a directory\n&#34;
-                else:
-                    # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{filename}: Permission denied\n&#34;
-                    else:
-                        to_hash = file.content[:-1] if file.content.endswith(&#34;\n&#34;) and args.zero else file.content
-                        hash = sha256(to_hash.encode()).hexdigest()
-                        if args.tag:
-                            output_text += f&#34;SHA256 ({filename}) = {hash}\n&#34;
-                        else:
-                            output_text += f&#34;{hash}  {filename}\n&#34;
+                output_text += f&#34;{hash}  {filename}\n&#34;
 
         return output(output_text, pipe)</code></pre>
 </details>
@@ -133,7 +141,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.sha256sum.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -141,7 +149,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -158,24 +166,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         output_text = &#34;&#34;
 
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f&#34;{filename}: No such file or directory\n&#34;
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Is a directory\n&#34;
+
+            to_hash = find_file_result.data[:-1] if find_file_result.data.endswith(
+                &#34;\n&#34;) and args.zero else find_file_result.data
+            hash = sha256(to_hash.encode()).hexdigest()
+            if args.tag:
+                output_text += f&#34;SHA256 ({filename}) = {hash}\n&#34;
             else:
-                file: File = find_file_result.data
-                if file.is_directory():
-                    output_text += f&#34;{filename}: Is a directory\n&#34;
-                else:
-                    # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{filename}: Permission denied\n&#34;
-                    else:
-                        to_hash = file.content[:-1] if file.content.endswith(&#34;\n&#34;) and args.zero else file.content
-                        hash = sha256(to_hash.encode()).hexdigest()
-                        if args.tag:
-                            output_text += f&#34;SHA256 ({filename}) = {hash}\n&#34;
-                        else:
-                            output_text += f&#34;{hash}  {filename}\n&#34;
+                output_text += f&#34;{hash}  {filename}\n&#34;
 
         return output(output_text, pipe)</code></pre>
 </details>
@@ -184,12 +190,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;--tag&#34;, action=&#34;store_true&#34;, help=&#34;create a BSD-style checksum&#34;)

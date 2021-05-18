@@ -30,27 +30,30 @@
 from getpass import getpass
 from hashlib import md5
 
-from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
+from ..helpers import ResultMessages, Result
 from ..lib.output import output
+from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp
 
 __COMMAND__ = &#34;sudo&#34;
 __VERSION__ = &#34;1.1&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Find a way to do this with arg parser without it breaking lol
     if &#34;--version&#34; in args:
         return output(f&#34;Sudo version {__VERSION__} (miscutils)&#34;, pipe)
 
     if len(args) == 0:
         return output(f&#34;{__COMMAND__}: missing argument: command&#34;, pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+                      success_message=ResultMessages.MISSING_ARGUMENT)
 
     # We can&#39;t run sudo without the /etc/sudoers
-    sudoers_file_result = computer.fs.find(&#34;/etc/sudoers&#34;)
+    sudoers_file_result = read(&#34;/etc/sudoers&#34;)
 
     if not sudoers_file_result.success:
+        if sudoers_file_result.message == ResultMessages.NOT_ALLOWED:
+            return output(f&#34;{__COMMAND__}: Cannot read sudoers file: Permission denied&#34;, pipe, success=False)
+
         return output(f&#34;{__COMMAND__}: no valid sudoers sources found, quitting&#34;, pipe, success=False)
 
     sudoers_file = sudoers_file_result.data
@@ -58,7 +61,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = computer.find_user(uid=getuid())
+    user_lookup = get_user(uid=getuid())
 
     if user_lookup.success:
         username = user_lookup.data.username
@@ -74,19 +77,19 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             args.remove(user_run_as)
 
             # Check if the given user exists
-            user_lookup = computer.find_user(username=user_run_as)
+            user_lookup = get_user(username=user_run_as)
 
             if not user_lookup.success:
                 return output(f&#34;{__COMMAND__}: unknown user: {user_run_as}&#34;, pipe, success=False,
-                              success_message=SysCallMessages.NOT_FOUND)
+                              success_message=ResultMessages.NOT_FOUND)
             else:
                 user = user_lookup.data
         except IndexError:
             return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;u&#39;&#34;, pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+                          success_message=ResultMessages.MISSING_ARGUMENT)
 
     else:
-        user = computer.find_user(uid=0).data
+        user = get_user(uid=0).data
 
     # We need to authenticate as that user before we can run any commands
     for x in range(3):
@@ -95,11 +98,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Encode the password
         password = md5(password.encode()).hexdigest()
 
-        current_user = computer.find_user(uid=getuid()).data
+        current_user = get_user(uid=getuid()).data
         if password == current_user.password:
 
             # Now lets isolate the record regarding this `username`
-            split_sudoers_content = sudoers_file.content.split(&#34;\n&#34;)
+            split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
 
             # NOTE: Possible exploit we&#39;re going to leave on purpose
             # Lets find the line that contains the username
@@ -118,7 +121,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
             # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
             host, line = line.split(&#34;=&#34;, 1)
-            if host.lower() != &#34;all&#34; and host != computer.hostname:
+            if host.lower() != &#34;all&#34; and host != gethostname():
                 return output(
                     f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
                     pipe, success=False)
@@ -148,12 +151,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported&#34;,
                     pipe, success=False)
 
-            computer.sessions[-1].effective_uid = user.uid
+            setuid(user.uid)
             # args[0] : command
             # args[1:] : arguments
-            result = computer.run_command(args[0], args[1:], pipe)
+            result = execvp(args[0], args[1:])
             # Reset the effective user after running command
-            computer.sessions[-1].effective_uid = computer.sessions[-1].real_uid
+            setuid(current_user.uid)
             return result
         else:
             # Simulates the password checking delay when wrong password is entered
@@ -162,7 +165,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 print(&#34;Sorry, try again.&#34;)
 
     return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
-                  success_message=SysCallMessages.NOT_ALLOWED)</code></pre>
+                  success_message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </section>
 <section>
@@ -173,7 +176,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.sudo.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -181,19 +184,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Find a way to do this with arg parser without it breaking lol
     if &#34;--version&#34; in args:
         return output(f&#34;Sudo version {__VERSION__} (miscutils)&#34;, pipe)
 
     if len(args) == 0:
         return output(f&#34;{__COMMAND__}: missing argument: command&#34;, pipe, success=False,
-                      success_message=SysCallMessages.MISSING_ARGUMENT)
+                      success_message=ResultMessages.MISSING_ARGUMENT)
 
     # We can&#39;t run sudo without the /etc/sudoers
-    sudoers_file_result = computer.fs.find(&#34;/etc/sudoers&#34;)
+    sudoers_file_result = read(&#34;/etc/sudoers&#34;)
 
     if not sudoers_file_result.success:
+        if sudoers_file_result.message == ResultMessages.NOT_ALLOWED:
+            return output(f&#34;{__COMMAND__}: Cannot read sudoers file: Permission denied&#34;, pipe, success=False)
+
         return output(f&#34;{__COMMAND__}: no valid sudoers sources found, quitting&#34;, pipe, success=False)
 
     sudoers_file = sudoers_file_result.data
@@ -201,7 +207,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = computer.find_user(uid=getuid())
+    user_lookup = get_user(uid=getuid())
 
     if user_lookup.success:
         username = user_lookup.data.username
@@ -217,19 +223,19 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             args.remove(user_run_as)
 
             # Check if the given user exists
-            user_lookup = computer.find_user(username=user_run_as)
+            user_lookup = get_user(username=user_run_as)
 
             if not user_lookup.success:
                 return output(f&#34;{__COMMAND__}: unknown user: {user_run_as}&#34;, pipe, success=False,
-                              success_message=SysCallMessages.NOT_FOUND)
+                              success_message=ResultMessages.NOT_FOUND)
             else:
                 user = user_lookup.data
         except IndexError:
             return output(f&#34;{__COMMAND__}: option requires an argument -- &#39;u&#39;&#34;, pipe, success=False,
-                          success_message=SysCallMessages.MISSING_ARGUMENT)
+                          success_message=ResultMessages.MISSING_ARGUMENT)
 
     else:
-        user = computer.find_user(uid=0).data
+        user = get_user(uid=0).data
 
     # We need to authenticate as that user before we can run any commands
     for x in range(3):
@@ -238,11 +244,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # Encode the password
         password = md5(password.encode()).hexdigest()
 
-        current_user = computer.find_user(uid=getuid()).data
+        current_user = get_user(uid=getuid()).data
         if password == current_user.password:
 
             # Now lets isolate the record regarding this `username`
-            split_sudoers_content = sudoers_file.content.split(&#34;\n&#34;)
+            split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
 
             # NOTE: Possible exploit we&#39;re going to leave on purpose
             # Lets find the line that contains the username
@@ -261,7 +267,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
             # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
             host, line = line.split(&#34;=&#34;, 1)
-            if host.lower() != &#34;all&#34; and host != computer.hostname:
+            if host.lower() != &#34;all&#34; and host != gethostname():
                 return output(
                     f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
                     pipe, success=False)
@@ -291,12 +297,12 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                     f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported&#34;,
                     pipe, success=False)
 
-            computer.sessions[-1].effective_uid = user.uid
+            setuid(user.uid)
             # args[0] : command
             # args[1:] : arguments
-            result = computer.run_command(args[0], args[1:], pipe)
+            result = execvp(args[0], args[1:])
             # Reset the effective user after running command
-            computer.sessions[-1].effective_uid = computer.sessions[-1].real_uid
+            setuid(current_user.uid)
             return result
         else:
             # Simulates the password checking delay when wrong password is entered
@@ -305,7 +311,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 print(&#34;Sorry, try again.&#34;)
 
     return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
-                  success_message=SysCallMessages.NOT_ALLOWED)</code></pre>
+                  success_message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 </dl>

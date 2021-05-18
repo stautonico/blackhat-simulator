@@ -26,18 +26,31 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import get_sessions, get_user
+import datetime
 
 __COMMAND__ = &#34;who&#34;
 __DESCRIPTION__ = &#34;show who is logged on&#34;
 __DESCRIPTION_LONG__ = &#34;Print information about users who are currently logged in.&#34;
 __VERSION__ = &#34;1.2&#34;
 
+from ..lib.unistd import read
+
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-b&#34;, &#34;--boot&#34;, action=&#34;store_true&#34;, help=&#34;time of last system boot&#34;)
     parser.add_argument(&#34;-H&#34;, &#34;--heading&#34;, action=&#34;store_true&#34;, help=&#34;print line of column headings&#34;)
@@ -83,7 +96,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -97,13 +110,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
+        # TODO: Create special attribute for files in /proc so that they can&#39;t be modified
+        # For now, just trust that they&#39;ll exist
+        read_uptime = read(&#34;/proc/uptime&#34;)
+
+        if not read_uptime.success:
+            raise Exception
+
+        total_seconds = int(float(read_uptime.data))
+
         if args.boot:
-            return output(f&#34;\tsystem boot  {computer.boot_time.strftime(&#39;%Y-%m-%d %H:%M&#39;)}&#34;, pipe)
+            return output((datetime.datetime.now() - datetime.timedelta(seconds=total_seconds)).strftime(&#34;%Y-%m-%d %H:%M&#34;), pipe)
 
         if args.count:
             usernames = []
-            for session in computer.sessions:
-                username_result = computer.find_user(session.real_uid)
+            for session in get_sessions().data:
+                username_result = get_user(session.real_uid)
                 if username_result.success:
                     username = username_result.data.username
                 else:
@@ -118,8 +140,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.heading:
             output_text += &#34;NAME\tLINE\n&#34;
 
-        for session in computer.sessions:
-            username_result = computer.find_user(session.real_uid)
+        for session in get_sessions().data:
+            username_result = get_user(session.real_uid)
             if username_result.success:
                 username = username_result.data.username
             else:
@@ -137,7 +159,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.who.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -145,7 +167,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -159,13 +181,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
+        # TODO: Create special attribute for files in /proc so that they can&#39;t be modified
+        # For now, just trust that they&#39;ll exist
+        read_uptime = read(&#34;/proc/uptime&#34;)
+
+        if not read_uptime.success:
+            raise Exception
+
+        total_seconds = int(float(read_uptime.data))
+
         if args.boot:
-            return output(f&#34;\tsystem boot  {computer.boot_time.strftime(&#39;%Y-%m-%d %H:%M&#39;)}&#34;, pipe)
+            return output((datetime.datetime.now() - datetime.timedelta(seconds=total_seconds)).strftime(&#34;%Y-%m-%d %H:%M&#34;), pipe)
 
         if args.count:
             usernames = []
-            for session in computer.sessions:
-                username_result = computer.find_user(session.real_uid)
+            for session in get_sessions().data:
+                username_result = get_user(session.real_uid)
                 if username_result.success:
                     username = username_result.data.username
                 else:
@@ -180,8 +211,8 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.heading:
             output_text += &#34;NAME\tLINE\n&#34;
 
-        for session in computer.sessions:
-            username_result = computer.find_user(session.real_uid)
+        for session in get_sessions().data:
+            username_result = get_user(session.real_uid)
             if username_result.success:
                 username = username_result.data.username
             else:
@@ -195,12 +226,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-b&#34;, &#34;--boot&#34;, action=&#34;store_true&#34;, help=&#34;time of last system boot&#34;)
     parser.add_argument(&#34;-H&#34;, &#34;--heading&#34;, action=&#34;store_true&#34;, help=&#34;print line of column headings&#34;)

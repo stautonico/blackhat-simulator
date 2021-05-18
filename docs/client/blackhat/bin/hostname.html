@@ -26,19 +26,29 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result
+from ..lib.arpa.inet import get_ip
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
+from ..lib.sys.stat import stat
+from ..lib.unistd import getuid, gethostname, sethostname, read
 
 __COMMAND__ = &#34;hostname&#34;
 __DESCRIPTION__ = &#34;show or set system hostname&#34;
 __VERSION__ = &#34;1.2&#34;
 
 
-
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;name&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;-f&#34;, &#34;--fqdn&#34;, &#34;--long&#34;, action=&#34;store_true&#34;, help=&#34;DNS host name or FQDN&#34;)
@@ -87,7 +97,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Add hostname aliases
     # TODO: Add local domain names (NIS/YP)
 
@@ -110,33 +120,45 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            find_file = computer.fs.find(args.file)
+            find_file = stat(args.file)
 
             if not find_file.success:
                 return output(f&#34;{__COMMAND__}: No such file or directory&#34;, pipe, success=False)
 
-            # We don&#39;t need to check read perms because only root can run this anyway (root can read anything)
-            computer.set_hostname(find_file.data.content)
+            if not find_file.data.st_isfile:
+                return output(f&#34;{__COMMAND__}: the specified hostname is invalid&#34;, pipe, success=False)
+
+            read_result = read(args.file)
+
+            if not read_result.success:
+                return output(f&#34;{__COMMAND__}: Failed to read file&#34;, pipe, success=False)
+
+            result = sethostname(read_result.data)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed to update system hostname&#34;, pipe, success=False)
 
         if args.fqdn:
             # TODO: Recognize FDQNs
-            return output(computer.hostname, pipe)
+            return output(gethostname(), pipe)
 
         if args.ip_addresses:
-            return output(computer.lan if computer.lan else &#34;&#34;, pipe)
+            # TODO: Make this more realistic, just for convenience as of now
+            return output(get_ip().data if get_ip().data else &#34;&#34;, pipe)
 
         if args.short:
             # TODO: Shorten FQDN
-            return output(computer.hostname, pipe)
+            return output(gethostname(), pipe)
 
         if args.name:
             # Only root can change the system hostname
             if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            computer.set_hostname(args.name)
+            result = sethostname(args.name)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed to update system hostname&#34;, pipe, success=False)
 
-        return output(computer.hostname, pipe)</code></pre>
+        return output(gethostname(), pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -147,7 +169,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.hostname.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -155,7 +177,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     # TODO: Add hostname aliases
     # TODO: Add local domain names (NIS/YP)
 
@@ -178,45 +200,76 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            find_file = computer.fs.find(args.file)
+            find_file = stat(args.file)
 
             if not find_file.success:
                 return output(f&#34;{__COMMAND__}: No such file or directory&#34;, pipe, success=False)
 
-            # We don&#39;t need to check read perms because only root can run this anyway (root can read anything)
-            computer.set_hostname(find_file.data.content)
+            if not find_file.data.st_isfile:
+                return output(f&#34;{__COMMAND__}: the specified hostname is invalid&#34;, pipe, success=False)
+
+            read_result = read(args.file)
+
+            if not read_result.success:
+                return output(f&#34;{__COMMAND__}: Failed to read file&#34;, pipe, success=False)
+
+            result = sethostname(read_result.data)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed to update system hostname&#34;, pipe, success=False)
 
         if args.fqdn:
             # TODO: Recognize FDQNs
-            return output(computer.hostname, pipe)
+            return output(gethostname(), pipe)
 
         if args.ip_addresses:
-            return output(computer.lan if computer.lan else &#34;&#34;, pipe)
+            # TODO: Make this more realistic, just for convenience as of now
+            return output(get_ip().data if get_ip().data else &#34;&#34;, pipe)
 
         if args.short:
             # TODO: Shorten FQDN
-            return output(computer.hostname, pipe)
+            return output(gethostname(), pipe)
 
         if args.name:
             # Only root can change the system hostname
             if getuid() != 0:
                 return output(f&#34;{__COMMAND__}: you must be root to change the host name&#34;, pipe, success=False)
 
-            computer.set_hostname(args.name)
+            result = sethostname(args.name)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed to update system hostname&#34;, pipe, success=False)
 
-        return output(computer.hostname, pipe)</code></pre>
+        return output(gethostname(), pipe)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.bin.hostname.parse_args"><code class="name flex">
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;name&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;-f&#34;, &#34;--fqdn&#34;, &#34;--long&#34;, action=&#34;store_true&#34;, help=&#34;DNS host name or FQDN&#34;)

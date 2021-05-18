@@ -26,11 +26,10 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
+from ..lib.unistd import getuid, get_user, get_group, get_user_primary_group, get_user_groups
 
 __COMMAND__ = &#34;id&#34;
 __DESCRIPTION__ = &#34;print real and effective user and group IDs&#34;
@@ -39,6 +38,16 @@ __VERSION__ = &#34;1.2&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;user&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;-g&#34;, &#34;--group&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective group ID&#34;)
@@ -88,7 +97,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -106,24 +115,24 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             # Check if a UID was entered
             try:
                 uid = int(args.user)
-                user_to_lookup_result = computer.find_user(uid=uid)
+                user_to_lookup_result = get_user(uid=uid)
             except ValueError:
                 # That means we entered a username
-                user_to_lookup_result = computer.find_user(username=args.user)
+                user_to_lookup_result = get_user(username=args.user)
         else:
-            user_to_lookup_result = computer.find_user(uid=getuid())
+            user_to_lookup_result = get_user(uid=getuid())
 
         if not user_to_lookup_result.success:
             return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group_gid = computer.find_user_primary_group(uid).data[0]
-            secondary_groups_gids = computer.find_user_groups(uid)
+            primary_group_gid = get_user_primary_group(uid).data[0]
+            secondary_groups_gids = get_user_groups(uid)
             secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
             secondary_groups_gids.remove(primary_group_gid)
 
-            primary_group_name = computer.find_group(gid=primary_group_gid)
+            primary_group_name = get_group(gid=primary_group_gid)
 
             if not primary_group_name.success:
                 primary_group_name = &#34;?&#34;
@@ -133,7 +142,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             secondary_group_names = []
 
             for item in secondary_groups_gids:
-                find_secondary_group = computer.find_group(gid=item)
+                find_secondary_group = get_group(gid=item)
                 if not find_secondary_group.success:
                     secondary_group_names.append(&#34;?&#34;)
                 else:
@@ -162,7 +171,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += &#34;groups=&#34;
 
             for group in secondary_groups_gids:
-                group_lookup = computer.find_group(gid=group)
+                group_lookup = get_group(gid=group)
                 if group_lookup.success:
                     output_text += f&#34;{group}({group_lookup.data.name}),&#34;
                 else:
@@ -182,7 +191,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.id.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -190,7 +199,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -208,24 +217,24 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             # Check if a UID was entered
             try:
                 uid = int(args.user)
-                user_to_lookup_result = computer.find_user(uid=uid)
+                user_to_lookup_result = get_user(uid=uid)
             except ValueError:
                 # That means we entered a username
-                user_to_lookup_result = computer.find_user(username=args.user)
+                user_to_lookup_result = get_user(username=args.user)
         else:
-            user_to_lookup_result = computer.find_user(uid=getuid())
+            user_to_lookup_result = get_user(uid=getuid())
 
         if not user_to_lookup_result.success:
             return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)
         else:
             user = user_to_lookup_result.data
             uid = user.uid
-            primary_group_gid = computer.find_user_primary_group(uid).data[0]
-            secondary_groups_gids = computer.find_user_groups(uid)
+            primary_group_gid = get_user_primary_group(uid).data[0]
+            secondary_groups_gids = get_user_groups(uid)
             secondary_groups_gids = secondary_groups_gids.data if secondary_groups_gids.success else []
             secondary_groups_gids.remove(primary_group_gid)
 
-            primary_group_name = computer.find_group(gid=primary_group_gid)
+            primary_group_name = get_group(gid=primary_group_gid)
 
             if not primary_group_name.success:
                 primary_group_name = &#34;?&#34;
@@ -235,7 +244,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
             secondary_group_names = []
 
             for item in secondary_groups_gids:
-                find_secondary_group = computer.find_group(gid=item)
+                find_secondary_group = get_group(gid=item)
                 if not find_secondary_group.success:
                     secondary_group_names.append(&#34;?&#34;)
                 else:
@@ -264,7 +273,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                 output_text += &#34;groups=&#34;
 
             for group in secondary_groups_gids:
-                group_lookup = computer.find_group(gid=group)
+                group_lookup = get_group(gid=group)
                 if group_lookup.success:
                     output_text += f&#34;{group}({group_lookup.data.name}),&#34;
                 else:
@@ -280,12 +289,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;user&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;-g&#34;, &#34;--group&#34;, action=&#34;store_true&#34;, help=&#34;print only the effective group ID&#34;)

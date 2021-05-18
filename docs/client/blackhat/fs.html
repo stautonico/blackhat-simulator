@@ -26,7 +26,8 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">import importlib
+<pre><code class="python">import datetime
+import importlib
 import os
 import sys
 from random import choice
@@ -35,7 +36,7 @@ from typing import Optional, Dict, List, Literal, Union, Callable
 
 from colorama import Style
 
-from .helpers import SysCallStatus, SysCallMessages
+from .helpers import Result, ResultMessages
 
 event_types = Literal[&#34;read&#34;, &#34;write&#34;, &#34;move&#34;, &#34;change_perm&#34;, &#34;change_owner&#34;, &#34;delete&#34;]
 
@@ -87,7 +88,7 @@ class FSBaseObject:
         &#34;&#34;&#34;
         return type(self) == File
 
-    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; SysCallStatus:
+    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; Result:
         &#34;&#34;&#34;
         Checks if the current user has the given `perm`
 
@@ -96,27 +97,27 @@ class FSBaseObject:
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if computer.get_uid() == 0:
-            return SysCallStatus(success=True)
+        if computer.sys_getuid() == 0:
+            return Result(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
         if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
-                return SysCallStatus(success=True)
+            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+                return Result(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == computer.get_uid():
-                return SysCallStatus(success=True)
+            if self.owner == computer.sys_getuid():
+                return Result(success=True)
 
         # No permission
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def check_owner(self, computer) -&gt; SysCallStatus:
+    def check_owner(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)
 
@@ -124,18 +125,18 @@ class FSBaseObject:
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # Get the list of user&#39;s groups
-        groups = computer.find_user_groups(computer.get_uid()).data
+        groups = computer.get_user_groups(computer.sys_getuid()).data
 
-        if self.owner == computer.get_uid() or self.group_owner in groups:
-            return SysCallStatus(success=True)
+        if self.owner == computer.sys_getuid() or self.group_owner in groups:
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def change_owner(self, computer, new_user_owner: Optional[int] = None,
-                     new_group_owner: Optional[int] = None) -&gt; SysCallStatus:
+                     new_group_owner: Optional[int] = None) -&gt; Result:
         &#34;&#34;&#34;
         Change the owner (user and/or group) of a given `File`/`Directory`, but check if the given UID should be allowed to first
 
@@ -145,37 +146,37 @@ class FSBaseObject:
             new_group_owner (int): The GID of the new owner (group) of the `File`/`Directory`
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         &#34;&#34;&#34;
-        caller_groups = computer.find_user_groups(computer.get_uid()).data
+        caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we&#39;re root
-        if computer.get_uid() == self.owner or self.group_owner in caller_groups or computer.get_uid() == 0:
+        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
-                return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+                return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)
             else:
                 # Same thing with uid 0
                 if new_user_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_user(uid=new_user_owner).success:
+                    if computer.get_user(uid=new_user_owner).success:
                         self.owner = new_user_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 # Confirm that the new group exists
                 # Same thing with gid 0
                 if new_group_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_group(gid=new_group_owner).success:
+                    if computer.get_group(gid=new_group_owner).success:
                         self.group_owner = new_group_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 self.handle_event(&#34;change_owner&#34;)
-                return SysCallStatus(success=True)
+                return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def pwd(self) -&gt; str:
         &#34;&#34;&#34;
@@ -202,7 +203,7 @@ class FSBaseObject:
 
         return working_dir
 
-    def delete(self, computer) -&gt; SysCallStatus:
+    def delete(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
@@ -210,18 +211,18 @@ class FSBaseObject:
             computer: The current computer object
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         if self.parent:
             # In unix, we need read+write permissions to delete
             if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
                 self.handle_event(&#34;delete&#34;)
                 del self.parent.files[self.name]
-                return SysCallStatus(success=True)
+                return Result(success=True)
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def add_event_listener(self, event: event_types, function: Callable):
+    def add_event_listener(self, event: event_types, function: Callable, when: Literal[&#34;before&#34;, &#34;after&#34;] = &#34;after&#34;):
         &#34;&#34;&#34;
         Bind a function to run whenever a given event fires.
         A `FSBaseObject` can only have one function per event type.
@@ -238,12 +239,13 @@ class FSBaseObject:
                 &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
             &lt;/ul&gt;
             function: The function/method to be called when the given `event` is fired
+            when (str): When the event is fired (for example, before the read happens, or after)
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         self.events[event] = function
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def remove_event_listener(self, event: event_types):
         &#34;&#34;&#34;
@@ -253,14 +255,14 @@ class FSBaseObject:
             event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         try:
             self.events.pop(event)
         except Exception:
             pass
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def handle_event(self, event: event_types):
         &#34;&#34;&#34;
@@ -270,12 +272,12 @@ class FSBaseObject:
             event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         if event in self.events.keys():
             self.events[event](self)
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
 
 class File(FSBaseObject):
@@ -294,22 +296,22 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, computer) -&gt; SysCallStatus:
+    def read(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
             computer: The current `Computer` instance
 
-        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
+        Returns: Result: A `Result` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
         if self.check_perm(&#34;read&#34;, computer).success:
             self.handle_event(&#34;read&#34;)
-            return SysCallStatus(success=True, data=self.content)
+            return Result(success=True, data=self.content)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def write(self, data: str, computer) -&gt; SysCallStatus:
+    def write(self, data: str, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to write to the file. Update the file&#39;s contents if allowed
 
@@ -318,17 +320,17 @@ class File(FSBaseObject):
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         &#34;&#34;&#34;
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
             self.handle_event(&#34;write&#34;)
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def append(self, data: str, computer) -&gt; SysCallStatus:
+    def append(self, data: str, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to write to the file. Append to the file&#39;s contents if allowed
 
@@ -337,16 +339,16 @@ class File(FSBaseObject):
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         &#34;&#34;&#34;
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
             self.update_size()
             self.handle_event(&#34;write&#34;)
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def update_size(self) -&gt; None:
         &#34;&#34;&#34;
@@ -385,7 +387,7 @@ class Directory(FSBaseObject):
 
         self.update_size()
 
-    def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; SysCallStatus:
+    def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; Result:
         &#34;&#34;&#34;
         Add a new `File` or `Directory` to self&#39;s internal file map
         Also updates its size and triggers its parent to update their size
@@ -394,14 +396,17 @@ class Directory(FSBaseObject):
             file (File/Directory): The `File`/`Directory` to add to self
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         &#34;&#34;&#34;
         if file.name in self.files.keys():
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         self.files[file.name] = file
         self.update_size()
-        return SysCallStatus(success=True)
+
+        self.handle_event(&#34;write&#34;)
+
+        return Result(success=True)
 
     def calculate_size(self) -&gt; int:
         &#34;&#34;&#34;
@@ -463,6 +468,9 @@ class StandardFS:
 
         # The filesystem root (/) (owned by root)
         self.files = Directory(&#34;/&#34;, None, 0, 0)
+        self.files.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+                                  &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;],
+                                  &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
         self.init()
 
@@ -474,17 +482,20 @@ class StandardFS:
             None
         &#34;&#34;&#34;
         # Setup the directory structure in the file system (Unix FHS)
-        for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
+        for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;proc&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
             directory = Directory(dir, self.files, 0, 0)
             # Special case for /tmp (read and write by everyone)
             if dir == &#34;tmp&#34;:
                 directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
-                                         &#34;execute&#34;: []}
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+            elif dir == &#34;proc&#34;:
+                directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [],
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
             else:
                 # TODO: Change this to be more accurate
                 # (rwx rw- r--)
                 directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;],
-                                         &#34;execute&#34;: [&#34;owner&#34;]}
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
             self.files.add_file(directory)
 
@@ -495,6 +506,7 @@ class StandardFS:
         self.setup_etc()
         # self.setup_home()
         # self.setup_lib()
+        self.setup_proc()
         self.setup_root()
         # self.setup_tmp()
         self.setup_usr()
@@ -514,10 +526,14 @@ class StandardFS:
             # Ignore the __init__.py and __pycache__ because those aren&#39;t bins (auto generated)
             if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;, &#34;installable&#34;]:
                 current_file = File(file.replace(&#34;.py&#34;, &#34;&#34;), &#34;[BINARY DATA]&#34;, bin_dir, 0, 0)
-                with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
-                    current_file.size = sys.getsizeof(f.read()) / 32
-                    current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                                &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+                try:
+                    with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
+                        current_file.size = sys.getsizeof(f.read()) / 32
+                except IsADirectoryError:
+                    current_file.size = 0
+
+                current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                                            &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
                 bin_dir.add_file(current_file)
 
@@ -532,6 +548,7 @@ class StandardFS:
             &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
             &lt;li&gt;/etc/sudoers - The file that contains all of the sudo permissions&lt;/li&gt;
             &lt;li&gt;/etc/apt/sources.list - Contains urls of apt repo servers&lt;/li&gt;
+            &lt;li&gt;/etc/resolv.conf - Contains the list of dns servers&lt;/li&gt;
         &lt;/ul&gt;
 
         Returns:
@@ -555,12 +572,12 @@ class StandardFS:
                         return
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # If we don&#39;t find the user, that means we added a new user
                     if not user_lookup.success:
                         # Make sure no user has the uid
-                        if not self.computer.find_user(uid=uid).success:
+                        if not self.computer.get_user(uid=uid).success:
                             # Add the user
                             self.computer.add_user(username, password, uid, plaintext=False)
                             self.computer.add_group(name=username, gid=primary_gid)
@@ -584,15 +601,15 @@ class StandardFS:
                         # 1. Make sure the new GID exists
                         # 2. Remove the user&#39;s old primary gid membership
                         # 3. Add a the user to the new gid as primary
-                        user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+                        user_primary_gid = self.computer.get_user_primary_group(user.uid).data[0]
 
                         if user_primary_gid != primary_gid:
-                            if self.computer.find_group(gid=primary_gid).success:
+                            if self.computer.get_group(gid=primary_gid).success:
                                 self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
                                 self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         def update_shadow(file):
             content = file.content.split(&#34;\n&#34;)
@@ -604,7 +621,7 @@ class StandardFS:
                     username, password = subitems
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # We have a user, now lets check if any of the data has changed
                     user = user_lookup.data
@@ -616,7 +633,7 @@ class StandardFS:
                             user.password = password
 
                 # Will automatically remove incorrect changes
-                self.computer.update_user_and_group_files()
+                self.computer.sync_user_and_group_files()
 
         def update_group(file):
             content = file.content.split(&#34;\n&#34;)
@@ -633,12 +650,12 @@ class StandardFS:
                         return
 
                     # Now we want to get the group by group name
-                    group_lookup = self.computer.find_group(name=group_name)
+                    group_lookup = self.computer.get_group(name=group_name)
 
                     # If we don&#39;t find the user, that means we added a new user
                     if not group_lookup.success:
                         # Make sure no group has the gid
-                        if not self.computer.find_group(gid=gid).success:
+                        if not self.computer.get_group(gid=gid).success:
                             # Add the group
                             self.computer.add_group(group_name, gid)
                             # TODO: Add users to the group by last param
@@ -648,7 +665,7 @@ class StandardFS:
                         # TODO: Add changes here
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
@@ -674,7 +691,7 @@ class StandardFS:
         for dir in [&#34;Desktop&#34;, &#34;Documents&#34;, &#34;Downloads&#34;, &#34;Music&#34;, &#34;Pictures&#34;, &#34;Public&#34;, &#34;Templates&#34;, &#34;Videos&#34;]:
             current_dir = Directory(dir, skel_dir, 0, 0)
             current_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                       &#34;execute&#34;: []}
+                                       &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
             skel_dir.add_file(current_dir)
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
@@ -699,6 +716,33 @@ class StandardFS:
 
         sources_file: File = File(&#34;sources.list&#34;, &#34;&#34;, apt_dir, 0, 0)
         apt_dir.add_file(sources_file)
+
+        # /etc/resolv.conf
+        resolv_conf: File = File(&#34;resolv.conf&#34;, &#34;nameserver 1.1.1.1&#34;, etc_dir, 0, 0)
+        etc_dir.add_file(resolv_conf)
+
+    def setup_proc(self) -&gt; None:
+        &#34;&#34;&#34;
+        Sets up:
+        &lt;ul&gt;
+            &lt;li&gt;/proc/uptime - Contains the amount of seconds since the system was booted&lt;/li&gt;
+        &lt;/ul&gt;
+
+        Returns:
+            None
+        &#34;&#34;&#34;
+
+        # EventHandler functions for /proc/uptime
+        def update_uptime(file):
+            file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
+
+        proc_dir: Directory = self.files.find(&#34;proc&#34;)
+        # Create the /etc/passwd file
+        uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
+        uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
+
+        uptime_file.add_event_listener(&#34;read&#34;, update_uptime, when=&#34;before&#34;)
+        proc_dir.add_file(uptime_file)
 
     def setup_root(self) -&gt; None:
         &#34;&#34;&#34;
@@ -737,7 +781,11 @@ class StandardFS:
 
         self.generate_manpages()
 
+        def generate_manpages(file):
+            self.generate_manpages()
+
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+        bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
         usr_dir.add_file(bin_dir)
 
     def setup_var(self) -&gt; None:
@@ -782,7 +830,7 @@ class StandardFS:
         html_dir: Directory = Directory(&#34;html&#34;, www_dir, 0, 0)
         www_dir.add_file(html_dir)
 
-    def find(self, pathname: str) -&gt; SysCallStatus:
+    def find(self, pathname: str) -&gt; Result:
         &#34;&#34;&#34;
         Try to find a given file anywhere in the file system based on a given `pathname`
 
@@ -790,7 +838,7 @@ class StandardFS:
             pathname (str): The full (absolute or relative) path of the file
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
+            Result: A `Result` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
         &#34;&#34;&#34;
 
         # Special cases
@@ -800,33 +848,33 @@ class StandardFS:
             pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
 
         if pathname == &#34;/&#34;:
-            return SysCallStatus(success=True, data=self.files)
+            return Result(success=True, data=self.files)
 
         if pathname == &#34;.&#34;:
-            return SysCallStatus(success=True, data=self.computer.get_pwd())
+            return Result(success=True, data=self.computer.sys_getcwd())
 
         if pathname == &#34;..&#34;:
             # Check if the directory has a parent
             # If it doesn&#39;t, we can assume that we&#39;re at /
             # In the case of /, just return /
-            if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.files)
+            if not self.computer.sys_getcwd().parent:
+                return Result(success=True, data=self.files)
             else:
-                return SysCallStatus(success=True, data=self.computer.get_pwd().parent)
+                return Result(success=True, data=self.computer.sys_getcwd().parent)
 
         if pathname == &#34;...&#34;:
             # Check if the directory has a parent
             # If it doesn&#39;t, we can assume that we&#39;re at /
             # In the case of /, just return /
             # And then do it again (go back twice)0
-            if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.computer.fs.files)
+            if not self.computer.sys_getcwd().parent:
+                return Result(success=True, data=self.computer.fs.files)
             else:
-                current_dir = self.computer.get_pwd().parent
+                current_dir = self.computer.sys_getcwd().parent
                 if current_dir.parent:
-                    return SysCallStatus(success=True, data=current_dir.parent)
+                    return Result(success=True, data=current_dir.parent)
                 else:
-                    return SysCallStatus(success=True, data=self.computer.fs.files)
+                    return Result(success=True, data=self.computer.fs.files)
 
         # Regular (non-special cases)
         pathname = pathname.split(&#34;/&#34;)
@@ -837,7 +885,7 @@ class StandardFS:
             current_dir = self.files
         else:
             # Relative (based on current dir)
-            current_dir = self.computer.get_pwd()
+            current_dir = self.computer.sys_getcwd()
 
         # Filter out garbage
         while &#34;&#34; in pathname:
@@ -859,12 +907,19 @@ class StandardFS:
             else:
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # This only runs when we successfully found
-        return SysCallStatus(success=True, data=current_dir)
+        return Result(success=True, data=current_dir)
 
     def generate_manpages(self):
+        &#34;&#34;&#34;
+        Loop through all available modules and import them. After, use the module.parse_args(doc=True) to generate
+        a manpage from the available help information.
+
+        Returns:
+            None
+        &#34;&#34;&#34;
         find_man_dir = self.find(&#34;/usr/share/man&#34;)
 
         if not find_man_dir.success:
@@ -898,7 +953,179 @@ class StandardFS:
                     current_manpage = File(binary, manpage, man_dir, 0, 0)
                     man_dir.add_file(current_manpage)
                 except AttributeError:
-                    continue</code></pre>
+                    continue
+
+
+def copy(computer, src_path: str, dst_path: str) -&gt; Result:
+    &#34;&#34;&#34;
+    A helper function to copy a file/directory from a given `src_path` to the given `dst_path`
+
+    Args:
+        computer (Computer): The computer to work on
+        src_path (str): The path of the `File`/`Directory` to copy
+        dst_path (str): The path to copy to. If the final item in the path doesn&#39;t exist, but the item one step up does,
+        the final item will be the new name of the `File`/`Directory`
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    find_src = computer.fs.find(src_path)
+
+    if not find_src.success:
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    src = find_src.data
+
+    # Handle file copying
+    if src.is_file():
+        # If the path is in the local dir
+        if &#34;/&#34; not in dst_path:
+            dst_path = &#34;./&#34; + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
+            new_file_name = dst_path.split(&#34;/&#34;)[-1]
+            if new_file_name == &#34;&#34;:
+                new_file_name = src.name
+        else:
+            new_file_name = src.name
+
+        if to_write.is_file():
+            # If its a file, we&#39;re overwriting
+            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
+            # Check read first (split for error messages)
+            if not src.check_perm(&#34;read&#34;, computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    to_write.write(src.content, computer)
+                    to_write.owner = computer.sys_getuid()
+                    to_write.group_owner = computer.sys_getgid()
+        else:
+            # If we have the parent dir, we need to create a new file
+            if not src.check_perm(&#34;read&#34;, computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_filename = new_file_name
+                    new_file = File(new_filename, src.content, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_file.events = src.events
+                    to_write.add_file(new_file)
+                    # We have to do this so the permissions work no matter if we&#39;re overwriting or not
+                    to_write = new_file
+
+        to_write.handle_event(&#34;move&#34;)
+        return Result(success=True)
+    # Handle directory copying
+    else:
+        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
+        # If the path is in the local dir
+        if &#34;/&#34; not in dst_path:
+            dst_path = &#34;./&#34; + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
+            new_file_name = dst_path.split(&#34;/&#34;)[-1]
+        else:
+            new_file_name = src.name
+
+        if new_file_name not in to_write.files:
+            if not src.check_perm(&#34;read&#34;, computer):
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_dir = Directory(new_file_name, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_dir.events = to_write.events
+                    to_write.add_file(new_dir)
+                    # Set a temporary write permission no matter what the new dir&#39;s permissions were so we can add its children
+                    new_dir.permissions[&#34;write&#34;] = [&#34;owner&#34;]
+                    # Go through all the source&#39;s files and copy them into the new dir
+                    for file in src.files.values():
+                        response = copy(computer, file, new_dir.pwd())
+
+                        if not response.success:
+                            if response.message == ResultMessages.NOT_ALLOWED_READ:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+                            elif response.message == ResultMessages.NOT_ALLOWED_WRITE:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+        else:
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
+
+        new_dir.handle_event(&#34;move&#34;)
+        return Result(success=True)
+
+# TODO: Re-write the copy function so its not so shit
+
+
+# def copy(computer, src_path: str, dst_path: str) -&gt; Result:
+#     # Make sure the src exists
+#     find_src = computer.fs.find(src_path)
+#
+#     if &#34;/&#34; not in src_path:
+#         src_path = &#34;./&#34; + src_path
+#
+#     src_filename = src_path.split(&#34;/&#34;)[-1]
+#
+#     if not find_src.success:
+#         return Result(success=False, message=ResultMessages.NOT_FOUND)
+#
+#     # We need read permissions to copy
+#     if not find_src.data.check_perm(&#34;read&#34;, computer).success:
+#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+#
+#     if &#34;/&#34; not in dst_path:
+#         dst_path = &#34;/&#34; + dst_path
+#
+#     find_dst = computer.fs.find(dst_path)
+#
+#     if not find_dst.success:
+#         # Try to find the destination file parent folder
+#         find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
+#         if not find_dst.success:
+#             return Result(success=False, message=ResultMessages.NOT_FOUND)
+#
+#     # We need write permissions of the dest
+#     if not find_dst.data.check_perm(&#34;write&#34;, computer).success:
+#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+#
+#     if find_src.data.is_file():
+#         copy_file = File(src_filename, find_src.data.content, find_dst.data, find_src.data.owner,
+#                          find_src.data.group_owner)
+#     else:
+#         copy_file = Directory(src_filename, find_dst.data, find_src.data.owner,
+#                               find_src.data.group_owner)
+#
+#     find_dst.data.add_file(copy_file)
+#
+#     return Result(success=True)</code></pre>
 </details>
 </section>
 <section>
@@ -906,6 +1133,160 @@ class StandardFS:
 <section>
 </section>
 <section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="client.blackhat.fs.copy"><code class="name flex">
+<span>def <span class="ident">copy</span></span>(<span>computer, src_path: str, dst_path: str) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>A helper function to copy a file/directory from a given <code>src_path</code> to the given <code>dst_path</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>computer</code></strong> :&ensp;<code>Computer</code></dt>
+<dd>The computer to work on</dd>
+<dt><strong><code>src_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>The path of the <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code> to copy</dd>
+<dt><strong><code>dst_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>The path to copy to. If the final item in the path doesn't exist, but the item one step up does,</dd>
+</dl>
+<p>the final item will be the new name of the <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code></p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def copy(computer, src_path: str, dst_path: str) -&gt; Result:
+    &#34;&#34;&#34;
+    A helper function to copy a file/directory from a given `src_path` to the given `dst_path`
+
+    Args:
+        computer (Computer): The computer to work on
+        src_path (str): The path of the `File`/`Directory` to copy
+        dst_path (str): The path to copy to. If the final item in the path doesn&#39;t exist, but the item one step up does,
+        the final item will be the new name of the `File`/`Directory`
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+    find_src = computer.fs.find(src_path)
+
+    if not find_src.success:
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    src = find_src.data
+
+    # Handle file copying
+    if src.is_file():
+        # If the path is in the local dir
+        if &#34;/&#34; not in dst_path:
+            dst_path = &#34;./&#34; + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
+            new_file_name = dst_path.split(&#34;/&#34;)[-1]
+            if new_file_name == &#34;&#34;:
+                new_file_name = src.name
+        else:
+            new_file_name = src.name
+
+        if to_write.is_file():
+            # If its a file, we&#39;re overwriting
+            # Check the permissions (write to `copy_to_dir + file` and read from `self`)
+            # Check read first (split for error messages)
+            if not src.check_perm(&#34;read&#34;, computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    to_write.write(src.content, computer)
+                    to_write.owner = computer.sys_getuid()
+                    to_write.group_owner = computer.sys_getgid()
+        else:
+            # If we have the parent dir, we need to create a new file
+            if not src.check_perm(&#34;read&#34;, computer).success:
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_filename = new_file_name
+                    new_file = File(new_filename, src.content, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_file.events = src.events
+                    to_write.add_file(new_file)
+                    # We have to do this so the permissions work no matter if we&#39;re overwriting or not
+                    to_write = new_file
+
+        to_write.handle_event(&#34;move&#34;)
+        return Result(success=True)
+    # Handle directory copying
+    else:
+        # TODO: Refactor this to work in both cases instead of re-writing a ton of code
+        # If the path is in the local dir
+        if &#34;/&#34; not in dst_path:
+            dst_path = &#34;./&#34; + dst_path
+
+        try_find_dst = computer.fs.find(dst_path)
+
+        # If the dst file doesn&#39;t exist, we can try to create a new item in the parent folder
+        if not try_find_dst.success:
+            # Try to find the destination file parent folder
+            try_find_dst = computer.fs.find(&#34;/&#34;.join(dst_path.split(&#34;/&#34;)[:-1]))
+            if not try_find_dst.success:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        to_write: Union[Directory, File] = try_find_dst.data
+
+        # If we found the parent folder, set the filename to the parent folder
+        if dst_path.split(&#34;/&#34;)[-1] != to_write.name:
+            new_file_name = dst_path.split(&#34;/&#34;)[-1]
+        else:
+            new_file_name = src.name
+
+        if new_file_name not in to_write.files:
+            if not src.check_perm(&#34;read&#34;, computer):
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+            else:
+                if not to_write.check_perm(&#34;write&#34;, computer).success:
+                    return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+                else:
+                    new_dir = Directory(new_file_name, to_write, computer.sys_getuid(), computer.sys_getgid())
+                    new_dir.events = to_write.events
+                    to_write.add_file(new_dir)
+                    # Set a temporary write permission no matter what the new dir&#39;s permissions were so we can add its children
+                    new_dir.permissions[&#34;write&#34;] = [&#34;owner&#34;]
+                    # Go through all the source&#39;s files and copy them into the new dir
+                    for file in src.files.values():
+                        response = copy(computer, file, new_dir.pwd())
+
+                        if not response.success:
+                            if response.message == ResultMessages.NOT_ALLOWED_READ:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
+                            elif response.message == ResultMessages.NOT_ALLOWED_WRITE:
+                                return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
+        else:
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
+
+        new_dir.handle_event(&#34;move&#34;)
+        return Result(success=True)</code></pre>
+</details>
+</dd>
+</dl>
 </section>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
@@ -948,7 +1329,7 @@ class StandardFS:
 
         self.update_size()
 
-    def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; SysCallStatus:
+    def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; Result:
         &#34;&#34;&#34;
         Add a new `File` or `Directory` to self&#39;s internal file map
         Also updates its size and triggers its parent to update their size
@@ -957,14 +1338,17 @@ class StandardFS:
             file (File/Directory): The `File`/`Directory` to add to self
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         &#34;&#34;&#34;
         if file.name in self.files.keys():
-            return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+            return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
         self.files[file.name] = file
         self.update_size()
-        return SysCallStatus(success=True)
+
+        self.handle_event(&#34;write&#34;)
+
+        return Result(success=True)
 
     def calculate_size(self) -&gt; int:
         &#34;&#34;&#34;
@@ -1020,7 +1404,7 @@ class StandardFS:
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.fs.Directory.add_file"><code class="name flex">
-<span>def <span class="ident">add_file</span></span>(<span>self, file: Union[<a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a>, ForwardRef('<a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a>')]) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">add_file</span></span>(<span>self, file: Union[<a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a>, ForwardRef('<a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a>')]) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Add a new <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code> or <code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code> to self's internal file map
@@ -1029,14 +1413,14 @@ Also updates its size and triggers its parent to update their size</p>
 <p>file (File/Directory): The <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code> to add to self</p>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; SysCallStatus:
+<pre><code class="python">def add_file(self, file: Union[File, &#34;Directory&#34;]) -&gt; Result:
     &#34;&#34;&#34;
     Add a new `File` or `Directory` to self&#39;s internal file map
     Also updates its size and triggers its parent to update their size
@@ -1045,14 +1429,17 @@ Also updates its size and triggers its parent to update their size</p>
         file (File/Directory): The `File`/`Directory` to add to self
 
     Returns:
-        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+        Result: A `Result` with the `success` flag set accordingly
     &#34;&#34;&#34;
     if file.name in self.files.keys():
-        return SysCallStatus(success=False, message=SysCallMessages.ALREADY_EXISTS)
+        return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
 
     self.files[file.name] = file
     self.update_size()
-    return SysCallStatus(success=True)</code></pre>
+
+    self.handle_event(&#34;write&#34;)
+
+    return Result(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.Directory.calculate_size"><code class="name flex">
@@ -1240,7 +1627,7 @@ Also updates its size and triggers its parent to update their size</p>
         &#34;&#34;&#34;
         return type(self) == File
 
-    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; SysCallStatus:
+    def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; Result:
         &#34;&#34;&#34;
         Checks if the current user has the given `perm`
 
@@ -1249,27 +1636,27 @@ Also updates its size and triggers its parent to update their size</p>
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if computer.get_uid() == 0:
-            return SysCallStatus(success=True)
+        if computer.sys_getuid() == 0:
+            return Result(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
-            return SysCallStatus(success=True)
+            return Result(success=True)
 
         if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
-                return SysCallStatus(success=True)
+            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+                return Result(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == computer.get_uid():
-                return SysCallStatus(success=True)
+            if self.owner == computer.sys_getuid():
+                return Result(success=True)
 
         # No permission
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def check_owner(self, computer) -&gt; SysCallStatus:
+    def check_owner(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)
 
@@ -1277,18 +1664,18 @@ Also updates its size and triggers its parent to update their size</p>
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # Get the list of user&#39;s groups
-        groups = computer.find_user_groups(computer.get_uid()).data
+        groups = computer.get_user_groups(computer.sys_getuid()).data
 
-        if self.owner == computer.get_uid() or self.group_owner in groups:
-            return SysCallStatus(success=True)
+        if self.owner == computer.sys_getuid() or self.group_owner in groups:
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def change_owner(self, computer, new_user_owner: Optional[int] = None,
-                     new_group_owner: Optional[int] = None) -&gt; SysCallStatus:
+                     new_group_owner: Optional[int] = None) -&gt; Result:
         &#34;&#34;&#34;
         Change the owner (user and/or group) of a given `File`/`Directory`, but check if the given UID should be allowed to first
 
@@ -1298,37 +1685,37 @@ Also updates its size and triggers its parent to update their size</p>
             new_group_owner (int): The GID of the new owner (group) of the `File`/`Directory`
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+            Result: A `Result` with the `success` flag set accordingly
         &#34;&#34;&#34;
-        caller_groups = computer.find_user_groups(computer.get_uid()).data
+        caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we&#39;re root
-        if computer.get_uid() == self.owner or self.group_owner in caller_groups or computer.get_uid() == 0:
+        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
-                return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+                return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)
             else:
                 # Same thing with uid 0
                 if new_user_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_user(uid=new_user_owner).success:
+                    if computer.get_user(uid=new_user_owner).success:
                         self.owner = new_user_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 # Confirm that the new group exists
                 # Same thing with gid 0
                 if new_group_owner is not None:
                     # Confirm that the user exists
-                    if computer.find_group(gid=new_group_owner).success:
+                    if computer.get_group(gid=new_group_owner).success:
                         self.group_owner = new_group_owner
                     else:
-                        return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                        return Result(success=False, message=ResultMessages.NOT_FOUND)
 
                 self.handle_event(&#34;change_owner&#34;)
-                return SysCallStatus(success=True)
+                return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def pwd(self) -&gt; str:
         &#34;&#34;&#34;
@@ -1355,7 +1742,7 @@ Also updates its size and triggers its parent to update their size</p>
 
         return working_dir
 
-    def delete(self, computer) -&gt; SysCallStatus:
+    def delete(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the `caller` has the proper permissions to delete a given file, then remove it
 
@@ -1363,18 +1750,18 @@ Also updates its size and triggers its parent to update their size</p>
             computer: The current computer object
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+            Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         if self.parent:
             # In unix, we need read+write permissions to delete
             if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
                 self.handle_event(&#34;delete&#34;)
                 del self.parent.files[self.name]
-                return SysCallStatus(success=True)
+                return Result(success=True)
             else:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+                return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def add_event_listener(self, event: event_types, function: Callable):
+    def add_event_listener(self, event: event_types, function: Callable, when: Literal[&#34;before&#34;, &#34;after&#34;] = &#34;after&#34;):
         &#34;&#34;&#34;
         Bind a function to run whenever a given event fires.
         A `FSBaseObject` can only have one function per event type.
@@ -1391,12 +1778,13 @@ Also updates its size and triggers its parent to update their size</p>
                 &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
             &lt;/ul&gt;
             function: The function/method to be called when the given `event` is fired
+            when (str): When the event is fired (for example, before the read happens, or after)
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         self.events[event] = function
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def remove_event_listener(self, event: event_types):
         &#34;&#34;&#34;
@@ -1406,14 +1794,14 @@ Also updates its size and triggers its parent to update their size</p>
             event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         try:
             self.events.pop(event)
         except Exception:
             pass
 
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     def handle_event(self, event: event_types):
         &#34;&#34;&#34;
@@ -1423,12 +1811,12 @@ Also updates its size and triggers its parent to update their size</p>
             event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
         Returns:
-             SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+             Result: A `Result` with the `success` flag set accordingly.
         &#34;&#34;&#34;
         if event in self.events.keys():
             self.events[event](self)
 
-        return SysCallStatus(success=True)</code></pre>
+        return Result(success=True)</code></pre>
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
@@ -1457,7 +1845,7 @@ Also updates its size and triggers its parent to update their size</p>
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.fs.FSBaseObject.add_event_listener"><code class="name flex">
-<span>def <span class="ident">add_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'change_perm', 'change_owner', 'delete'], function: Callable)</span>
+<span>def <span class="ident">add_event_listener</span></span>(<span>self, event: Literal['read', 'write', 'move', 'change_perm', 'change_owner', 'delete'], function: Callable, when: Literal['before', 'after'] = 'after')</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Bind a function to run whenever a given event fires.
@@ -1479,17 +1867,19 @@ If a function is already bound to the given event type, it will be overwritten.<
 <dl>
 <dt><strong><code>function</code></strong></dt>
 <dd>The function/method to be called when the given <code>event</code> is fired</dd>
+<dt><strong><code>when</code></strong> :&ensp;<code>str</code></dt>
+<dd>When the event is fired (for example, before the read happens, or after)</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly.</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def add_event_listener(self, event: event_types, function: Callable):
+<pre><code class="python">def add_event_listener(self, event: event_types, function: Callable, when: Literal[&#34;before&#34;, &#34;after&#34;] = &#34;after&#34;):
     &#34;&#34;&#34;
     Bind a function to run whenever a given event fires.
     A `FSBaseObject` can only have one function per event type.
@@ -1506,16 +1896,17 @@ If a function is already bound to the given event type, it will be overwritten.<
             &lt;li&gt;delete - Before a file is deleted&lt;/li&gt;
         &lt;/ul&gt;
         function: The function/method to be called when the given `event` is fired
+        when (str): When the event is fired (for example, before the read happens, or after)
 
     Returns:
-         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+         Result: A `Result` with the `success` flag set accordingly.
     &#34;&#34;&#34;
     self.events[event] = function
-    return SysCallStatus(success=True)</code></pre>
+    return Result(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.change_owner"><code class="name flex">
-<span>def <span class="ident">change_owner</span></span>(<span>self, computer, new_user_owner: Optional[int] = None, new_group_owner: Optional[int] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">change_owner</span></span>(<span>self, computer, new_user_owner: Optional[int] = None, new_group_owner: Optional[int] = None) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Change the owner (user and/or group) of a given <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code>/<code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code>, but check if the given UID should be allowed to first</p>
@@ -1530,15 +1921,15 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def change_owner(self, computer, new_user_owner: Optional[int] = None,
-                 new_group_owner: Optional[int] = None) -&gt; SysCallStatus:
+                 new_group_owner: Optional[int] = None) -&gt; Result:
     &#34;&#34;&#34;
     Change the owner (user and/or group) of a given `File`/`Directory`, but check if the given UID should be allowed to first
 
@@ -1548,41 +1939,41 @@ If a function is already bound to the given event type, it will be overwritten.<
         new_group_owner (int): The GID of the new owner (group) of the `File`/`Directory`
 
     Returns:
-        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly
+        Result: A `Result` with the `success` flag set accordingly
     &#34;&#34;&#34;
-    caller_groups = computer.find_user_groups(computer.get_uid()).data
+    caller_groups = computer.get_user_groups(computer.sys_getuid()).data
     # Check if the owner or group owner is correct or if we&#39;re root
-    if computer.get_uid() == self.owner or self.group_owner in caller_groups or computer.get_uid() == 0:
+    if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
         # We need at least one of the two params (uid/gid)
         # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
         if new_user_owner is None and new_group_owner is None:
-            return SysCallStatus(success=False, message=SysCallMessages.MISSING_ARGUMENT)
+            return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)
         else:
             # Same thing with uid 0
             if new_user_owner is not None:
                 # Confirm that the user exists
-                if computer.find_user(uid=new_user_owner).success:
+                if computer.get_user(uid=new_user_owner).success:
                     self.owner = new_user_owner
                 else:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
             # Confirm that the new group exists
             # Same thing with gid 0
             if new_group_owner is not None:
                 # Confirm that the user exists
-                if computer.find_group(gid=new_group_owner).success:
+                if computer.get_group(gid=new_group_owner).success:
                     self.group_owner = new_group_owner
                 else:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
             self.handle_event(&#34;change_owner&#34;)
-            return SysCallStatus(success=True)
+            return Result(success=True)
     else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.check_owner"><code class="name flex">
-<span>def <span class="ident">check_owner</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">check_owner</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)</p>
@@ -1593,14 +1984,14 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def check_owner(self, computer) -&gt; SysCallStatus:
+<pre><code class="python">def check_owner(self, computer) -&gt; Result:
     &#34;&#34;&#34;
     Checks if the given UID or GID is one of the owners (for chmod/chgrp/etc)
 
@@ -1608,19 +1999,19 @@ If a function is already bound to the given event type, it will be overwritten.<
         computer: The current `Computer` instance
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
     # Get the list of user&#39;s groups
-    groups = computer.find_user_groups(computer.get_uid()).data
+    groups = computer.get_user_groups(computer.sys_getuid()).data
 
-    if self.owner == computer.get_uid() or self.group_owner in groups:
-        return SysCallStatus(success=True)
+    if self.owner == computer.sys_getuid() or self.group_owner in groups:
+        return Result(success=True)
     else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.check_perm"><code class="name flex">
-<span>def <span class="ident">check_perm</span></span>(<span>self, perm: Literal['read', 'write', 'execute'], computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">check_perm</span></span>(<span>self, perm: Literal['read', 'write', 'execute'], computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if the current user has the given <code>perm</code></p>
@@ -1633,14 +2024,14 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; SysCallStatus:
+<pre><code class="python">def check_perm(self, perm: Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;], computer) -&gt; Result:
     &#34;&#34;&#34;
     Checks if the current user has the given `perm`
 
@@ -1649,29 +2040,29 @@ If a function is already bound to the given event type, it will be overwritten.<
         computer: The current `Computer` instance
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
     # If we&#34;re root (UID 0), return True because root has all permissions
-    if computer.get_uid() == 0:
-        return SysCallStatus(success=True)
+    if computer.sys_getuid() == 0:
+        return Result(success=True)
     # If &#34;public&#34;, don&#34;t bother checking anything else
     if &#34;public&#34; in self.permissions[perm]:
-        return SysCallStatus(success=True)
+        return Result(success=True)
 
     if &#34;group&#34; in self.permissions[perm]:
-        if self.group_owner in computer.find_user_groups(computer.get_uid()).data:
-            return SysCallStatus(success=True)
+        if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+            return Result(success=True)
 
     if &#34;owner&#34; in self.permissions[perm]:
-        if self.owner == computer.get_uid():
-            return SysCallStatus(success=True)
+        if self.owner == computer.sys_getuid():
+            return Result(success=True)
 
     # No permission
-    return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+    return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.delete"><code class="name flex">
-<span>def <span class="ident">delete</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">delete</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the <code>caller</code> has the proper permissions to delete a given file, then remove it</p>
@@ -1682,14 +2073,14 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag set accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag set accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def delete(self, computer) -&gt; SysCallStatus:
+<pre><code class="python">def delete(self, computer) -&gt; Result:
     &#34;&#34;&#34;
     Check if the `caller` has the proper permissions to delete a given file, then remove it
 
@@ -1697,16 +2088,16 @@ If a function is already bound to the given event type, it will be overwritten.<
         computer: The current computer object
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag set accordingly
+        Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
     if self.parent:
         # In unix, we need read+write permissions to delete
         if self.check_perm(&#34;read&#34;, computer).success and self.check_perm(&#34;write&#34;, computer).success:
             self.handle_event(&#34;delete&#34;)
             del self.parent.files[self.name]
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.handle_event"><code class="name flex">
@@ -1721,8 +2112,8 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly.</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -1736,12 +2127,12 @@ If a function is already bound to the given event type, it will be overwritten.<
         event: The event type to run. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
     Returns:
-         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+         Result: A `Result` with the `success` flag set accordingly.
     &#34;&#34;&#34;
     if event in self.events.keys():
         self.events[event](self)
 
-    return SysCallStatus(success=True)</code></pre>
+    return Result(success=True)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.is_directory"><code class="name flex">
@@ -1844,8 +2235,8 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly.</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly.</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -1859,14 +2250,14 @@ If a function is already bound to the given event type, it will be overwritten.<
         event: The event type to unbind. Valid event types include: `read`, `write`, `move`, `perm`, `delete`
 
     Returns:
-         SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly.
+         Result: A `Result` with the `success` flag set accordingly.
     &#34;&#34;&#34;
     try:
         self.events.pop(event)
     except Exception:
         pass
 
-    return SysCallStatus(success=True)</code></pre>
+    return Result(success=True)</code></pre>
 </details>
 </dd>
 </dl>
@@ -1910,22 +2301,22 @@ If a function is already bound to the given event type, it will be overwritten.<
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
-    def read(self, computer) -&gt; SysCallStatus:
+    def read(self, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
 
         Args:
             computer: The current `Computer` instance
 
-        Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
+        Returns: Result: A `Result` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
         &#34;&#34;&#34;
         if self.check_perm(&#34;read&#34;, computer).success:
             self.handle_event(&#34;read&#34;)
-            return SysCallStatus(success=True, data=self.content)
+            return Result(success=True, data=self.content)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def write(self, data: str, computer) -&gt; SysCallStatus:
+    def write(self, data: str, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to write to the file. Update the file&#39;s contents if allowed
 
@@ -1934,17 +2325,17 @@ If a function is already bound to the given event type, it will be overwritten.<
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         &#34;&#34;&#34;
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content = data
             self.update_size()
             self.handle_event(&#34;write&#34;)
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-    def append(self, data: str, computer) -&gt; SysCallStatus:
+    def append(self, data: str, computer) -&gt; Result:
         &#34;&#34;&#34;
         Check if the current UID has permission to write to the file. Append to the file&#39;s contents if allowed
 
@@ -1953,16 +2344,16 @@ If a function is already bound to the given event type, it will be overwritten.<
             computer: The current `Computer` instance
 
         Returns:
-            SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+            Result: A `Result` object with the `success` flag accordingly
         &#34;&#34;&#34;
         # NOTE: This may be unnecessary, we&#34;ll find out later
         if self.check_perm(&#34;write&#34;, computer).success:
             self.content += data
             self.update_size()
             self.handle_event(&#34;write&#34;)
-            return SysCallStatus(success=True)
+            return Result(success=True)
         else:
-            return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     def update_size(self) -&gt; None:
         &#34;&#34;&#34;
@@ -1990,7 +2381,7 @@ If a function is already bound to the given event type, it will be overwritten.<
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.fs.File.append"><code class="name flex">
-<span>def <span class="ident">append</span></span>(<span>self, data: str, computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">append</span></span>(<span>self, data: str, computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the current UID has permission to write to the file. Append to the file's contents if allowed</p>
@@ -2003,14 +2394,14 @@ If a function is already bound to the given event type, it will be overwritten.<
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def append(self, data: str, computer) -&gt; SysCallStatus:
+<pre><code class="python">def append(self, data: str, computer) -&gt; Result:
     &#34;&#34;&#34;
     Check if the current UID has permission to write to the file. Append to the file&#39;s contents if allowed
 
@@ -2019,20 +2410,20 @@ If a function is already bound to the given event type, it will be overwritten.<
         computer: The current `Computer` instance
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+        Result: A `Result` object with the `success` flag accordingly
     &#34;&#34;&#34;
     # NOTE: This may be unnecessary, we&#34;ll find out later
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content += data
         self.update_size()
         self.handle_event(&#34;write&#34;)
-        return SysCallStatus(success=True)
+        return Result(success=True)
     else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.File.read"><code class="name flex">
-<span>def <span class="ident">read</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">read</span></span>(<span>self, computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed</p>
@@ -2041,26 +2432,26 @@ If a function is already bound to the given event type, it will be overwritten.<
 <dt><strong><code>computer</code></strong></dt>
 <dd>The current <code>Computer</code> instance</dd>
 </dl>
-<p>Returns: SysCallStatus: A <code>SysCallStatus</code> object with the <code>success</code> flag set and the <code>data</code> flag set with the
+<p>Returns: Result: A <code>Result</code> object with the <code>success</code> flag set and the <code>data</code> flag set with the
 file's content if permitted</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def read(self, computer) -&gt; SysCallStatus:
+<pre><code class="python">def read(self, computer) -&gt; Result:
     &#34;&#34;&#34;
     Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
 
     Args:
         computer: The current `Computer` instance
 
-    Returns: SysCallStatus: A `SysCallStatus` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
+    Returns: Result: A `Result` object with the `success` flag set and the `data` flag set with the  file&#39;s content if permitted
     &#34;&#34;&#34;
     if self.check_perm(&#34;read&#34;, computer).success:
         self.handle_event(&#34;read&#34;)
-        return SysCallStatus(success=True, data=self.content)
+        return Result(success=True, data=self.content)
     else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.File.update_size"><code class="name flex">
@@ -2093,7 +2484,7 @@ Also, recursively tells it's parent to update its size.</p>
 </details>
 </dd>
 <dt id="client.blackhat.fs.File.write"><code class="name flex">
-<span>def <span class="ident">write</span></span>(<span>self, data: str, computer) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">write</span></span>(<span>self, data: str, computer) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Check if the current UID has permission to write to the file. Update the file's contents if allowed</p>
@@ -2106,14 +2497,14 @@ Also, recursively tells it's parent to update its size.</p>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with the <code>success</code> flag accordingly</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the <code>success</code> flag accordingly</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def write(self, data: str, computer) -&gt; SysCallStatus:
+<pre><code class="python">def write(self, data: str, computer) -&gt; Result:
     &#34;&#34;&#34;
     Check if the current UID has permission to write to the file. Update the file&#39;s contents if allowed
 
@@ -2122,15 +2513,15 @@ Also, recursively tells it's parent to update its size.</p>
         computer: The current `Computer` instance
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with the `success` flag accordingly
+        Result: A `Result` object with the `success` flag accordingly
     &#34;&#34;&#34;
     if self.check_perm(&#34;write&#34;, computer).success:
         self.content = data
         self.update_size()
         self.handle_event(&#34;write&#34;)
-        return SysCallStatus(success=True)
+        return Result(success=True)
     else:
-        return SysCallStatus(success=False, message=SysCallMessages.NOT_ALLOWED)</code></pre>
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)</code></pre>
 </details>
 </dd>
 </dl>
@@ -2183,6 +2574,9 @@ Also, recursively tells it's parent to update its size.</p>
 
         # The filesystem root (/) (owned by root)
         self.files = Directory(&#34;/&#34;, None, 0, 0)
+        self.files.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+                                  &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;],
+                                  &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
         self.init()
 
@@ -2194,17 +2588,20 @@ Also, recursively tells it's parent to update its size.</p>
             None
         &#34;&#34;&#34;
         # Setup the directory structure in the file system (Unix FHS)
-        for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
+        for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;proc&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
             directory = Directory(dir, self.files, 0, 0)
             # Special case for /tmp (read and write by everyone)
             if dir == &#34;tmp&#34;:
                 directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
-                                         &#34;execute&#34;: []}
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+            elif dir == &#34;proc&#34;:
+                directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [],
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
             else:
                 # TODO: Change this to be more accurate
                 # (rwx rw- r--)
                 directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;],
-                                         &#34;execute&#34;: [&#34;owner&#34;]}
+                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
             self.files.add_file(directory)
 
@@ -2215,6 +2612,7 @@ Also, recursively tells it's parent to update its size.</p>
         self.setup_etc()
         # self.setup_home()
         # self.setup_lib()
+        self.setup_proc()
         self.setup_root()
         # self.setup_tmp()
         self.setup_usr()
@@ -2234,10 +2632,14 @@ Also, recursively tells it's parent to update its size.</p>
             # Ignore the __init__.py and __pycache__ because those aren&#39;t bins (auto generated)
             if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;, &#34;installable&#34;]:
                 current_file = File(file.replace(&#34;.py&#34;, &#34;&#34;), &#34;[BINARY DATA]&#34;, bin_dir, 0, 0)
-                with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
-                    current_file.size = sys.getsizeof(f.read()) / 32
-                    current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                                &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+                try:
+                    with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
+                        current_file.size = sys.getsizeof(f.read()) / 32
+                except IsADirectoryError:
+                    current_file.size = 0
+
+                current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                                            &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
                 bin_dir.add_file(current_file)
 
@@ -2252,6 +2654,7 @@ Also, recursively tells it's parent to update its size.</p>
             &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
             &lt;li&gt;/etc/sudoers - The file that contains all of the sudo permissions&lt;/li&gt;
             &lt;li&gt;/etc/apt/sources.list - Contains urls of apt repo servers&lt;/li&gt;
+            &lt;li&gt;/etc/resolv.conf - Contains the list of dns servers&lt;/li&gt;
         &lt;/ul&gt;
 
         Returns:
@@ -2275,12 +2678,12 @@ Also, recursively tells it's parent to update its size.</p>
                         return
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # If we don&#39;t find the user, that means we added a new user
                     if not user_lookup.success:
                         # Make sure no user has the uid
-                        if not self.computer.find_user(uid=uid).success:
+                        if not self.computer.get_user(uid=uid).success:
                             # Add the user
                             self.computer.add_user(username, password, uid, plaintext=False)
                             self.computer.add_group(name=username, gid=primary_gid)
@@ -2304,15 +2707,15 @@ Also, recursively tells it's parent to update its size.</p>
                         # 1. Make sure the new GID exists
                         # 2. Remove the user&#39;s old primary gid membership
                         # 3. Add a the user to the new gid as primary
-                        user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+                        user_primary_gid = self.computer.get_user_primary_group(user.uid).data[0]
 
                         if user_primary_gid != primary_gid:
-                            if self.computer.find_group(gid=primary_gid).success:
+                            if self.computer.get_group(gid=primary_gid).success:
                                 self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
                                 self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         def update_shadow(file):
             content = file.content.split(&#34;\n&#34;)
@@ -2324,7 +2727,7 @@ Also, recursively tells it's parent to update its size.</p>
                     username, password = subitems
 
                     # Now we want to get the user by username
-                    user_lookup = self.computer.find_user(username=username)
+                    user_lookup = self.computer.get_user(username=username)
 
                     # We have a user, now lets check if any of the data has changed
                     user = user_lookup.data
@@ -2336,7 +2739,7 @@ Also, recursively tells it's parent to update its size.</p>
                             user.password = password
 
                 # Will automatically remove incorrect changes
-                self.computer.update_user_and_group_files()
+                self.computer.sync_user_and_group_files()
 
         def update_group(file):
             content = file.content.split(&#34;\n&#34;)
@@ -2353,12 +2756,12 @@ Also, recursively tells it's parent to update its size.</p>
                         return
 
                     # Now we want to get the group by group name
-                    group_lookup = self.computer.find_group(name=group_name)
+                    group_lookup = self.computer.get_group(name=group_name)
 
                     # If we don&#39;t find the user, that means we added a new user
                     if not group_lookup.success:
                         # Make sure no group has the gid
-                        if not self.computer.find_group(gid=gid).success:
+                        if not self.computer.get_group(gid=gid).success:
                             # Add the group
                             self.computer.add_group(group_name, gid)
                             # TODO: Add users to the group by last param
@@ -2368,7 +2771,7 @@ Also, recursively tells it's parent to update its size.</p>
                         # TODO: Add changes here
 
                     # Will automatically remove incorrect changes
-                    self.computer.update_user_and_group_files()
+                    self.computer.sync_user_and_group_files()
 
         etc_dir: Directory = self.files.find(&#34;etc&#34;)
         # Create the /etc/passwd file
@@ -2394,7 +2797,7 @@ Also, recursively tells it's parent to update its size.</p>
         for dir in [&#34;Desktop&#34;, &#34;Documents&#34;, &#34;Downloads&#34;, &#34;Music&#34;, &#34;Pictures&#34;, &#34;Public&#34;, &#34;Templates&#34;, &#34;Videos&#34;]:
             current_dir = Directory(dir, skel_dir, 0, 0)
             current_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                       &#34;execute&#34;: []}
+                                       &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
             skel_dir.add_file(current_dir)
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
@@ -2419,6 +2822,33 @@ Also, recursively tells it's parent to update its size.</p>
 
         sources_file: File = File(&#34;sources.list&#34;, &#34;&#34;, apt_dir, 0, 0)
         apt_dir.add_file(sources_file)
+
+        # /etc/resolv.conf
+        resolv_conf: File = File(&#34;resolv.conf&#34;, &#34;nameserver 1.1.1.1&#34;, etc_dir, 0, 0)
+        etc_dir.add_file(resolv_conf)
+
+    def setup_proc(self) -&gt; None:
+        &#34;&#34;&#34;
+        Sets up:
+        &lt;ul&gt;
+            &lt;li&gt;/proc/uptime - Contains the amount of seconds since the system was booted&lt;/li&gt;
+        &lt;/ul&gt;
+
+        Returns:
+            None
+        &#34;&#34;&#34;
+
+        # EventHandler functions for /proc/uptime
+        def update_uptime(file):
+            file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
+
+        proc_dir: Directory = self.files.find(&#34;proc&#34;)
+        # Create the /etc/passwd file
+        uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
+        uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
+
+        uptime_file.add_event_listener(&#34;read&#34;, update_uptime, when=&#34;before&#34;)
+        proc_dir.add_file(uptime_file)
 
     def setup_root(self) -&gt; None:
         &#34;&#34;&#34;
@@ -2457,7 +2887,11 @@ Also, recursively tells it's parent to update its size.</p>
 
         self.generate_manpages()
 
+        def generate_manpages(file):
+            self.generate_manpages()
+
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+        bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
         usr_dir.add_file(bin_dir)
 
     def setup_var(self) -&gt; None:
@@ -2502,7 +2936,7 @@ Also, recursively tells it's parent to update its size.</p>
         html_dir: Directory = Directory(&#34;html&#34;, www_dir, 0, 0)
         www_dir.add_file(html_dir)
 
-    def find(self, pathname: str) -&gt; SysCallStatus:
+    def find(self, pathname: str) -&gt; Result:
         &#34;&#34;&#34;
         Try to find a given file anywhere in the file system based on a given `pathname`
 
@@ -2510,7 +2944,7 @@ Also, recursively tells it's parent to update its size.</p>
             pathname (str): The full (absolute or relative) path of the file
 
         Returns:
-            SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
+            Result: A `Result` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
         &#34;&#34;&#34;
 
         # Special cases
@@ -2520,33 +2954,33 @@ Also, recursively tells it's parent to update its size.</p>
             pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
 
         if pathname == &#34;/&#34;:
-            return SysCallStatus(success=True, data=self.files)
+            return Result(success=True, data=self.files)
 
         if pathname == &#34;.&#34;:
-            return SysCallStatus(success=True, data=self.computer.get_pwd())
+            return Result(success=True, data=self.computer.sys_getcwd())
 
         if pathname == &#34;..&#34;:
             # Check if the directory has a parent
             # If it doesn&#39;t, we can assume that we&#39;re at /
             # In the case of /, just return /
-            if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.files)
+            if not self.computer.sys_getcwd().parent:
+                return Result(success=True, data=self.files)
             else:
-                return SysCallStatus(success=True, data=self.computer.get_pwd().parent)
+                return Result(success=True, data=self.computer.sys_getcwd().parent)
 
         if pathname == &#34;...&#34;:
             # Check if the directory has a parent
             # If it doesn&#39;t, we can assume that we&#39;re at /
             # In the case of /, just return /
             # And then do it again (go back twice)0
-            if not self.computer.get_pwd().parent:
-                return SysCallStatus(success=True, data=self.computer.fs.files)
+            if not self.computer.sys_getcwd().parent:
+                return Result(success=True, data=self.computer.fs.files)
             else:
-                current_dir = self.computer.get_pwd().parent
+                current_dir = self.computer.sys_getcwd().parent
                 if current_dir.parent:
-                    return SysCallStatus(success=True, data=current_dir.parent)
+                    return Result(success=True, data=current_dir.parent)
                 else:
-                    return SysCallStatus(success=True, data=self.computer.fs.files)
+                    return Result(success=True, data=self.computer.fs.files)
 
         # Regular (non-special cases)
         pathname = pathname.split(&#34;/&#34;)
@@ -2557,7 +2991,7 @@ Also, recursively tells it's parent to update its size.</p>
             current_dir = self.files
         else:
             # Relative (based on current dir)
-            current_dir = self.computer.get_pwd()
+            current_dir = self.computer.sys_getcwd()
 
         # Filter out garbage
         while &#34;&#34; in pathname:
@@ -2579,12 +3013,19 @@ Also, recursively tells it's parent to update its size.</p>
             else:
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
-                    return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                    return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # This only runs when we successfully found
-        return SysCallStatus(success=True, data=current_dir)
+        return Result(success=True, data=current_dir)
 
     def generate_manpages(self):
+        &#34;&#34;&#34;
+        Loop through all available modules and import them. After, use the module.parse_args(doc=True) to generate
+        a manpage from the available help information.
+
+        Returns:
+            None
+        &#34;&#34;&#34;
         find_man_dir = self.find(&#34;/usr/share/man&#34;)
 
         if not find_man_dir.success:
@@ -2623,7 +3064,7 @@ Also, recursively tells it's parent to update its size.</p>
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.fs.StandardFS.find"><code class="name flex">
-<span>def <span class="ident">find</span></span>(<span>self, pathname: str) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">find</span></span>(<span>self, pathname: str) ‑> <a title="client.blackhat.helpers.Result" href="helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Try to find a given file anywhere in the file system based on a given <code>pathname</code></p>
@@ -2634,14 +3075,14 @@ Also, recursively tells it's parent to update its size.</p>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> with the <code>success</code> flag set accordingly and the <code>data</code> flag with the found <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code> or <code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code> if the file was found</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> with the <code>success</code> flag set accordingly and the <code>data</code> flag with the found <code><a title="client.blackhat.fs.File" href="#client.blackhat.fs.File">File</a></code> or <code><a title="client.blackhat.fs.Directory" href="#client.blackhat.fs.Directory">Directory</a></code> if the file was found</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def find(self, pathname: str) -&gt; SysCallStatus:
+<pre><code class="python">def find(self, pathname: str) -&gt; Result:
     &#34;&#34;&#34;
     Try to find a given file anywhere in the file system based on a given `pathname`
 
@@ -2649,7 +3090,7 @@ Also, recursively tells it's parent to update its size.</p>
         pathname (str): The full (absolute or relative) path of the file
 
     Returns:
-        SysCallStatus: A `SysCallStatus` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
+        Result: A `Result` with the `success` flag set accordingly and the `data` flag with the found `File` or `Directory` if the file was found
     &#34;&#34;&#34;
 
     # Special cases
@@ -2659,33 +3100,33 @@ Also, recursively tells it's parent to update its size.</p>
         pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
 
     if pathname == &#34;/&#34;:
-        return SysCallStatus(success=True, data=self.files)
+        return Result(success=True, data=self.files)
 
     if pathname == &#34;.&#34;:
-        return SysCallStatus(success=True, data=self.computer.get_pwd())
+        return Result(success=True, data=self.computer.sys_getcwd())
 
     if pathname == &#34;..&#34;:
         # Check if the directory has a parent
         # If it doesn&#39;t, we can assume that we&#39;re at /
         # In the case of /, just return /
-        if not self.computer.get_pwd().parent:
-            return SysCallStatus(success=True, data=self.files)
+        if not self.computer.sys_getcwd().parent:
+            return Result(success=True, data=self.files)
         else:
-            return SysCallStatus(success=True, data=self.computer.get_pwd().parent)
+            return Result(success=True, data=self.computer.sys_getcwd().parent)
 
     if pathname == &#34;...&#34;:
         # Check if the directory has a parent
         # If it doesn&#39;t, we can assume that we&#39;re at /
         # In the case of /, just return /
         # And then do it again (go back twice)0
-        if not self.computer.get_pwd().parent:
-            return SysCallStatus(success=True, data=self.computer.fs.files)
+        if not self.computer.sys_getcwd().parent:
+            return Result(success=True, data=self.computer.fs.files)
         else:
-            current_dir = self.computer.get_pwd().parent
+            current_dir = self.computer.sys_getcwd().parent
             if current_dir.parent:
-                return SysCallStatus(success=True, data=current_dir.parent)
+                return Result(success=True, data=current_dir.parent)
             else:
-                return SysCallStatus(success=True, data=self.computer.fs.files)
+                return Result(success=True, data=self.computer.fs.files)
 
     # Regular (non-special cases)
     pathname = pathname.split(&#34;/&#34;)
@@ -2696,7 +3137,7 @@ Also, recursively tells it's parent to update its size.</p>
         current_dir = self.files
     else:
         # Relative (based on current dir)
-        current_dir = self.computer.get_pwd()
+        current_dir = self.computer.sys_getcwd()
 
     # Filter out garbage
     while &#34;&#34; in pathname:
@@ -2718,22 +3159,32 @@ Also, recursively tells it's parent to update its size.</p>
         else:
             current_dir = current_dir.find(subdir)
             if not current_dir:
-                return SysCallStatus(success=False, message=SysCallMessages.NOT_FOUND)
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
     # This only runs when we successfully found
-    return SysCallStatus(success=True, data=current_dir)</code></pre>
+    return Result(success=True, data=current_dir)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.StandardFS.generate_manpages"><code class="name flex">
 <span>def <span class="ident">generate_manpages</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Loop through all available modules and import them. After, use the module.parse_args(doc=True) to generate
+a manpage from the available help information.</p>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def generate_manpages(self):
+    &#34;&#34;&#34;
+    Loop through all available modules and import them. After, use the module.parse_args(doc=True) to generate
+    a manpage from the available help information.
+
+    Returns:
+        None
+    &#34;&#34;&#34;
     find_man_dir = self.find(&#34;/usr/share/man&#34;)
 
     if not find_man_dir.success:
@@ -2789,17 +3240,20 @@ Also, recursively tells it's parent to update its size.</p>
         None
     &#34;&#34;&#34;
     # Setup the directory structure in the file system (Unix FHS)
-    for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
+    for dir in [&#34;bin&#34;, &#34;etc&#34;, &#34;home&#34;, &#34;lib&#34;, &#34;root&#34;, &#34;proc&#34;, &#34;tmp&#34;, &#34;usr&#34;, &#34;var&#34;]:
         directory = Directory(dir, self.files, 0, 0)
         # Special case for /tmp (read and write by everyone)
         if dir == &#34;tmp&#34;:
             directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
-                                     &#34;execute&#34;: []}
+                                     &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+        elif dir == &#34;proc&#34;:
+            directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [],
+                                     &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
         else:
             # TODO: Change this to be more accurate
             # (rwx rw- r--)
             directory.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;, &#34;group&#34;],
-                                     &#34;execute&#34;: [&#34;owner&#34;]}
+                                     &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
         self.files.add_file(directory)
 
@@ -2810,6 +3264,7 @@ Also, recursively tells it's parent to update its size.</p>
     self.setup_etc()
     # self.setup_home()
     # self.setup_lib()
+    self.setup_proc()
     self.setup_root()
     # self.setup_tmp()
     self.setup_usr()
@@ -2842,10 +3297,14 @@ All these files represent binaries in the system</p>
         # Ignore the __init__.py and __pycache__ because those aren&#39;t bins (auto generated)
         if file not in [&#34;__init__.py&#34;, &#34;__pycache__&#34;, &#34;installable&#34;]:
             current_file = File(file.replace(&#34;.py&#34;, &#34;&#34;), &#34;[BINARY DATA]&#34;, bin_dir, 0, 0)
-            with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
-                current_file.size = sys.getsizeof(f.read()) / 32
-                current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                            &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+            try:
+                with open(f&#34;./blackhat/bin/{file}&#34;, &#34;r&#34;) as f:
+                    current_file.size = sys.getsizeof(f.read()) / 32
+            except IsADirectoryError:
+                current_file.size = 0
+
+            current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                                        &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
             bin_dir.add_file(current_file)</code></pre>
 </details>
@@ -2864,6 +3323,7 @@ All these files represent binaries in the system</p>
 A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)</li>
 <li>/etc/sudoers - The file that contains all of the sudo permissions</li>
 <li>/etc/apt/sources.list - Contains urls of apt repo servers</li>
+<li>/etc/resolv.conf - Contains the list of dns servers</li>
 </ul>
 <h2 id="returns">Returns</h2>
 <p>None</p></div>
@@ -2882,6 +3342,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
         &lt;li&gt;/etc/skel -  A &#34;skeleton&#34; needed to create a users home folder (located in /home/&lt;USERNAME&gt;)&lt;/li&gt;
         &lt;li&gt;/etc/sudoers - The file that contains all of the sudo permissions&lt;/li&gt;
         &lt;li&gt;/etc/apt/sources.list - Contains urls of apt repo servers&lt;/li&gt;
+        &lt;li&gt;/etc/resolv.conf - Contains the list of dns servers&lt;/li&gt;
     &lt;/ul&gt;
 
     Returns:
@@ -2905,12 +3366,12 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                     return
 
                 # Now we want to get the user by username
-                user_lookup = self.computer.find_user(username=username)
+                user_lookup = self.computer.get_user(username=username)
 
                 # If we don&#39;t find the user, that means we added a new user
                 if not user_lookup.success:
                     # Make sure no user has the uid
-                    if not self.computer.find_user(uid=uid).success:
+                    if not self.computer.get_user(uid=uid).success:
                         # Add the user
                         self.computer.add_user(username, password, uid, plaintext=False)
                         self.computer.add_group(name=username, gid=primary_gid)
@@ -2934,15 +3395,15 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                     # 1. Make sure the new GID exists
                     # 2. Remove the user&#39;s old primary gid membership
                     # 3. Add a the user to the new gid as primary
-                    user_primary_gid = self.computer.find_user_primary_group(user.uid).data[0]
+                    user_primary_gid = self.computer.get_user_primary_group(user.uid).data[0]
 
                     if user_primary_gid != primary_gid:
-                        if self.computer.find_group(gid=primary_gid).success:
+                        if self.computer.get_group(gid=primary_gid).success:
                             self.computer.remove_user_from_group(uid=user.uid, gid=user_primary_gid)
                             self.computer.add_user_to_group(user.uid, primary_gid, &#34;primary&#34;)
 
                 # Will automatically remove incorrect changes
-                self.computer.update_user_and_group_files()
+                self.computer.sync_user_and_group_files()
 
     def update_shadow(file):
         content = file.content.split(&#34;\n&#34;)
@@ -2954,7 +3415,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                 username, password = subitems
 
                 # Now we want to get the user by username
-                user_lookup = self.computer.find_user(username=username)
+                user_lookup = self.computer.get_user(username=username)
 
                 # We have a user, now lets check if any of the data has changed
                 user = user_lookup.data
@@ -2966,7 +3427,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                         user.password = password
 
             # Will automatically remove incorrect changes
-            self.computer.update_user_and_group_files()
+            self.computer.sync_user_and_group_files()
 
     def update_group(file):
         content = file.content.split(&#34;\n&#34;)
@@ -2983,12 +3444,12 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                     return
 
                 # Now we want to get the group by group name
-                group_lookup = self.computer.find_group(name=group_name)
+                group_lookup = self.computer.get_group(name=group_name)
 
                 # If we don&#39;t find the user, that means we added a new user
                 if not group_lookup.success:
                     # Make sure no group has the gid
-                    if not self.computer.find_group(gid=gid).success:
+                    if not self.computer.get_group(gid=gid).success:
                         # Add the group
                         self.computer.add_group(group_name, gid)
                         # TODO: Add users to the group by last param
@@ -2998,7 +3459,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                     # TODO: Add changes here
 
                 # Will automatically remove incorrect changes
-                self.computer.update_user_and_group_files()
+                self.computer.sync_user_and_group_files()
 
     etc_dir: Directory = self.files.find(&#34;etc&#34;)
     # Create the /etc/passwd file
@@ -3024,7 +3485,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
     for dir in [&#34;Desktop&#34;, &#34;Documents&#34;, &#34;Downloads&#34;, &#34;Music&#34;, &#34;Pictures&#34;, &#34;Public&#34;, &#34;Templates&#34;, &#34;Videos&#34;]:
         current_dir = Directory(dir, skel_dir, 0, 0)
         current_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
-                                   &#34;execute&#34;: []}
+                                   &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
         skel_dir.add_file(current_dir)
 
     # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
@@ -3048,7 +3509,49 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
     etc_dir.add_file(apt_dir)
 
     sources_file: File = File(&#34;sources.list&#34;, &#34;&#34;, apt_dir, 0, 0)
-    apt_dir.add_file(sources_file)</code></pre>
+    apt_dir.add_file(sources_file)
+
+    # /etc/resolv.conf
+    resolv_conf: File = File(&#34;resolv.conf&#34;, &#34;nameserver 1.1.1.1&#34;, etc_dir, 0, 0)
+    etc_dir.add_file(resolv_conf)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.fs.StandardFS.setup_proc"><code class="name flex">
+<span>def <span class="ident">setup_proc</span></span>(<span>self) ‑> NoneType</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Sets up:</p>
+<ul>
+<li>/proc/uptime - Contains the amount of seconds since the system was booted</li>
+</ul>
+<h2 id="returns">Returns</h2>
+<p>None</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def setup_proc(self) -&gt; None:
+    &#34;&#34;&#34;
+    Sets up:
+    &lt;ul&gt;
+        &lt;li&gt;/proc/uptime - Contains the amount of seconds since the system was booted&lt;/li&gt;
+    &lt;/ul&gt;
+
+    Returns:
+        None
+    &#34;&#34;&#34;
+
+    # EventHandler functions for /proc/uptime
+    def update_uptime(file):
+        file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
+
+    proc_dir: Directory = self.files.find(&#34;proc&#34;)
+    # Create the /etc/passwd file
+    uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
+    uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
+
+    uptime_file.add_event_listener(&#34;read&#34;, update_uptime, when=&#34;before&#34;)
+    proc_dir.add_file(uptime_file)</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.fs.StandardFS.setup_root"><code class="name flex">
@@ -3116,7 +3619,11 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 
     self.generate_manpages()
 
+    def generate_manpages(file):
+        self.generate_manpages()
+
     bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+    bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
     usr_dir.add_file(bin_dir)</code></pre>
 </details>
 </dd>
@@ -3197,6 +3704,11 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 <li><code><a title="client.blackhat" href="index.html">client.blackhat</a></code></li>
 </ul>
 </li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="client.blackhat.fs.copy" href="#client.blackhat.fs.copy">copy</a></code></li>
+</ul>
+</li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
@@ -3244,6 +3756,7 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 <li><code><a title="client.blackhat.fs.StandardFS.init" href="#client.blackhat.fs.StandardFS.init">init</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_bin" href="#client.blackhat.fs.StandardFS.setup_bin">setup_bin</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_etc" href="#client.blackhat.fs.StandardFS.setup_etc">setup_etc</a></code></li>
+<li><code><a title="client.blackhat.fs.StandardFS.setup_proc" href="#client.blackhat.fs.StandardFS.setup_proc">setup_proc</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_root" href="#client.blackhat.fs.StandardFS.setup_root">setup_root</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_usr" href="#client.blackhat.fs.StandardFS.setup_usr">setup_usr</a></code></li>
 <li><code><a title="client.blackhat.fs.StandardFS.setup_var" href="#client.blackhat.fs.StandardFS.setup_var">setup_var</a></code></li>

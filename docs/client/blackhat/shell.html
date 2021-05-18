@@ -101,10 +101,10 @@ class Shell:
         prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
         prompt = prompt.replace(&#34;\\u&#34;,
-                                self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+                                self.computers[-1].get_user(uid=self.computers[-1].sys_getuid()).data.username)
         prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
         prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
+        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].sys_getuid() == 0 else &#34;$&#34;)
         prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
         prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)
@@ -408,10 +408,10 @@ This will be removed once the GUI is working</p>
         prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
         prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
         prompt = prompt.replace(&#34;\\u&#34;,
-                                self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+                                self.computers[-1].get_user(uid=self.computers[-1].sys_getuid()).data.username)
         prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
         prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
+        prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].sys_getuid() == 0 else &#34;$&#34;)
         prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
         prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)
@@ -698,10 +698,10 @@ This will be removed once the GUI is working</p>
     prompt = prompt.replace(&#34;\\T&#34;, datetime.now().strftime(&#34;%I:%M:%S&#34;))
     prompt = prompt.replace(&#34;\\@&#34;, datetime.now().strftime(&#34;%I:%M:%S %p&#34;))
     prompt = prompt.replace(&#34;\\u&#34;,
-                            self.computers[-1].find_user(uid=self.computers[-1].get_uid()).data.username)
+                            self.computers[-1].get_user(uid=self.computers[-1].sys_getuid()).data.username)
     prompt = prompt.replace(&#34;\\w&#34;, self.computers[-1].sessions[-1].current_dir.pwd())
     prompt = prompt.replace(&#34;\\W&#34;, self.computers[-1].sessions[-1].current_dir.pwd().split(&#34;/&#34;)[-1] or &#34;/&#34;)
-    prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].get_uid() == 0 else &#34;$&#34;)
+    prompt = prompt.replace(&#34;\\$&#34;, &#34;#&#34; if self.computers[-1].sys_getuid() == 0 else &#34;$&#34;)
     prompt = prompt.replace(&#34;\\\\&#34;, &#34;\\&#34;)
 
     prompt = prompt.replace(&#34;\\e[0;31m&#34;, Fore.RED)

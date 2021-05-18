@@ -26,21 +26,32 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import stat
+from ..lib.unistd import read
 
 __COMMAND__ = &#34;man&#34;
 __DESCRIPTION__ = &#34;an interface to the system reference manuals&#34;
 __DESCRIPTION_LONG__ = &#34;man is the system&#39;s manual pager.  Each page argument given to man is normally the name of a program, utility or function.&#34;
-__VERSION__ = &#34;1.2&#34;
+__VERSION__ = &#34;1.0&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;command&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
 
@@ -81,25 +92,25 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f&#34;man {__VERSION__} (miscutils)&#34;, pipe)
-
-        if not args.command and not args.version:
-            return output(f&#34;What manual page do you want?\nFor example try &#39;man man&#39;&#34;, pipe)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
-        return output(f&#34;&#34;, pipe)
+        return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         # Find the manpage from /usr/share/man
-        find_man_result = computer.fs.find(f&#34;/usr/share/man/{args.command}&#34;)
+        find_man_result = stat(f&#34;/usr/share/man/{args.command}&#34;)
 
         if find_man_result.success:
-            read_result = find_man_result.data.read(computer)
+            read_result = read(f&#34;/usr/share/man/{args.command}&#34;)
 
             if read_result.success:
                 return output(read_result.data, pipe)
@@ -117,7 +128,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.man.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -125,25 +136,25 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f&#34;man {__VERSION__} (miscutils)&#34;, pipe)
-
-        if not args.command and not args.version:
-            return output(f&#34;What manual page do you want?\nFor example try &#39;man man&#39;&#34;, pipe)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
-        return output(f&#34;&#34;, pipe)
+        return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         # Find the manpage from /usr/share/man
-        find_man_result = computer.fs.find(f&#34;/usr/share/man/{args.command}&#34;)
+        find_man_result = stat(f&#34;/usr/share/man/{args.command}&#34;)
 
         if find_man_result.success:
-            read_result = find_man_result.data.read(computer)
+            read_result = read(f&#34;/usr/share/man/{args.command}&#34;)
 
             if read_result.success:
                 return output(read_result.data, pipe)
@@ -157,15 +168,34 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;command&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
 

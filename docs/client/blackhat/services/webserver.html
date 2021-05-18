@@ -27,27 +27,35 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from .service import Service
-from ..helpers import SysCallStatus
+from ..helpers import Result
 
 
 class WebServer(Service):
-    &#34;&#34;&#34;
-    An example service that&#39;s supposed to replicate the functionality of a webserver
-    As of now (just for example purposes) it just echos args that is sent to it.
-    &#34;&#34;&#34;
-
     def __init__(self, computer):
+        &#34;&#34;&#34;
+        An example service that&#39;s supposed to replicate the functionality of a webserver
+        As of now (just for example purposes) it just echos args that is sent to it.
+        &#34;&#34;&#34;
         super().__init__(&#34;WebServer&#34;, 80, computer)
 
-    def main(self, args: dict) -&gt; SysCallStatus:
+    def main(self, args: dict) -&gt; Result:
+        &#34;&#34;&#34;
+        Function that runs when the service is &#39;connected to&#39;
+
+        Args:
+            args (dict): A dict of arguments that is given to the service to process
+
+        Returns:
+            Result: A `Result` object containing the success status and resulting data of the service
+        &#34;&#34;&#34;
         find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
 
         if not find_var_www_html.success:
-            return SysCallStatus(success=True, data={})
+            return Result(success=True, data={})
         else:
 
-            return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
-        # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+            return Result(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+        # return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </section>
 <section>
@@ -65,37 +73,37 @@ class WebServer(Service):
 </code></dt>
 <dd>
 <div class="desc"><p>An example service that's supposed to replicate the functionality of a webserver
-As of now (just for example purposes) it just echos args that is sent to it.</p>
-<p>Generic base template for all network services</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>name</code></strong> :&ensp;<code>str</code></dt>
-<dd>The name of the given service</dd>
-<dt><strong><code>port</code></strong> :&ensp;<code>int</code></dt>
-<dd>The port that the given service run on</dd>
-</dl></div>
+As of now (just for example purposes) it just echos args that is sent to it.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class WebServer(Service):
-    &#34;&#34;&#34;
-    An example service that&#39;s supposed to replicate the functionality of a webserver
-    As of now (just for example purposes) it just echos args that is sent to it.
-    &#34;&#34;&#34;
-
     def __init__(self, computer):
+        &#34;&#34;&#34;
+        An example service that&#39;s supposed to replicate the functionality of a webserver
+        As of now (just for example purposes) it just echos args that is sent to it.
+        &#34;&#34;&#34;
         super().__init__(&#34;WebServer&#34;, 80, computer)
 
-    def main(self, args: dict) -&gt; SysCallStatus:
+    def main(self, args: dict) -&gt; Result:
+        &#34;&#34;&#34;
+        Function that runs when the service is &#39;connected to&#39;
+
+        Args:
+            args (dict): A dict of arguments that is given to the service to process
+
+        Returns:
+            Result: A `Result` object containing the success status and resulting data of the service
+        &#34;&#34;&#34;
         find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
 
         if not find_var_www_html.success:
-            return SysCallStatus(success=True, data={})
+            return Result(success=True, data={})
         else:
 
-            return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
-        # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+            return Result(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+        # return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -104,23 +112,42 @@ As of now (just for example purposes) it just echos args that is sent to it.</p>
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.services.webserver.WebServer.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>self, args: dict) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>self, args: dict) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Function that runs when the service is 'connected to'</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>dict</code></dt>
+<dd>A dict of arguments that is given to the service to process</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object containing the success status and resulting data of the service</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(self, args: dict) -&gt; SysCallStatus:
+<pre><code class="python">def main(self, args: dict) -&gt; Result:
+    &#34;&#34;&#34;
+    Function that runs when the service is &#39;connected to&#39;
+
+    Args:
+        args (dict): A dict of arguments that is given to the service to process
+
+    Returns:
+        Result: A `Result` object containing the success status and resulting data of the service
+    &#34;&#34;&#34;
     find_var_www_html = self.computer.fs.find(&#34;/var/www/html/index.html&#34;)
 
     if not find_var_www_html.success:
-        return SysCallStatus(success=True, data={})
+        return Result(success=True, data={})
     else:
 
-        return SysCallStatus(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
-    # return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+        return Result(success=True, data={&#34;content&#34;: find_var_www_html.data.content})
+    # return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </dd>
 </dl>
@@ -131,6 +158,7 @@ As of now (just for example purposes) it just echos args that is sent to it.</p>
 <li><code><a title="client.blackhat.services.service.Service.brand" href="service.html#client.blackhat.services.service.Service.brand">brand</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.computer" href="service.html#client.blackhat.services.service.Service.computer">computer</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.description" href="service.html#client.blackhat.services.service.Service.description">description</a></code></li>
+<li><code><a title="client.blackhat.services.service.Service.get_metadata" href="service.html#client.blackhat.services.service.Service.get_metadata">get_metadata</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.name" href="service.html#client.blackhat.services.service.Service.name">name</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.port" href="service.html#client.blackhat.services.service.Service.port">port</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.version" href="service.html#client.blackhat.services.service.Service.version">version</a></code></li>

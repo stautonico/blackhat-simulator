@@ -27,19 +27,27 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">from .service import Service
-from ..helpers import SysCallStatus
+from ..helpers import Result
 
 
 class SSHServer(Service):
-    &#34;&#34;&#34;
-    An example service that&#39;s supposed to replicate the functionality of an SSH Server (main method doesn&#39;t work like other services)
-    &#34;&#34;&#34;
-
     def __init__(self, computer):
+        &#34;&#34;&#34;
+        An example service that&#39;s supposed to replicate the functionality of an SSH Server (main method doesn&#39;t work like other services)
+        &#34;&#34;&#34;
         super().__init__(&#34;SSH&#34;, 22, computer)
 
-    def main(self, args: dict) -&gt; SysCallStatus:
-        return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+    def main(self, args: dict) -&gt; Result:
+        &#34;&#34;&#34;
+        Function that runs when the service is &#39;connected to&#39;
+
+        Args:
+            args (dict): A dict of arguments that is given to the service to process
+
+        Returns:
+            Result: A `Result` object containing the success status and resulting data of the service
+        &#34;&#34;&#34;
+        return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </section>
 <section>
@@ -56,29 +64,29 @@ class SSHServer(Service):
 <span>(</span><span>computer)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>An example service that's supposed to replicate the functionality of an SSH Server (main method doesn't work like other services)</p>
-<p>Generic base template for all network services</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>name</code></strong> :&ensp;<code>str</code></dt>
-<dd>The name of the given service</dd>
-<dt><strong><code>port</code></strong> :&ensp;<code>int</code></dt>
-<dd>The port that the given service run on</dd>
-</dl></div>
+<div class="desc"><p>An example service that's supposed to replicate the functionality of an SSH Server (main method doesn't work like other services)</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class SSHServer(Service):
-    &#34;&#34;&#34;
-    An example service that&#39;s supposed to replicate the functionality of an SSH Server (main method doesn&#39;t work like other services)
-    &#34;&#34;&#34;
-
     def __init__(self, computer):
+        &#34;&#34;&#34;
+        An example service that&#39;s supposed to replicate the functionality of an SSH Server (main method doesn&#39;t work like other services)
+        &#34;&#34;&#34;
         super().__init__(&#34;SSH&#34;, 22, computer)
 
-    def main(self, args: dict) -&gt; SysCallStatus:
-        return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+    def main(self, args: dict) -&gt; Result:
+        &#34;&#34;&#34;
+        Function that runs when the service is &#39;connected to&#39;
+
+        Args:
+            args (dict): A dict of arguments that is given to the service to process
+
+        Returns:
+            Result: A `Result` object containing the success status and resulting data of the service
+        &#34;&#34;&#34;
+        return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -87,16 +95,35 @@ class SSHServer(Service):
 <h3>Methods</h3>
 <dl>
 <dt id="client.blackhat.services.sshserver.SSHServer.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>self, args: dict) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>self, args: dict) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Function that runs when the service is 'connected to'</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>dict</code></dt>
+<dd>A dict of arguments that is given to the service to process</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object containing the success status and resulting data of the service</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(self, args: dict) -&gt; SysCallStatus:
-    return SysCallStatus(success=True, data={&#34;args&#34;: args})</code></pre>
+<pre><code class="python">def main(self, args: dict) -&gt; Result:
+    &#34;&#34;&#34;
+    Function that runs when the service is &#39;connected to&#39;
+
+    Args:
+        args (dict): A dict of arguments that is given to the service to process
+
+    Returns:
+        Result: A `Result` object containing the success status and resulting data of the service
+    &#34;&#34;&#34;
+    return Result(success=True, data={&#34;args&#34;: args})</code></pre>
 </details>
 </dd>
 </dl>
@@ -107,6 +134,7 @@ class SSHServer(Service):
 <li><code><a title="client.blackhat.services.service.Service.brand" href="service.html#client.blackhat.services.service.Service.brand">brand</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.computer" href="service.html#client.blackhat.services.service.Service.computer">computer</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.description" href="service.html#client.blackhat.services.service.Service.description">description</a></code></li>
+<li><code><a title="client.blackhat.services.service.Service.get_metadata" href="service.html#client.blackhat.services.service.Service.get_metadata">get_metadata</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.name" href="service.html#client.blackhat.services.service.Service.name">name</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.port" href="service.html#client.blackhat.services.service.Service.port">port</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.version" href="service.html#client.blackhat.services.service.Service.version">version</a></code></li>

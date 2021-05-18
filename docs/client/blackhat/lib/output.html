@@ -28,11 +28,11 @@
 </summary>
 <pre><code class="python">from typing import Optional
 
-from ..helpers import SysCallStatus, SysCallMessages
+from ..helpers import Result, ResultMessages
 
 
 def output(text: str, pipe: bool, success: bool = True,
-           success_message: Optional[SysCallMessages] = None) -&gt; SysCallStatus:
+           success_message: Optional[ResultMessages] = None) -&gt; Result:
     &#34;&#34;&#34;
     Handle output from binaries and system commands properly with pipe
     If pipe is `True` (we&#39;re passing the output of a command into the input of another), we don&#39;t want to print the output
@@ -41,10 +41,10 @@ def output(text: str, pipe: bool, success: bool = True,
         text (str): The text to output/pass to the next command
         pipe (bool): If we&#39;re going to use pipe for the next command
         success (bool): If the command was successful or not
-        success_message (SysCallMessages, optional): An extra parameter to give additional information about the result of a command
+        success_message (ResultMessages, optional): An extra parameter to give additional information about the result of a command
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with information about the status of a command (success, success message, etc)
+        Result: A `Result` object with information about the status of a command (success, success message, etc)
     &#34;&#34;&#34;
     # If we&#39;re piping the output, we don&#39;t want to print the output
     # This function will handle all the logic for pipe/output
@@ -60,7 +60,7 @@ def output(text: str, pipe: bool, success: bool = True,
     if text == &#34;&#34;:
         text = None
 
-    return SysCallStatus(success=success, message=success_message, data=text)</code></pre>
+    return Result(success=success, message=success_message, data=text)</code></pre>
 </details>
 </section>
 <section>
@@ -71,7 +71,7 @@ def output(text: str, pipe: bool, success: bool = True,
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.lib.output.output"><code class="name flex">
-<span>def <span class="ident">output</span></span>(<span>text: str, pipe: bool, success: bool = True, success_message: Optional[<a title="client.blackhat.helpers.SysCallMessages" href="../helpers.html#client.blackhat.helpers.SysCallMessages">SysCallMessages</a>] = None) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">output</span></span>(<span>text: str, pipe: bool, success: bool = True, success_message: Optional[<a title="client.blackhat.helpers.ResultMessages" href="../helpers.html#client.blackhat.helpers.ResultMessages">ResultMessages</a>] = None) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Handle output from binaries and system commands properly with pipe
@@ -84,20 +84,20 @@ If pipe is <code>True</code> (we're passing the output of a command into the inp
 <dd>If we're going to use pipe for the next command</dd>
 <dt><strong><code>success</code></strong> :&ensp;<code>bool</code></dt>
 <dd>If the command was successful or not</dd>
-<dt><strong><code>success_message</code></strong> :&ensp;<code>SysCallMessages</code>, optional</dt>
+<dt><strong><code>success_message</code></strong> :&ensp;<code>ResultMessages</code>, optional</dt>
 <dd>An extra parameter to give additional information about the result of a command</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>SysCallStatus</code></dt>
-<dd>A <code>SysCallStatus</code> object with information about the status of a command (success, success message, etc)</dd>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with information about the status of a command (success, success message, etc)</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def output(text: str, pipe: bool, success: bool = True,
-           success_message: Optional[SysCallMessages] = None) -&gt; SysCallStatus:
+           success_message: Optional[ResultMessages] = None) -&gt; Result:
     &#34;&#34;&#34;
     Handle output from binaries and system commands properly with pipe
     If pipe is `True` (we&#39;re passing the output of a command into the input of another), we don&#39;t want to print the output
@@ -106,10 +106,10 @@ If pipe is <code>True</code> (we're passing the output of a command into the inp
         text (str): The text to output/pass to the next command
         pipe (bool): If we&#39;re going to use pipe for the next command
         success (bool): If the command was successful or not
-        success_message (SysCallMessages, optional): An extra parameter to give additional information about the result of a command
+        success_message (ResultMessages, optional): An extra parameter to give additional information about the result of a command
 
     Returns:
-        SysCallStatus: A `SysCallStatus` object with information about the status of a command (success, success message, etc)
+        Result: A `Result` object with information about the status of a command (success, success message, etc)
     &#34;&#34;&#34;
     # If we&#39;re piping the output, we don&#39;t want to print the output
     # This function will handle all the logic for pipe/output
@@ -125,7 +125,7 @@ If pipe is <code>True</code> (we're passing the output of a command into the inp
     if text == &#34;&#34;:
         text = None
 
-    return SysCallStatus(success=success, message=success_message, data=text)</code></pre>
+    return Result(success=success, message=success_message, data=text)</code></pre>
 </details>
 </dd>
 </dl>

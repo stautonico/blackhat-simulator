@@ -26,12 +26,12 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from datetime import datetime
+<pre><code class="python">import datetime
 
-from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = &#34;uptime&#34;
 __DESCRIPTION__ = &#34;Tell how long the system has been running.&#34;
@@ -40,6 +40,16 @@ __VERSION__ = &#34;1.2&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-p&#34;, &#34;--pretty&#34;, action=&#34;store_true&#34;, help=&#34;show uptime in pretty format&#34;)
     parser.add_argument(&#34;-s&#34;, &#34;--since&#34;, action=&#34;store_true&#34;, help=&#34;system up since, in yyyy-mm-dd HH:MM:SS format&#34;)
@@ -84,7 +94,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -98,17 +108,23 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
 
-        now = datetime.now()
-        total_seconds = (now - computer.boot_time).total_seconds()
+        # TODO: Create special attribute for files in /proc so that they can&#39;t be modified
+        # For now, just trust that they&#39;ll exist
+        read_uptime = read(&#34;/proc/uptime&#34;)
+
+        if not read_uptime.success:
+            raise Exception
+
+        total_seconds = int(float(read_uptime.data))
+
+        if args.since:
+            return output((datetime.datetime.now() - datetime.timedelta(seconds=total_seconds)).strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
 
         seconds = total_seconds % (24 * 3600)
         hours = seconds // 3600
         seconds %= 3600
         minutes = seconds // 60
         seconds %= 60
-
-        if args.since:
-            return output(computer.boot_time.strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
 
         if args.pretty:
             if hours == 0:
@@ -144,7 +160,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.uptime.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -152,7 +168,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -166,17 +182,23 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         if args.version:
             return output(f&#34;uptime from blackhat sysutils {__VERSION__}&#34;, pipe)
 
-        now = datetime.now()
-        total_seconds = (now - computer.boot_time).total_seconds()
+        # TODO: Create special attribute for files in /proc so that they can&#39;t be modified
+        # For now, just trust that they&#39;ll exist
+        read_uptime = read(&#34;/proc/uptime&#34;)
+
+        if not read_uptime.success:
+            raise Exception
+
+        total_seconds = int(float(read_uptime.data))
+
+        if args.since:
+            return output((datetime.datetime.now() - datetime.timedelta(seconds=total_seconds)).strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
 
         seconds = total_seconds % (24 * 3600)
         hours = seconds // 3600
         seconds %= 3600
         minutes = seconds // 60
         seconds %= 60
-
-        if args.since:
-            return output(computer.boot_time.strftime(&#34;%Y-%m-%d %H:%M:%S&#34;), pipe)
 
         if args.pretty:
             if hours == 0:
@@ -208,12 +230,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-p&#34;, &#34;--pretty&#34;, action=&#34;store_true&#34;, help=&#34;show uptime in pretty format&#34;)
     parser.add_argument(&#34;-s&#34;, &#34;--since&#34;, action=&#34;store_true&#34;, help=&#34;system up since, in yyyy-mm-dd HH:MM:SS format&#34;)

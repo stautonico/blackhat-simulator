@@ -29,18 +29,27 @@
 <pre><code class="python">from base64 import b32decode, b32encode
 from binascii import Error
 
-from ..computer import Computer
-from ..fs import File
-from ..helpers import SysCallStatus
+from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import read
 
 __COMMAND__ = &#34;base32&#34;
 __DESCRIPTION__ = &#34;base32 encode/decode data and print to standard output&#34;
-__VERSION__ = &#34;1.2&#34;
+__VERSION__ = &#34;2.0&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;-d&#34;, &#34;--decode&#34;, action=&#34;store_true&#34;, help=&#34;decode data&#34;)
@@ -85,7 +94,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -105,25 +114,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_text = &#34;&#34;
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
-            else:
-                file: File = find_file_result.data
-                if file.is_directory():
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
                     output_text += f&#34;{__COMMAND__}: {filename}: Is a directory\n&#34;
-                else:
-                    # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
-                    else:
-                        if args.decode:
-                            try:
-                                output_text += f&#34;{file.name}: \n\n{b32decode(file.content.encode()).decode()}\n&#34;
-                            except Error:
-                                output_text += f&#34;{__COMMAND__}: {filename}: invalid input\n&#34;
-                        else:
-                            output_text += f&#34;{file.name}: \n\n{b32encode(file.content.encode()).decode()}\n&#34;
+
+            if args.decode:
+                try:
+                    output_text += f&#34;{filename}: \n\n{b32decode(find_file_result.data.encode()).decode()}\n&#34;
+                except Error:
+                    output_text += f&#34;{__COMMAND__}: {filename}: invalid input\n&#34;
+            else:
+                output_text += f&#34;{filename}: \n\n{b32encode(find_file_result.data.encode()).decode()}\n&#34;
 
         if args.wrap:
             if args.wrap == 0:
@@ -145,7 +151,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.base32.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -153,7 +159,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -173,25 +179,22 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_text = &#34;&#34;
         for filename in args.files:
-            find_file_result = computer.fs.find(filename)
+            find_file_result = read(filename)
             if not find_file_result.success:
-                output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
-            else:
-                file: File = find_file_result.data
-                if file.is_directory():
+                if find_file_result.message == ResultMessages.NOT_FOUND:
+                    output_text += f&#34;{__COMMAND__}: {filename}: No such file or directory\n&#34;
+                elif find_file_result.message == ResultMessages.NOT_ALLOWED_READ:
+                    output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
+                elif find_file_result.message == ResultMessages.IS_DIRECTORY:
                     output_text += f&#34;{__COMMAND__}: {filename}: Is a directory\n&#34;
-                else:
-                    # We need read perms!
-                    if not file.check_perm(&#34;read&#34;, computer).success:
-                        output_text += f&#34;{__COMMAND__}: {filename}: Permission denied\n&#34;
-                    else:
-                        if args.decode:
-                            try:
-                                output_text += f&#34;{file.name}: \n\n{b32decode(file.content.encode()).decode()}\n&#34;
-                            except Error:
-                                output_text += f&#34;{__COMMAND__}: {filename}: invalid input\n&#34;
-                        else:
-                            output_text += f&#34;{file.name}: \n\n{b32encode(file.content.encode()).decode()}\n&#34;
+
+            if args.decode:
+                try:
+                    output_text += f&#34;{filename}: \n\n{b32decode(find_file_result.data.encode()).decode()}\n&#34;
+                except Error:
+                    output_text += f&#34;{__COMMAND__}: {filename}: invalid input\n&#34;
+            else:
+                output_text += f&#34;{filename}: \n\n{b32encode(find_file_result.data.encode()).decode()}\n&#34;
 
         if args.wrap:
             if args.wrap == 0:
@@ -209,12 +212,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
     parser.add_argument(&#34;-d&#34;, &#34;--decode&#34;, action=&#34;store_true&#34;, help=&#34;decode data&#34;)

@@ -26,166 +26,167 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallMessages, SysCallStatus
-from ..lib.input import ArgParser
-from ..lib.output import output
+<pre><code class="python">import os
 
 from colorama import Fore, Style
 
+from ..helpers import Result
+from ..helpers import stat_struct
+from ..lib.dirent import readdir
+from ..lib.input import ArgParser
+from ..lib.output import output
+from ..lib.sys.stat import stat
+from ..lib.unistd import get_user, get_group
+
 __COMMAND__ = &#34;ls&#34;
-__VERSION__ = &#34;1.1&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
+__VERSION__ = &#34;2.0&#34;
 
-def calculate_permission_string(fileobj):
-    # Permission format
-    # 0 - owner read
-    # 1 - owner write
-    # 2 - owner execute
-    # 3 - group read
-    # 4 - group write
-    # 5 - group execute
-    # 6 - public read
-    # 7 - public write
-    # 8 - public execute
-    permissions = [&#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;]
-    # Owner read
-    if &#34;owner&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[0] = &#34;r&#34;
 
-    # Owner write
-    if &#34;owner&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[1] = &#34;w&#34;
-
-    # Owner execute
-    if &#34;owner&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[2] = &#34;x&#34;
-
-    # Group read
-    if &#34;group&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[3] = &#34;r&#34;
-
-    # Group write
-    if &#34;group&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[4] = &#34;w&#34;
-
-    # Group execute
-    if &#34;group&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[5] = &#34;x&#34;
-
-    # Public read
-    if &#34;public&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[6] = &#34;r&#34;
-
-    # Public write
-    if &#34;public&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[7] = &#34;w&#34;
-
-    # Public execute
-    if &#34;public&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[8] = &#34;x&#34;
-
-    return &#34;&#34;.join(permissions)
-
-def calculate_output(directory, computer, all=False, long=False, nocolor=False):
-    output_text = &#34;&#34;
-    # Output a file (only show that one thing)
-    if directory.is_file():
-        if directory.name.startswith(&#34;.&#34;) and not all:
-            return None
-        else:
-            if long:
-                # Find the owner&#39;s username by uid and group name by gid
-                username_lookup = computer.find_user(uid=directory.owner)
-                group_lookup = computer.find_group(gid=directory.group_owner)
-
-                username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
-                group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-                if nocolor:
-                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n&#39;
-                else:
-                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
-            else:
-                output_text += directory.name
-    else:
-        for file in directory.files.values():
-            if file.name.startswith(&#34;.&#34;) and not all:
-                pass
-            else:
-                if long:
-                    # Find the owner&#39;s username by uid and group name by gid
-                    username_lookup = computer.find_user(uid=file.owner)
-                    group_lookup = computer.find_group(gid=file.group_owner)
-
-                    username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
-                    group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-
-                    if file.is_file():
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
-                    else:
-                        if nocolor:
-                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
-                        else:
-                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
-                else:
-                    if file.is_file():
-                        output_text += f&#34;{file.name} &#34;
-                    else:
-                        if nocolor:
-                            output_text += f&#34;{file.name} &#34;
-                        else:
-                            output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
-    return output_text
-
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;, default=&#34;.&#34;)
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;files&#34;, nargs=&#34;*&#34;, default=&#34;.&#34;)
     parser.add_argument(&#34;-a&#34;, dest=&#34;all&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;-l&#34;, dest=&#34;long&#34;, action=&#34;store_true&#34;)
     parser.add_argument(&#34;--no-color&#34;, dest=&#34;nocolor&#34;, action=&#34;store_true&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
 
     args = parser.parse_args(args)
 
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def calculate_permission_string(perm_octal: int) -&gt; str:
+    perms = {
+        &#34;0&#34;: &#34;---&#34;,
+        &#34;1&#34;: &#34;--x&#34;,
+        &#34;2&#34;: &#34;-w-&#34;,
+        &#34;3&#34;: &#34;-wx&#34;,
+        &#34;4&#34;: &#34;r--&#34;,
+        &#34;5&#34;: &#34;r-x&#34;,
+        &#34;6&#34;: &#34;rw-&#34;,
+        &#34;7&#34;: &#34;rwx&#34;
+    }
+
+    result = &#34;&#34;
+
+    for bit in str(perm_octal):
+        result += perms[bit]
+
+    return result
+
+
+def calculate_output(filename, file_struct: stat_struct, long=False, nocolor=False):
+    output_text = &#34;&#34;
+
+    base_filename = filename.split(&#34;/&#34;)[-1]
+    color = Fore.WHITE if file_struct.st_isfile or nocolor else Fore.LIGHTBLUE_EX
+
+    if long:
+        username_lookup = get_user(uid=file_struct.st_uid)
+        group_lookup = get_group(gid=file_struct.st_gid)
+
+        username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+        group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+
+        output_text += f&#39;{calculate_permission_string(file_struct.st_mode)} {username} {group_name} {round(file_struct.st_size, 1)}kB {color}{base_filename}{Style.RESET_ALL}\n&#39;
+    else:
+        output_text += f&#34;{color}{base_filename}{Style.RESET_ALL} &#34;
+
+    return output_text
+
+
+def main(args: list, pipe: bool) -&gt; Result:
+    args, parser = parse_args(args)
+
     if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         output_text = &#34;&#34;
-        if len(args.files) &gt; 0:
 
-            for file in args.files:
-
-                response = computer.fs.find(file)
-
-                if response.success:
-                    if len(args.files) &gt; 1:
-                        if response.data.is_directory():
-                            output_text += f&#34;{file}: \n&#34;
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + &#34;\n\n&#34;
-                else:
-                    output_text += f&#34;cannot access &#39;{file}&#39;: No such file or directory\n\n&#34;
+        if len(args.files) &gt; 0 and args.files != &#34;.&#34;:
+            to_list = args.files
 
         # No file args were specified (so print the local dir)
         else:
-            response = computer.fs.find(&#34;.&#34;)
+            to_list = [&#34;.&#34;]
 
-            if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
+        for file in to_list:
+            stat_result = stat(file)
+
+            if not stat_result.success:
+                output_text += f&#34;{__COMMAND__}: Cannot stat file: {file}\n&#34;
+                continue
+
+            if stat_result.data.st_isfile:
+                output_text += calculate_output(file, stat_result.data, args.long, args.nocolor)
             else:
-                return output(&#34;Error&#34;, pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
+                read_result = readdir(file)
+
+                for subfile in read_result.data:
+                    if args.all or not subfile.startswith(&#34;.&#34;):
+                        stat_result = stat(os.path.join(file, subfile))
+                        if not stat_result.success:
+                            output_text += f&#34;{__COMMAND__}: Cannot stat file: {file}\n&#34;
+                        else:
+                            output_text += calculate_output(subfile, stat_result.data, args.long, args.nocolor)
 
         if not output_text:
             return output(&#34;&#34;, pipe)
         else:
-
             return output(output_text, pipe)</code></pre>
 </details>
 </section>
@@ -197,7 +198,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.ls.calculate_output"><code class="name flex">
-<span>def <span class="ident">calculate_output</span></span>(<span>directory, computer, all=False, long=False, nocolor=False)</span>
+<span>def <span class="ident">calculate_output</span></span>(<span>filename, file_struct: <a title="client.blackhat.helpers.stat_struct" href="../helpers.html#client.blackhat.helpers.stat_struct">stat_struct</a>, long=False, nocolor=False)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -205,59 +206,28 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_output(directory, computer, all=False, long=False, nocolor=False):
+<pre><code class="python">def calculate_output(filename, file_struct: stat_struct, long=False, nocolor=False):
     output_text = &#34;&#34;
-    # Output a file (only show that one thing)
-    if directory.is_file():
-        if directory.name.startswith(&#34;.&#34;) and not all:
-            return None
-        else:
-            if long:
-                # Find the owner&#39;s username by uid and group name by gid
-                username_lookup = computer.find_user(uid=directory.owner)
-                group_lookup = computer.find_group(gid=directory.group_owner)
 
-                username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
-                group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-                if nocolor:
-                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {directory.name}\n&#39;
-                else:
-                    output_text += f&#39;{calculate_permission_string(directory)} {username} {group_name} {round(directory.size, 1)}kB {Fore.LIGHTBLUE_EX}{directory.name}{Style.RESET_ALL}\n&#39;
-            else:
-                output_text += directory.name
+    base_filename = filename.split(&#34;/&#34;)[-1]
+    color = Fore.WHITE if file_struct.st_isfile or nocolor else Fore.LIGHTBLUE_EX
+
+    if long:
+        username_lookup = get_user(uid=file_struct.st_uid)
+        group_lookup = get_group(gid=file_struct.st_gid)
+
+        username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
+        group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
+
+        output_text += f&#39;{calculate_permission_string(file_struct.st_mode)} {username} {group_name} {round(file_struct.st_size, 1)}kB {color}{base_filename}{Style.RESET_ALL}\n&#39;
     else:
-        for file in directory.files.values():
-            if file.name.startswith(&#34;.&#34;) and not all:
-                pass
-            else:
-                if long:
-                    # Find the owner&#39;s username by uid and group name by gid
-                    username_lookup = computer.find_user(uid=file.owner)
-                    group_lookup = computer.find_group(gid=file.group_owner)
+        output_text += f&#34;{color}{base_filename}{Style.RESET_ALL} &#34;
 
-                    username = username_lookup.data.username if username_lookup.success else &#34;?&#34;
-                    group_name = group_lookup.data.name if group_lookup.success else &#34;?&#34;
-
-                    if file.is_file():
-                        output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
-                    else:
-                        if nocolor:
-                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {file.name}\n&#39;
-                        else:
-                            output_text += f&#39;{calculate_permission_string(file)} {username} {group_name} {round(file.size, 1)}kB {Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL}\n&#39;
-                else:
-                    if file.is_file():
-                        output_text += f&#34;{file.name} &#34;
-                    else:
-                        if nocolor:
-                            output_text += f&#34;{file.name} &#34;
-                        else:
-                            output_text += f&#34;{Fore.LIGHTBLUE_EX}{file.name}{Style.RESET_ALL} &#34;
     return output_text</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.bin.ls.calculate_permission_string"><code class="name flex">
-<span>def <span class="ident">calculate_permission_string</span></span>(<span>fileobj)</span>
+<span>def <span class="ident">calculate_permission_string</span></span>(<span>perm_octal: int) ‑> str</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -265,117 +235,157 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_permission_string(fileobj):
-    # Permission format
-    # 0 - owner read
-    # 1 - owner write
-    # 2 - owner execute
-    # 3 - group read
-    # 4 - group write
-    # 5 - group execute
-    # 6 - public read
-    # 7 - public write
-    # 8 - public execute
-    permissions = [&#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;, &#34;-&#34;]
-    # Owner read
-    if &#34;owner&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[0] = &#34;r&#34;
+<pre><code class="python">def calculate_permission_string(perm_octal: int) -&gt; str:
+    perms = {
+        &#34;0&#34;: &#34;---&#34;,
+        &#34;1&#34;: &#34;--x&#34;,
+        &#34;2&#34;: &#34;-w-&#34;,
+        &#34;3&#34;: &#34;-wx&#34;,
+        &#34;4&#34;: &#34;r--&#34;,
+        &#34;5&#34;: &#34;r-x&#34;,
+        &#34;6&#34;: &#34;rw-&#34;,
+        &#34;7&#34;: &#34;rwx&#34;
+    }
 
-    # Owner write
-    if &#34;owner&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[1] = &#34;w&#34;
+    result = &#34;&#34;
 
-    # Owner execute
-    if &#34;owner&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[2] = &#34;x&#34;
+    for bit in str(perm_octal):
+        result += perms[bit]
 
-    # Group read
-    if &#34;group&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[3] = &#34;r&#34;
-
-    # Group write
-    if &#34;group&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[4] = &#34;w&#34;
-
-    # Group execute
-    if &#34;group&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[5] = &#34;x&#34;
-
-    # Public read
-    if &#34;public&#34; in fileobj.permissions[&#34;read&#34;]:
-        permissions[6] = &#34;r&#34;
-
-    # Public write
-    if &#34;public&#34; in fileobj.permissions[&#34;write&#34;]:
-        permissions[7] = &#34;w&#34;
-
-    # Public execute
-    if &#34;public&#34; in fileobj.permissions[&#34;execute&#34;]:
-        permissions[8] = &#34;x&#34;
-
-    return &#34;&#34;.join(permissions)</code></pre>
+    return result</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.bin.ls.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
+<div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
-    &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
-    &#34;&#34;&#34;
-
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;, default=&#34;.&#34;)
-    parser.add_argument(&#34;-a&#34;, dest=&#34;all&#34;, action=&#34;store_true&#34;)
-    parser.add_argument(&#34;-l&#34;, dest=&#34;long&#34;, action=&#34;store_true&#34;)
-    parser.add_argument(&#34;--no-color&#34;, dest=&#34;nocolor&#34;, action=&#34;store_true&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
+    args, parser = parse_args(args)
 
     if parser.error_message:
-        if args.version:
-            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+        if not args.version:
+            return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
+
         output_text = &#34;&#34;
-        if len(args.files) &gt; 0:
 
-            for file in args.files:
-
-                response = computer.fs.find(file)
-
-                if response.success:
-                    if len(args.files) &gt; 1:
-                        if response.data.is_directory():
-                            output_text += f&#34;{file}: \n&#34;
-                    output_text += calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor) + &#34;\n\n&#34;
-                else:
-                    output_text += f&#34;cannot access &#39;{file}&#39;: No such file or directory\n\n&#34;
+        if len(args.files) &gt; 0 and args.files != &#34;.&#34;:
+            to_list = args.files
 
         # No file args were specified (so print the local dir)
         else:
-            response = computer.fs.find(&#34;.&#34;)
+            to_list = [&#34;.&#34;]
 
-            if response.success:
-                output_text = calculate_output(response.data, computer, all=args.all, long=args.long, nocolor=args.nocolor)
+        for file in to_list:
+            stat_result = stat(file)
+
+            if not stat_result.success:
+                output_text += f&#34;{__COMMAND__}: Cannot stat file: {file}\n&#34;
+                continue
+
+            if stat_result.data.st_isfile:
+                output_text += calculate_output(file, stat_result.data, args.long, args.nocolor)
             else:
-                return output(&#34;Error&#34;, pipe, success=False, success_message=SysCallMessages.NOT_FOUND)
+                read_result = readdir(file)
+
+                for subfile in read_result.data:
+                    if args.all or not subfile.startswith(&#34;.&#34;):
+                        stat_result = stat(os.path.join(file, subfile))
+                        if not stat_result.success:
+                            output_text += f&#34;{__COMMAND__}: Cannot stat file: {file}\n&#34;
+                        else:
+                            output_text += calculate_output(subfile, stat_result.data, args.long, args.nocolor)
 
         if not output_text:
             return output(&#34;&#34;, pipe)
         else:
-
             return output(output_text, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.ls.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;files&#34;, nargs=&#34;*&#34;, default=&#34;.&#34;)
+    parser.add_argument(&#34;-a&#34;, dest=&#34;all&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;-l&#34;, dest=&#34;long&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--no-color&#34;, dest=&#34;nocolor&#34;, action=&#34;store_true&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;print program version&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -399,6 +409,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><code><a title="client.blackhat.bin.ls.calculate_output" href="#client.blackhat.bin.ls.calculate_output">calculate_output</a></code></li>
 <li><code><a title="client.blackhat.bin.ls.calculate_permission_string" href="#client.blackhat.bin.ls.calculate_permission_string">calculate_permission_string</a></code></li>
 <li><code><a title="client.blackhat.bin.ls.main" href="#client.blackhat.bin.ls.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.ls.parse_args" href="#client.blackhat.bin.ls.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

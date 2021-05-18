@@ -49,7 +49,21 @@ class Service:
         self.port: int = port
         &#34;&#34;&#34;int: The port that the give service runs on&#34;&#34;&#34;
         self.computer = computer
-        &#34;&#34;&#34;Computer: The computer the service is running on&#34;&#34;&#34;</code></pre>
+        &#34;&#34;&#34;Computer: The computer the service is running on&#34;&#34;&#34;
+
+    def get_metadata(self):
+        &#34;&#34;&#34;
+        Get extra information about a service like service name and version
+
+        Returns:
+            dict: A dict containing the service name, brand, version, and a brief description
+        &#34;&#34;&#34;
+        return {
+            &#34;name&#34;: self.name,
+            &#34;brand&#34;: self.brand,
+            &#34;version&#34;: self.version,
+            &#34;description&#34;: self.description,
+        }</code></pre>
 </details>
 </section>
 <section>
@@ -98,13 +112,30 @@ class Service:
         self.port: int = port
         &#34;&#34;&#34;int: The port that the give service runs on&#34;&#34;&#34;
         self.computer = computer
-        &#34;&#34;&#34;Computer: The computer the service is running on&#34;&#34;&#34;</code></pre>
+        &#34;&#34;&#34;Computer: The computer the service is running on&#34;&#34;&#34;
+
+    def get_metadata(self):
+        &#34;&#34;&#34;
+        Get extra information about a service like service name and version
+
+        Returns:
+            dict: A dict containing the service name, brand, version, and a brief description
+        &#34;&#34;&#34;
+        return {
+            &#34;name&#34;: self.name,
+            &#34;brand&#34;: self.brand,
+            &#34;version&#34;: self.version,
+            &#34;description&#34;: self.description,
+        }</code></pre>
 </details>
 <h3>Subclasses</h3>
 <ul class="hlist">
 <li><a title="client.blackhat.services.aptserver.AptServer" href="aptserver.html#client.blackhat.services.aptserver.AptServer">AptServer</a></li>
+<li><a title="client.blackhat.services.dnsserver.DNSServer" href="dnsserver.html#client.blackhat.services.dnsserver.DNSServer">DNSServer</a></li>
+<li><a title="client.blackhat.services.pingserver.PingServer" href="pingserver.html#client.blackhat.services.pingserver.PingServer">PingServer</a></li>
 <li><a title="client.blackhat.services.sshserver.SSHServer" href="sshserver.html#client.blackhat.services.sshserver.SSHServer">SSHServer</a></li>
 <li><a title="client.blackhat.services.webserver.WebServer" href="webserver.html#client.blackhat.services.webserver.WebServer">WebServer</a></li>
+<li><a title="client.blackhat.services.whoisserver.WhoIsServer" href="whoisserver.html#client.blackhat.services.whoisserver.WhoIsServer">WhoIsServer</a></li>
 </ul>
 <h3>Instance variables</h3>
 <dl>
@@ -133,6 +164,38 @@ class Service:
 <div class="desc"><p>float: The version of the given service (duh)</p></div>
 </dd>
 </dl>
+<h3>Methods</h3>
+<dl>
+<dt id="client.blackhat.services.service.Service.get_metadata"><code class="name flex">
+<span>def <span class="ident">get_metadata</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get extra information about a service like service name and version</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>dict</code></dt>
+<dd>A dict containing the service name, brand, version, and a brief description</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_metadata(self):
+    &#34;&#34;&#34;
+    Get extra information about a service like service name and version
+
+    Returns:
+        dict: A dict containing the service name, brand, version, and a brief description
+    &#34;&#34;&#34;
+    return {
+        &#34;name&#34;: self.name,
+        &#34;brand&#34;: self.brand,
+        &#34;version&#34;: self.version,
+        &#34;description&#34;: self.description,
+    }</code></pre>
+</details>
+</dd>
+</dl>
 </dd>
 </dl>
 </section>
@@ -156,6 +219,7 @@ class Service:
 <li><code><a title="client.blackhat.services.service.Service.brand" href="#client.blackhat.services.service.Service.brand">brand</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.computer" href="#client.blackhat.services.service.Service.computer">computer</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.description" href="#client.blackhat.services.service.Service.description">description</a></code></li>
+<li><code><a title="client.blackhat.services.service.Service.get_metadata" href="#client.blackhat.services.service.Service.get_metadata">get_metadata</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.name" href="#client.blackhat.services.service.Service.name">name</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.port" href="#client.blackhat.services.service.Service.port">port</a></code></li>
 <li><code><a title="client.blackhat.services.service.Service.version" href="#client.blackhat.services.service.Service.version">version</a></code></li>

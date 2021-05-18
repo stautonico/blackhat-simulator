@@ -30,7 +30,7 @@
 from hashlib import md5
 
 from ..computer import Computer
-from ..helpers import SysCallStatus
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
 
@@ -40,7 +40,7 @@ __VERSION__ = &#34;1.1&#34;
 from ..session import Session
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(computer: Computer, args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
@@ -82,7 +82,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                           success=False)
 
         # Try to get the user from the remote computer
-        user_result = computer_result.data.find_user(username=username)
+        user_result = computer_result.data.get_user(username=username)
 
         # If we found the host, let&#39;s try to authenticate with the given host
         for x in range(3):
@@ -123,7 +123,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.ssh.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
@@ -131,7 +131,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
@@ -173,7 +173,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                           success=False)
 
         # Try to get the user from the remote computer
-        user_result = computer_result.data.find_user(username=username)
+        user_result = computer_result.data.get_user(username=username)
 
         # If we found the host, let&#39;s try to authenticate with the given host
         for x in range(3):

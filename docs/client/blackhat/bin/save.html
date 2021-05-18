@@ -26,12 +26,10 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">import os
-
-from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import save
 
 __COMMAND__ = &#34;save&#34;
 __DESCRIPTION__ = &#34;save the game to a file&#34;
@@ -39,6 +37,16 @@ __VERSION__ = &#34;1.2&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;file&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
@@ -80,7 +88,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -96,14 +104,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_file = args.file if args.file else &#34;blackhat.save&#34;
 
-        # We&#39;re going to temporarily disable debug mode (for manual saving)
-        prev_debug_mode = os.environ.get(&#34;DEBUGMODE&#34;, &#34;false&#34;)
-        os.environ[&#34;DEBUGMODE&#34;] = &#34;false&#34;
-        save_result = computer.save(output_file)
-        # Restore to what it was before after saving
-        os.environ[&#34;DEBUGMODE&#34;] = prev_debug_mode
-
-        if not save_result:
+        if not save(output_file):
             return output(f&#34;{__COMMAND__}: Failed to save!&#34;, pipe, success=False)
 
         return output(f&#34;{__COMMAND__}: Successfully saved to {output_file}!&#34;, pipe)</code></pre>
@@ -117,7 +118,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.save.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -125,7 +126,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -141,14 +142,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
     else:
         output_file = args.file if args.file else &#34;blackhat.save&#34;
 
-        # We&#39;re going to temporarily disable debug mode (for manual saving)
-        prev_debug_mode = os.environ.get(&#34;DEBUGMODE&#34;, &#34;false&#34;)
-        os.environ[&#34;DEBUGMODE&#34;] = &#34;false&#34;
-        save_result = computer.save(output_file)
-        # Restore to what it was before after saving
-        os.environ[&#34;DEBUGMODE&#34;] = prev_debug_mode
-
-        if not save_result:
+        if not save(output_file):
             return output(f&#34;{__COMMAND__}: Failed to save!&#34;, pipe, success=False)
 
         return output(f&#34;{__COMMAND__}: Successfully saved to {output_file}!&#34;, pipe)</code></pre>
@@ -158,12 +152,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;file&#34;, nargs=&#34;?&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)

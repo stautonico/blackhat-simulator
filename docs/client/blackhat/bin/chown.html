@@ -26,25 +26,78 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from ..computer import Computer
-from ..helpers import SysCallStatus, SysCallMessages
+<pre><code class="python">from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.sys.stat import stat
+from ..lib.unistd import get_user, get_group, chown
 
 __COMMAND__ = &#34;chown&#34;
+__DESCRIPTION__ = &#34;&#34;
+__DESCRIPTION_LONG__ = &#34;&#34;
 __VERSION__ = &#34;1.1&#34;
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
-    # TODO: Add docstring for manpage
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;owner&#34;)
     parser.add_argument(&#34;file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser
+
+
+def main(args: list, pipe: bool) -&gt; Result:
+    &#34;&#34;&#34;
+    # TODO: Add docstring for manpage
+    &#34;&#34;&#34;
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -52,7 +105,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         if not args.version and not args.owner and not args.file:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
-
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
@@ -67,7 +119,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         else:
             owner = args.owner
 
-        check_user_exists = computer.find_user(username=owner)
+        check_user_exists = get_user(username=owner)
 
         if not check_user_exists.success:
             return output(f&#34;{__COMMAND__}: invalid user: {owner}&#34;, pipe, success=False)
@@ -77,24 +129,23 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # Make sure the group exists (if we&#39;re using it)
         if group_owner:
-            check_group_exists = computer.find_group(name=group_owner)
+            check_group_exists = get_group(name=group_owner)
             if not check_group_exists.success:
                 return output(f&#34;{__COMMAND__}: invalid group: {group_owner}&#34;, pipe, success=False)
             else:
                 group_owner = check_group_exists.data.gid
 
-        result = computer.fs.find(args.file)
+        result = stat(args.file)
 
         if result.success:
             # Check if the dir we&#39;re trying to change is the root dir (we cant change perm)
-            if not result.data.parent:
+            if result.data.st_path == &#34;/&#34;:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer, new_user_owner=owner,
-                                                           new_group_owner=group_owner)
+                update_response = chown(args.file, owner, group_owner)
                 if not update_response.success:
-                    if update_response.message == SysCallMessages.NOT_ALLOWED:
+                    if update_response.message == ResultMessages.NOT_ALLOWED:
                         return output(
                             f&#34;{__COMMAND__}: changing ownership of &#39;{args.file}&#39;: Operation not permitted&#34;,
                             pipe,
@@ -118,7 +169,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.chown.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"><h1 id="todo-add-docstring-for-manpage">TODO: Add docstring for manpage</h1></div>
@@ -126,16 +177,11 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
-    parser = ArgParser(prog=__COMMAND__)
-    parser.add_argument(&#34;owner&#34;)
-    parser.add_argument(&#34;file&#34;)
-    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
-
-    args = parser.parse_args(args)
+    args, parser = parse_args(args)
 
     if parser.error_message:
         if args.version:
@@ -143,7 +189,6 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         if not args.version and not args.owner and not args.file:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
-
 
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
@@ -158,7 +203,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         else:
             owner = args.owner
 
-        check_user_exists = computer.find_user(username=owner)
+        check_user_exists = get_user(username=owner)
 
         if not check_user_exists.success:
             return output(f&#34;{__COMMAND__}: invalid user: {owner}&#34;, pipe, success=False)
@@ -168,24 +213,23 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 
         # Make sure the group exists (if we&#39;re using it)
         if group_owner:
-            check_group_exists = computer.find_group(name=group_owner)
+            check_group_exists = get_group(name=group_owner)
             if not check_group_exists.success:
                 return output(f&#34;{__COMMAND__}: invalid group: {group_owner}&#34;, pipe, success=False)
             else:
                 group_owner = check_group_exists.data.gid
 
-        result = computer.fs.find(args.file)
+        result = stat(args.file)
 
         if result.success:
             # Check if the dir we&#39;re trying to change is the root dir (we cant change perm)
-            if not result.data.parent:
+            if result.data.st_path == &#34;/&#34;:
                 return output(f&#34;{__COMMAND__}: Can&#39;t change owner of /&#34;, pipe, success=False)
             else:
                 # Syscall
-                update_response = result.data.change_owner(computer, new_user_owner=owner,
-                                                           new_group_owner=group_owner)
+                update_response = chown(args.file, owner, group_owner)
                 if not update_response.success:
-                    if update_response.message == SysCallMessages.NOT_ALLOWED:
+                    if update_response.message == ResultMessages.NOT_ALLOWED:
                         return output(
                             f&#34;{__COMMAND__}: changing ownership of &#39;{args.file}&#39;: Operation not permitted&#34;,
                             pipe,
@@ -199,6 +243,79 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
                           success=False)
 
     return output(&#34;&#34;, pipe)</code></pre>
+</details>
+</dd>
+<dt id="client.blackhat.bin.chown.parse_args"><code class="name flex">
+<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
+    parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
+    parser.add_argument(&#34;owner&#34;)
+    parser.add_argument(&#34;file&#34;)
+    parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
+
+    args = parser.parse_args(args)
+
+    arg_helps_with_dups = parser._actions
+
+    arg_helps = []
+    [arg_helps.append(x) for x in arg_helps_with_dups if x not in arg_helps]
+
+    NAME = f&#34;**NAME*/\n\t{__COMMAND__} - {__DESCRIPTION__}&#34;
+    SYNOPSIS = f&#34;**SYNOPSIS*/\n\t{__COMMAND__} [OPTION]... &#34;
+    DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
+
+    for item in arg_helps:
+        # Its a positional argument
+        if len(item.option_strings) == 0:
+            # If the argument is optional:
+            if item.nargs == &#34;?&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}] &#34;
+            elif item.nargs == &#34;+&#34;:
+                SYNOPSIS += f&#34;[{item.dest.upper()}]... &#34;
+            else:
+                SYNOPSIS += f&#34;{item.dest.upper()} &#34;
+        else:
+            # Boolean flag
+            if item.nargs == 0:
+                if len(item.option_strings) == 1:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\t{item.help}\n\n&#34;
+                else:
+                    DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/\n\t\t{item.help}\n\n&#34;
+            elif item.nargs == &#34;+&#34;:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/=[{item.dest.upper()}]...\n\t\t{item.help}\n\n&#34;
+            else:
+                DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
+
+    if doc:
+        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
+    else:
+        return args, parser</code></pre>
 </details>
 </dd>
 </dl>
@@ -220,6 +337,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="client.blackhat.bin.chown.main" href="#client.blackhat.bin.chown.main">main</a></code></li>
+<li><code><a title="client.blackhat.bin.chown.parse_args" href="#client.blackhat.bin.chown.parse_args">parse_args</a></code></li>
 </ul>
 </li>
 </ul>

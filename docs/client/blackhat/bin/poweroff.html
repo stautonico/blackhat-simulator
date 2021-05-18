@@ -26,12 +26,12 @@
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">from time import sleep
-
-from ..computer import Computer
-from ..helpers import SysCallStatus
+<pre><code class="python">from ..helpers import RebootMode
+from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
+from ..lib.unistd import getuid
+from ..lib.unistd import reboot
 
 __COMMAND__ = &#34;poweroff&#34;
 __DESCRIPTION__ = &#34;power-off or reboot the machine&#34;
@@ -40,6 +40,16 @@ __VERSION__ = &#34;1.2&#34;
 
 
 def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-p&#34;, &#34;--poweroff&#34;, action=&#34;store_true&#34;,
                         help=&#34;Power-off the machine, regardless of which one of the two commands is invoked.&#34;)
@@ -85,7 +95,7 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
-def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -98,17 +108,16 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # TODO: Add ability to power off/reboot external machines via SSH
         # Only root can reboot/power off
         if getuid() == 0:
+
             if args.reboot:
-                print(f&#34;Rebooting...&#34;)
-                sleep(1)
-                computer.run_command(&#34;clear&#34;, [], pipe=True)
-                computer.init()
-                while len(computer.sessions) != 1:
-                    computer.run_command(&#34;exit&#34;, [], pipe=True)
+                result = reboot(RebootMode.LINUX_REBOOT_CMD_RESTART)
+            else:
+                result = reboot(RebootMode.LINUX_REBOOT_CMD_POWER_OFF)
 
-                return output(&#34;&#34;, pipe)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed&#34;, pipe, success=False)
 
-            exit(0)
+            return output(&#34;&#34;, pipe)
         else:
             return output(f&#34;{__COMMAND__}: permission denied&#34;, pipe, success=False)</code></pre>
 </details>
@@ -121,7 +130,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="client.blackhat.bin.poweroff.main"><code class="name flex">
-<span>def <span class="ident">main</span></span>(<span>computer: <a title="client.blackhat.computer.Computer" href="../computer.html#client.blackhat.computer.Computer">Computer</a>, args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.SysCallStatus" href="../helpers.html#client.blackhat.helpers.SysCallStatus">SysCallStatus</a></span>
+<span>def <span class="ident">main</span></span>(<span>args: list, pipe: bool) ‑> <a title="client.blackhat.helpers.Result" href="../helpers.html#client.blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -129,7 +138,7 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
+<pre><code class="python">def main(args: list, pipe: bool) -&gt; Result:
     args, parser = parse_args(args)
 
     if parser.error_message:
@@ -142,17 +151,16 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
         # TODO: Add ability to power off/reboot external machines via SSH
         # Only root can reboot/power off
         if getuid() == 0:
+
             if args.reboot:
-                print(f&#34;Rebooting...&#34;)
-                sleep(1)
-                computer.run_command(&#34;clear&#34;, [], pipe=True)
-                computer.init()
-                while len(computer.sessions) != 1:
-                    computer.run_command(&#34;exit&#34;, [], pipe=True)
+                result = reboot(RebootMode.LINUX_REBOOT_CMD_RESTART)
+            else:
+                result = reboot(RebootMode.LINUX_REBOOT_CMD_POWER_OFF)
 
-                return output(&#34;&#34;, pipe)
+            if not result.success:
+                return output(f&#34;{__COMMAND__}: Failed&#34;, pipe, success=False)
 
-            exit(0)
+            return output(&#34;&#34;, pipe)
         else:
             return output(f&#34;{__COMMAND__}: permission denied&#34;, pipe, success=False)</code></pre>
 </details>
@@ -161,12 +169,31 @@ def main(computer: Computer, args: list, pipe: bool) -&gt; SysCallStatus:
 <span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>args</code></strong> :&ensp;<code>list</code></dt>
+<dd>argv passed to the binary</dd>
+<dt><strong><code>doc</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If the function should generate and return manpage</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Processed args and a copy of the <code>ArgParser</code> object if not <code>doc</code> else a <code>string</code> containing the generated manpage</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def parse_args(args=[], doc=False):
+    &#34;&#34;&#34;
+    Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
+
+    Args:
+        args (list): argv passed to the binary
+        doc (bool): If the function should generate and return manpage
+
+    Returns:
+        Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
+    &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;-p&#34;, &#34;--poweroff&#34;, action=&#34;store_true&#34;,
                         help=&#34;Power-off the machine, regardless of which one of the two commands is invoked.&#34;)
