@@ -743,7 +743,9 @@ class Computer:
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         """
-        if os.getenv("DEBUGMODE") == "false":
+        # Temporary: Disable saving because it doesn't work anyway
+        if True == False:
+        # if os.getenv("DEBUGMODE") == "false":
             try:
                 with open(output_file, "wb") as f:
                     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)

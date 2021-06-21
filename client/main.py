@@ -9,8 +9,8 @@ from blackhat.services.sshserver import SSHServer
 from blackhat.services.webserver import WebServer
 from blackhat.session import Session
 from blackhat.shell import Shell
-from client.blackhat.services.dnsserver import DNSServer
-from client.blackhat.services.whoisserver import WhoIsServer
+from blackhat.services.dnsserver import DNSServer
+from blackhat.services.whoisserver import WhoIsServer
 
 load_save_success = False
 
@@ -197,10 +197,10 @@ if not load_save_success:
 
         # We're done initializing the user stuff, lets remove the root session
         # And drop the user into a shell of their own user
-        # comp.sessions = []
+        comp.sessions = []
         lan2_client2.sessions = []
 
-        # comp.sessions.append(session)
+        comp.sessions.append(session)
 
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
             computer.sync_user_and_group_files()
@@ -208,6 +208,10 @@ if not load_save_success:
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
         comp.run_command("export", ["PATH=/usr/bin:$PATH"], False)
+
+# from blackhat.new_shell import NewShell
+# shell = NewShell(comp)
+# shell.main()
 
 shell = Shell(comp)
 shell.main()

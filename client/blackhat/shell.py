@@ -278,11 +278,14 @@ class Shell:
         """
         self.prompt = self.generate_prompt()
         while True:
-            command = input(self.prompt)
+            try:
+                command = input(self.prompt)
 
-            # We handle commands from left to right and && doesn't affect the previous commands, so we can start at &&
-            if command:
-                for cmd in command.split("&&"):
-                    self.handle_command(cmd)
+                # We handle commands from left to right and && doesn't affect the previous commands, so we can start at &&
+                if command:
+                    for cmd in command.split("&&"):
+                        self.handle_command(cmd)
 
-            self.prompt = self.generate_prompt()
+                self.prompt = self.generate_prompt()
+            except KeyboardInterrupt:
+                print()
