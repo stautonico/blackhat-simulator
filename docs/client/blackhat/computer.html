@@ -771,7 +771,9 @@ class Computer:
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         &#34;&#34;&#34;
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+        # Temporary: Disable saving because it doesn&#39;t work anyway
+        if True == False:
+        # if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             try:
                 with open(output_file, &#34;wb&#34;) as f:
                     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
@@ -2392,7 +2394,9 @@ class ISPRouter(Router):
         Returns:
             bool: `True` if the dump/save was successful, otherwise `False`
         &#34;&#34;&#34;
-        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+        # Temporary: Disable saving because it doesn&#39;t work anyway
+        if True == False:
+        # if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             try:
                 with open(output_file, &#34;wb&#34;) as f:
                     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
@@ -4138,7 +4142,9 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
     Returns:
         bool: `True` if the dump/save was successful, otherwise `False`
     &#34;&#34;&#34;
-    if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
+    # Temporary: Disable saving because it doesn&#39;t work anyway
+    if True == False:
+    # if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
         try:
             with open(output_file, &#34;wb&#34;) as f:
                 pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)

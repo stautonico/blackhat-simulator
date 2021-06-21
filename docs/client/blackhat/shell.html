@@ -306,14 +306,17 @@ class Shell:
         &#34;&#34;&#34;
         self.prompt = self.generate_prompt()
         while True:
-            command = input(self.prompt)
+            try:
+                command = input(self.prompt)
 
-            # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
-            if command:
-                for cmd in command.split(&#34;&amp;&amp;&#34;):
-                    self.handle_command(cmd)
+                # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
+                if command:
+                    for cmd in command.split(&#34;&amp;&amp;&#34;):
+                        self.handle_command(cmd)
 
-            self.prompt = self.generate_prompt()</code></pre>
+                self.prompt = self.generate_prompt()
+            except KeyboardInterrupt:
+                print()</code></pre>
 </details>
 </section>
 <section>
@@ -613,14 +616,17 @@ This will be removed once the GUI is working</p>
         &#34;&#34;&#34;
         self.prompt = self.generate_prompt()
         while True:
-            command = input(self.prompt)
+            try:
+                command = input(self.prompt)
 
-            # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
-            if command:
-                for cmd in command.split(&#34;&amp;&amp;&#34;):
-                    self.handle_command(cmd)
+                # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
+                if command:
+                    for cmd in command.split(&#34;&amp;&amp;&#34;):
+                        self.handle_command(cmd)
 
-            self.prompt = self.generate_prompt()</code></pre>
+                self.prompt = self.generate_prompt()
+            except KeyboardInterrupt:
+                print()</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -876,14 +882,17 @@ Determine how to route input and output between commands</p>
     &#34;&#34;&#34;
     self.prompt = self.generate_prompt()
     while True:
-        command = input(self.prompt)
+        try:
+            command = input(self.prompt)
 
-        # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
-        if command:
-            for cmd in command.split(&#34;&amp;&amp;&#34;):
-                self.handle_command(cmd)
+            # We handle commands from left to right and &amp;&amp; doesn&#39;t affect the previous commands, so we can start at &amp;&amp;
+            if command:
+                for cmd in command.split(&#34;&amp;&amp;&#34;):
+                    self.handle_command(cmd)
 
-        self.prompt = self.generate_prompt()</code></pre>
+            self.prompt = self.generate_prompt()
+        except KeyboardInterrupt:
+            print()</code></pre>
 </details>
 </dd>
 <dt id="client.blackhat.shell.Shell.run_command"><code class="name flex">
