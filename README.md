@@ -103,7 +103,12 @@ Python must be installed. All dependencies are listed in [`requirements.txt`](re
    ```shell
    git clone https://github.com/stautonico/blackhat-simulator
    ```
-2. Install dependencies
+2. Enter the directory
+   ```
+   cd blackhat-simulator
+   ```
+
+3. Install dependencies
    ```shell
    pip install -r requirements.txt
    ```
