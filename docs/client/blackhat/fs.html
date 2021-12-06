@@ -785,6 +785,8 @@ class StandardFS:
             self.generate_manpages()
 
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+        bin_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                               &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
         bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
         usr_dir.add_file(bin_dir)
 
@@ -2891,6 +2893,8 @@ Also, recursively tells it's parent to update its size.</p>
             self.generate_manpages()
 
         bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+        bin_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                               &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
         bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
         usr_dir.add_file(bin_dir)
 
@@ -3623,6 +3627,8 @@ Otherwise, the format of root's home folder is the same as any other user</p>
         self.generate_manpages()
 
     bin_dir: Directory = Directory(&#34;bin&#34;, usr_dir, 0, 0)
+    bin_dir.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
+                           &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
     bin_dir.add_event_listener(&#34;write&#34;, generate_manpages)
     usr_dir.add_file(bin_dir)</code></pre>
 </details>
