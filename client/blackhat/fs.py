@@ -757,6 +757,8 @@ class StandardFS:
             self.generate_manpages()
 
         bin_dir: Directory = Directory("bin", usr_dir, 0, 0)
+        bin_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
+                               "execute": ["owner", "group", "public"]}
         bin_dir.add_event_listener("write", generate_manpages)
         usr_dir.add_file(bin_dir)
 
