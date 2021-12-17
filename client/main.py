@@ -27,8 +27,8 @@ if len(sys.argv) > 1:
             comp = pickle.load(f)
             load_save_success = True
             comp.run_current_user_shellrc()
-    except Exception as e:
-        print(f"Failed to load save! Trying to load default save.")
+    except Exception:
+        print("Failed to load save! Trying to load default save.")
 
 elif "toload" in os.listdir():
     try:
@@ -40,8 +40,8 @@ elif "toload" in os.listdir():
             os.remove("toload")
             load_save_success = True
             comp.run_current_user_shellrc()
-    except Exception as e:
-        print(f"Failed to load save! Trying to load default save.")
+    except Exception:
+        print("Failed to load save! Trying to load default save.")
 
 # If we couldn't load a specific save, lets try to load the default `blackhat.save` file
 if not load_save_success:
@@ -134,6 +134,8 @@ if not load_save_success:
         print(f"LAN2 CLIENT1 LAN ADDRESS: {lan2_client1.lan}")
         print(f"LAN2 CLIENT2 LAN ADDRESS: {lan2_client2.lan}")
 
+        comp.services[80] = WebServer(comp)
+
         other_comp.services[80] = WebServer(other_comp)
         other_comp.services[22] = SSHServer(other_comp)
 
@@ -188,6 +190,11 @@ if not load_save_success:
         comp.run_command("apt", ["install", "nmap"], False)
         comp.run_command("apt", ["install", "john"], False)
         comp.run_command("apt", ["install", "whois"], False)
+        comp.run_command("apt", ["install", "netutils"], False)
+
+        comp.run_command("touch", ["/var/www/html/index.html"], False)
+        comp.fs.find("/var/www/html/index.html").data.content = "<h1>Hello world!</h1>"
+
         # comp.run_command("touch", ["/usr/bin/ping"], False)
         # comp.run_command("touch", ["/usr/bin/ifconfig"], False)
         # comp.run_command("touch", ["/usr/bin/unshadow"], False)

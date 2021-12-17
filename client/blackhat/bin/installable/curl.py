@@ -80,27 +80,33 @@ def main(args: list, pipe: bool) -> Result:
     if not args:
         return output("", pipe)
     else:
+        if ":" in args.host:
+            host, port = args.host.split(":")
+        else:
+            host = args.host
+            port = 80
+
         # Try to resolve the hostname
-        resolve_hostname = gethostbyname(args.host)
+        resolve_hostname = gethostbyname(host)
         if not resolve_hostname.success:
-            return output(f"{__COMMAND__}: (6) Could not resolve host: {args.host}", pipe, success=False)
+            return output(f"{__COMMAND__}: (6) Could not resolve host: {host}", pipe, success=False)
 
         sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+        sock_addr = socket.SockAddr(socket.AF_INET, port, resolve_hostname.data.h_addr)
         connection_result = socket.connect(sock, sock_addr)
 
         if not connection_result.success:
-            return output(f"{__COMMAND__}: (7) Failed to connect to {args.host} port 80: Connection refused", pipe,
+            return output(f"{__COMMAND__}: (7) Failed to connect to {host} port {port}: Connection refused", pipe,
                           success=False)
 
         write_result = write(sock, {})
 
         if not write_result.success:
-            return output(f"{__COMMAND__}: (7) Failed to connect to {args.host} port 80: Connection refused", pipe,
+            return output(f"{__COMMAND__}: (7) Failed to connect to {host} port {port}: Connection refused", pipe,
                           success=False)
 
         if not write_result.data.get("content"):
-            return output(f"{__COMMAND__}: (7) Failed to connect to {args.host} port 80: Connection refused", pipe,
+            return output(f"{__COMMAND__}: (7) Failed to connect to {host} port {port}: Connection refused", pipe,
                           success=False)
 
         return output(write_result.data.get("content"), pipe)

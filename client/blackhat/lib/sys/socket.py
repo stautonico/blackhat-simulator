@@ -78,6 +78,13 @@ def connect(sockfd: Socket, addr: SockAddr) -> Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     """
+    # Special cases for 'localhost' and '127.0.0.1'
+    if addr.addr in ["localhost", "127.0.0.1"]:
+        if addr.port in computer.services.keys():
+            return Result(success=True, data=computer.services.get(addr.port))
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
     find_client = computer.parent.find_client(addr.addr, port=addr.port)
 
     if not find_client.success:

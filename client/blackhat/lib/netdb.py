@@ -44,6 +44,12 @@ def gethostbyname(name: str, dns_server: Optional[str] = None) -> Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     """
+
+    # Special cases for localhost
+    if name == "localhost":
+        entry = hostent(h_name=name, h_addr=computer.lan)
+        return Result(success=True, data=entry)
+
     # See if we have to resolve a dns record or not
     try:
         is_ipv4 = ipaddress.ip_address(name)
