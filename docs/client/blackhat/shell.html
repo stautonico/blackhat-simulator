@@ -32,6 +32,7 @@ from datetime import datetime
 from colorama import Fore, Style, Back
 
 from .computer import Computer
+from .helpers import Result, ResultMessages
 
 
 class Shell:
@@ -144,7 +145,7 @@ class Shell:
 
         &#34;&#34;&#34;
         if external_binary:
-            pass
+            return Result(success=False, message=ResultMessages.GENERIC)
             # response = self.computer.run_binary(command, args, pipe)
         else:
             response = self.computers[-1].run_command(command, args, pipe)
@@ -454,7 +455,7 @@ This will be removed once the GUI is working</p>
 
         &#34;&#34;&#34;
         if external_binary:
-            pass
+            return Result(success=False, message=ResultMessages.GENERIC)
             # response = self.computer.run_binary(command, args, pipe)
         else:
             response = self.computers[-1].run_command(command, args, pipe)
@@ -930,7 +931,7 @@ Determine how to route input and output between commands</p>
 
     &#34;&#34;&#34;
     if external_binary:
-        pass
+        return Result(success=False, message=ResultMessages.GENERIC)
         # response = self.computer.run_binary(command, args, pipe)
     else:
         response = self.computers[-1].run_command(command, args, pipe)

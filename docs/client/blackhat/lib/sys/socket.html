@@ -106,6 +106,13 @@ def connect(sockfd: Socket, addr: SockAddr) -&gt; Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     &#34;&#34;&#34;
+    # Special cases for &#39;localhost&#39; and &#39;127.0.0.1&#39;
+    if addr.addr in [&#34;localhost&#34;, &#34;127.0.0.1&#34;]:
+        if addr.port in computer.services.keys():
+            return Result(success=True, data=computer.services.get(addr.port))
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
     find_client = computer.parent.find_client(addr.addr, port=addr.port)
 
     if not find_client.success:
@@ -152,6 +159,13 @@ addr (:obj:<code><a title="client.blackhat.lib.sys.socket.SockAddr" href="#clien
     Returns:
         Result: A `Result` object with the success flag set accordingly
     &#34;&#34;&#34;
+    # Special cases for &#39;localhost&#39; and &#39;127.0.0.1&#39;
+    if addr.addr in [&#34;localhost&#34;, &#34;127.0.0.1&#34;]:
+        if addr.port in computer.services.keys():
+            return Result(success=True, data=computer.services.get(addr.port))
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
     find_client = computer.parent.find_client(addr.addr, port=addr.port)
 
     if not find_client.success:

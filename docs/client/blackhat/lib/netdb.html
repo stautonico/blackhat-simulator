@@ -72,6 +72,12 @@ def gethostbyname(name: str, dns_server: Optional[str] = None) -&gt; Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     &#34;&#34;&#34;
+
+    # Special cases for localhost
+    if name == &#34;localhost&#34;:
+        entry = hostent(h_name=name, h_addr=computer.lan)
+        return Result(success=True, data=entry)
+
     # See if we have to resolve a dns record or not
     try:
         is_ipv4 = ipaddress.ip_address(name)
@@ -128,6 +134,12 @@ def gethostbyname(name: str, dns_server: Optional[str] = None) -&gt; Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     &#34;&#34;&#34;
+
+    # Special cases for localhost
+    if name == &#34;localhost&#34;:
+        entry = hostent(h_name=name, h_addr=computer.lan)
+        return Result(success=True, data=entry)
+
     # See if we have to resolve a dns record or not
     try:
         is_ipv4 = ipaddress.ip_address(name)

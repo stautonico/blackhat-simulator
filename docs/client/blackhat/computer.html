@@ -267,8 +267,11 @@ class Computer:
 
         exists = False
 
+        binary_object = None
+
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
+                binary_object = dir.files[command]
                 to_run = True
                 break
         else:
@@ -285,6 +288,11 @@ class Computer:
                 print(f&#34;There was an error when running command: {command}&#34;)
                 return Result(success=False, message=ResultMessages.GENERIC)
 
+        # If the binary is a setuid, we will change the uid
+        old_uid = self.sys_getuid()
+        if binary_object.setuid:
+            self.sys_setuid(binary_object.owner)
+
         try:
             response = module.main(args, pipe)
 
@@ -294,7 +302,9 @@ class Computer:
             print(f&#34;{command}: Segmentation violation&#34;)
             return Result(success=False, message=ResultMessages.GENERIC)
 
+        # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+
         if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             self.save()
 
@@ -1124,8 +1134,9 @@ class Computer:
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        if not find_file.data.check_perm(&#34;read&#34;, self).success:
-            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+        # Do we need read permissions to stat this file?
+        #if not find_file.data.check_perm(&#34;read&#34;, self).success:
+        #    return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
         file = find_file.data
 
@@ -1234,7 +1245,8 @@ class Computer:
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
+        # TODO: Allow changing setuid bit
+
         if self.sys_getuid() not in [find_file.data.owner, 0]:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
@@ -1890,8 +1902,11 @@ class ISPRouter(Router):
 
         exists = False
 
+        binary_object = None
+
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
+                binary_object = dir.files[command]
                 to_run = True
                 break
         else:
@@ -1908,6 +1923,11 @@ class ISPRouter(Router):
                 print(f&#34;There was an error when running command: {command}&#34;)
                 return Result(success=False, message=ResultMessages.GENERIC)
 
+        # If the binary is a setuid, we will change the uid
+        old_uid = self.sys_getuid()
+        if binary_object.setuid:
+            self.sys_setuid(binary_object.owner)
+
         try:
             response = module.main(args, pipe)
 
@@ -1917,7 +1937,9 @@ class ISPRouter(Router):
             print(f&#34;{command}: Segmentation violation&#34;)
             return Result(success=False, message=ResultMessages.GENERIC)
 
+        # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+
         if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             self.save()
 
@@ -2747,8 +2769,9 @@ class ISPRouter(Router):
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        if not find_file.data.check_perm(&#34;read&#34;, self).success:
-            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+        # Do we need read permissions to stat this file?
+        #if not find_file.data.check_perm(&#34;read&#34;, self).success:
+        #    return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
         file = find_file.data
 
@@ -2857,7 +2880,8 @@ class ISPRouter(Router):
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
+        # TODO: Allow changing setuid bit
+
         if self.sys_getuid() not in [find_file.data.owner, 0]:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
@@ -4039,8 +4063,11 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
 
     exists = False
 
+    binary_object = None
+
     for dir in bin_dirs:
         if command in list(dir.files.keys()):
+            binary_object = dir.files[command]
             to_run = True
             break
     else:
@@ -4057,6 +4084,11 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
             print(f&#34;There was an error when running command: {command}&#34;)
             return Result(success=False, message=ResultMessages.GENERIC)
 
+    # If the binary is a setuid, we will change the uid
+    old_uid = self.sys_getuid()
+    if binary_object.setuid:
+        self.sys_setuid(binary_object.owner)
+
     try:
         response = module.main(args, pipe)
 
@@ -4066,7 +4098,9 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
         print(f&#34;{command}: Segmentation violation&#34;)
         return Result(success=False, message=ResultMessages.GENERIC)
 
+    # Reset the UID (to prevent binaries from getting stuck with invalid uids)
     self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+
     if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
         self.save()
 
@@ -4471,7 +4505,8 @@ Possible modes are:
     if not find_file.success:
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    # Only the owner can change chmod permissions
+    # TODO: Allow changing setuid bit
+
     if self.sys_getuid() not in [find_file.data.owner, 0]:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
@@ -5284,8 +5319,9 @@ user's current directory</dd>
     if not find_file.success:
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    if not find_file.data.check_perm(&#34;read&#34;, self).success:
-        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    # Do we need read permissions to stat this file?
+    #if not find_file.data.check_perm(&#34;read&#34;, self).success:
+    #    return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     file = find_file.data
 

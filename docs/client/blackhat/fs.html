@@ -56,6 +56,17 @@ class FSBaseObject:
         self.permissions: Dict[str, List[Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;]]] = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
                                                                                   &#34;write&#34;: [&#34;owner&#34;],
                                                                                   &#34;execute&#34;: []}
+        # TODO: Handle setuid bit on directories
+        &#34;&#34;&#34;
+        Reference:
+        
+        27.5 Directories and the Set-User-ID and Set-Group-ID Bits
+
+        On most systems, if a directory’s set-group-ID bit is set, newly created subfiles inherit the same group as the directory, and newly created subdirectories inherit the set-group-ID bit of the parent directory. On a few systems, a directory’s set-user-ID bit has a similar effect on the ownership of new subfiles and the set-user-ID bits of new subdirectories. These mechanisms let users share files more easily, by lessening the need to use chmod or chown to share new files.
+        
+        (https://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html)
+        &#34;&#34;&#34;
+        self.setuid = False
         &#34;&#34;&#34;Permissions for accessing the file. Default permissions; rw-r--r-- (644)&#34;&#34;&#34;
         self.parent: Optional[&#34;Directory&#34;] = parent
         self.owner: int = owner
@@ -534,6 +545,9 @@ class StandardFS:
 
                 current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                             &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+                # Add setuid bit to specific binaries
+                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+                    current_file.setuid = True
 
                 bin_dir.add_file(current_file)
 
@@ -737,7 +751,7 @@ class StandardFS:
             file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
 
         proc_dir: Directory = self.files.find(&#34;proc&#34;)
-        # Create the /etc/passwd file
+        # Create the /proc/uptime file
         uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
         uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
 
@@ -907,6 +921,8 @@ class StandardFS:
                     current_dir = current_dir.parent
 
             else:
+                if current_dir.is_file():
+                    return Result(success=True, data=current_dir)
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
                     return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -1557,6 +1573,7 @@ Also updates its size and triggers its parent to update their size</p>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.setuid" href="#client.blackhat.fs.FSBaseObject.setuid">setuid</a></code></li>
 </ul>
 </li>
 </ul>
@@ -1597,6 +1614,17 @@ Also updates its size and triggers its parent to update their size</p>
         self.permissions: Dict[str, List[Literal[&#34;read&#34;, &#34;write&#34;, &#34;execute&#34;]]] = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
                                                                                   &#34;write&#34;: [&#34;owner&#34;],
                                                                                   &#34;execute&#34;: []}
+        # TODO: Handle setuid bit on directories
+        &#34;&#34;&#34;
+        Reference:
+        
+        27.5 Directories and the Set-User-ID and Set-Group-ID Bits
+
+        On most systems, if a directory’s set-group-ID bit is set, newly created subfiles inherit the same group as the directory, and newly created subdirectories inherit the set-group-ID bit of the parent directory. On a few systems, a directory’s set-user-ID bit has a similar effect on the ownership of new subfiles and the set-user-ID bits of new subdirectories. These mechanisms let users share files more easily, by lessening the need to use chmod or chown to share new files.
+        
+        (https://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html)
+        &#34;&#34;&#34;
+        self.setuid = False
         &#34;&#34;&#34;Permissions for accessing the file. Default permissions; rw-r--r-- (644)&#34;&#34;&#34;
         self.parent: Optional[&#34;Directory&#34;] = parent
         self.owner: int = owner
@@ -1840,6 +1868,13 @@ Also updates its size and triggers its parent to update their size</p>
 <div class="desc"><p>int: Modified time; when the file"s content was last modified</p></div>
 </dd>
 <dt id="client.blackhat.fs.FSBaseObject.permissions"><code class="name">var <span class="ident">permissions</span></code></dt>
+<dd>
+<div class="desc"><p>Reference:</p>
+<p>27.5 Directories and the Set-User-ID and Set-Group-ID Bits</p>
+<p>On most systems, if a directory’s set-group-ID bit is set, newly created subfiles inherit the same group as the directory, and newly created subdirectories inherit the set-group-ID bit of the parent directory. On a few systems, a directory’s set-user-ID bit has a similar effect on the ownership of new subfiles and the set-user-ID bits of new subdirectories. These mechanisms let users share files more easily, by lessening the need to use chmod or chown to share new files.</p>
+<p>(<a href="https://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html">https://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html</a>)</p></div>
+</dd>
+<dt id="client.blackhat.fs.FSBaseObject.setuid"><code class="name">var <span class="ident">setuid</span></code></dt>
 <dd>
 <div class="desc"><p>Permissions for accessing the file. Default permissions; rw-r&ndash;r&ndash; (644)</p></div>
 </dd>
@@ -2545,6 +2580,7 @@ Also, recursively tells it's parent to update its size.</p>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.setuid" href="#client.blackhat.fs.FSBaseObject.setuid">setuid</a></code></li>
 </ul>
 </li>
 </ul>
@@ -2642,6 +2678,9 @@ Also, recursively tells it's parent to update its size.</p>
 
                 current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                             &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+                # Add setuid bit to specific binaries
+                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+                    current_file.setuid = True
 
                 bin_dir.add_file(current_file)
 
@@ -2845,7 +2884,7 @@ Also, recursively tells it's parent to update its size.</p>
             file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
 
         proc_dir: Directory = self.files.find(&#34;proc&#34;)
-        # Create the /etc/passwd file
+        # Create the /proc/uptime file
         uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
         uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
 
@@ -3015,6 +3054,8 @@ Also, recursively tells it's parent to update its size.</p>
                     current_dir = current_dir.parent
 
             else:
+                if current_dir.is_file():
+                    return Result(success=True, data=current_dir)
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
                     return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -3161,6 +3202,8 @@ Also, recursively tells it's parent to update its size.</p>
                 current_dir = current_dir.parent
 
         else:
+            if current_dir.is_file():
+                return Result(success=True, data=current_dir)
             current_dir = current_dir.find(subdir)
             if not current_dir:
                 return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -3309,6 +3352,9 @@ All these files represent binaries in the system</p>
 
             current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
+            # Add setuid bit to specific binaries
+            if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+                current_file.setuid = True
 
             bin_dir.add_file(current_file)</code></pre>
 </details>
@@ -3550,7 +3596,7 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
         file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
 
     proc_dir: Directory = self.files.find(&#34;proc&#34;)
-    # Create the /etc/passwd file
+    # Create the /proc/uptime file
     uptime_file: File = File(&#34;uptime&#34;, f&#34;&#34;, proc_dir, 0, 0)
     uptime_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [], &#34;execute&#34;: []}
 
@@ -3743,6 +3789,7 @@ Otherwise, the format of root's home folder is the same as any other user</p>
 <li><code><a title="client.blackhat.fs.FSBaseObject.permissions" href="#client.blackhat.fs.FSBaseObject.permissions">permissions</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.pwd" href="#client.blackhat.fs.FSBaseObject.pwd">pwd</a></code></li>
 <li><code><a title="client.blackhat.fs.FSBaseObject.remove_event_listener" href="#client.blackhat.fs.FSBaseObject.remove_event_listener">remove_event_listener</a></code></li>
+<li><code><a title="client.blackhat.fs.FSBaseObject.setuid" href="#client.blackhat.fs.FSBaseObject.setuid">setuid</a></code></li>
 </ul>
 </li>
 <li>
