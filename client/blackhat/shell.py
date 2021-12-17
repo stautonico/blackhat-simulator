@@ -4,6 +4,7 @@ from datetime import datetime
 from colorama import Fore, Style, Back
 
 from .computer import Computer
+from .helpers import Result, ResultMessages
 
 
 class Shell:
@@ -116,7 +117,7 @@ class Shell:
 
         """
         if external_binary:
-            pass
+            return Result(success=False, message=ResultMessages.GENERIC)
             # response = self.computer.run_binary(command, args, pipe)
         else:
             response = self.computers[-1].run_command(command, args, pipe)

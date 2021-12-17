@@ -239,8 +239,11 @@ class Computer:
 
         exists = False
 
+        binary_object = None
+
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
+                binary_object = dir.files[command]
                 to_run = True
                 break
         else:
@@ -257,6 +260,11 @@ class Computer:
                 print(f"There was an error when running command: {command}")
                 return Result(success=False, message=ResultMessages.GENERIC)
 
+        # If the binary is a setuid, we will change the uid
+        old_uid = self.sys_getuid()
+        if binary_object.setuid:
+            self.sys_setuid(binary_object.owner)
+
         try:
             response = module.main(args, pipe)
 
@@ -266,7 +274,9 @@ class Computer:
             print(f"{command}: Segmentation violation")
             return Result(success=False, message=ResultMessages.GENERIC)
 
+        # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+
         if os.getenv("DEBUGMODE") == "false":
             self.save()
 
@@ -1096,8 +1106,9 @@ class Computer:
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        if not find_file.data.check_perm("read", self).success:
-            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+        # Do we need read permissions to stat this file?
+        #if not find_file.data.check_perm("read", self).success:
+        #    return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
         file = find_file.data
 
@@ -1206,7 +1217,8 @@ class Computer:
         if not find_file.success:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        # Only the owner can change chmod permissions
+        # TODO: Allow changing setuid bit
+
         if self.sys_getuid() not in [find_file.data.owner, 0]:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 

@@ -39,7 +39,8 @@ def readdir(pathname: str) -> Result:
         return Result(success=False, message=ResultMessages.IS_FILE)
 
     # We need execute permissions to list a directory (???)
-    if not find_dir.data.check_perm("execute", computer).success:
-        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+    if 0:
+        if not find_dir.data.check_perm("execute", computer).success:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     return Result(success=True, data=[x.name for x in find_dir.data.files.values()])

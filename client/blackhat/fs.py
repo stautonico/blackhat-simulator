@@ -28,6 +28,17 @@ class FSBaseObject:
         self.permissions: Dict[str, List[Literal["read", "write", "execute"]]] = {"read": ["owner", "group", "public"],
                                                                                   "write": ["owner"],
                                                                                   "execute": []}
+        # TODO: Handle setuid bit on directories
+        """
+        Reference:
+        
+        27.5 Directories and the Set-User-ID and Set-Group-ID Bits
+
+        On most systems, if a directory’s set-group-ID bit is set, newly created subfiles inherit the same group as the directory, and newly created subdirectories inherit the set-group-ID bit of the parent directory. On a few systems, a directory’s set-user-ID bit has a similar effect on the ownership of new subfiles and the set-user-ID bits of new subdirectories. These mechanisms let users share files more easily, by lessening the need to use chmod or chown to share new files.
+        
+        (https://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html)
+        """
+        self.setuid = False
         """Permissions for accessing the file. Default permissions; rw-r--r-- (644)"""
         self.parent: Optional["Directory"] = parent
         self.owner: int = owner
@@ -506,6 +517,9 @@ class StandardFS:
 
                 current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                             "execute": ["owner", "group", "public"]}
+                # Add setuid bit to specific binaries
+                if file.replace(".py", "") in ["sudo"]:
+                    current_file.setuid = True
 
                 bin_dir.add_file(current_file)
 
@@ -709,7 +723,7 @@ class StandardFS:
             file.content = str((datetime.datetime.now() - self.computer.boot_time).total_seconds())
 
         proc_dir: Directory = self.files.find("proc")
-        # Create the /etc/passwd file
+        # Create the /proc/uptime file
         uptime_file: File = File("uptime", f"", proc_dir, 0, 0)
         uptime_file.permissions = {"read": ["owner", "group", "public"], "write": [], "execute": []}
 
@@ -879,6 +893,8 @@ class StandardFS:
                     current_dir = current_dir.parent
 
             else:
+                if current_dir.is_file():
+                    return Result(success=True, data=current_dir)
                 current_dir = current_dir.find(subdir)
                 if not current_dir:
                     return Result(success=False, message=ResultMessages.NOT_FOUND)
