@@ -94,17 +94,19 @@ def main(args: list, pipe: bool) -> Result:
             env_value = split_args[1].replace("\"", "")
             env_value = env_value.replace("\'", "")
 
-            if env_value.startswith("$"):
-                env_value = get_env(env_value.replace("$", "")) or ""
-            else:
-                if ":" in env_value:
-                    new_env_value = []
-                    for val in env_value.split(":"):
-                        if val.startswith("$"):
-                            val = get_env(val.replace("$", "")) or ""
-                        new_env_value.append(val)
+            if ":" in env_value:
+                new_env_value = []
+                for val in env_value.split(":"):
+                    if val.startswith("$"):
+                        val = get_env(val.replace("$", "")) or ""
+                        if val.endswith(":"):
+                            val = val[:-1]
+                    new_env_value.append(val)
 
-                    env_value = ":".join(new_env_value)
+                env_value = ":".join(new_env_value)
+            else:
+                if env_value.startswith("$"):
+                    env_value = get_env(env_value.replace("$", "")) or ""
 
             setenv(split_args[0], env_value)
 
