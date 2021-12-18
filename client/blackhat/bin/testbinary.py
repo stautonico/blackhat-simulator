@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from ..computer import Computer
 from ..helpers import Result
 from ..lib import unistd, stdlib

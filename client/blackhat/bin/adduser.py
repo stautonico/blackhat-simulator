@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 import os
 from getpass import getpass
 

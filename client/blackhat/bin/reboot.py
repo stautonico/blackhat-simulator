@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from ..helpers import RebootMode
 from ..helpers import Result
 from ..lib.input import ArgParser

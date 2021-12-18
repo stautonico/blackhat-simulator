@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from hashlib import sha256
 
 from ..helpers import Result, ResultMessages

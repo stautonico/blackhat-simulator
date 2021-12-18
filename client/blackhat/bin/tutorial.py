@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from colorama import Fore, Style
 
 from ..helpers import Result

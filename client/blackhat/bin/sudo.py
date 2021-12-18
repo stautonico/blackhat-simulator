@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from asyncio import sleep
 from getpass import getpass
 from hashlib import md5

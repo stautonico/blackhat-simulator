@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from base64 import b64decode, b64encode
 from binascii import Error
 

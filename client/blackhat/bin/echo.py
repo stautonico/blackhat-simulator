@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 import codecs
 
 from ..helpers import Result

@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from os import system as syscall
 from platform import system
 

@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 import datetime
 
 from ..helpers import Result

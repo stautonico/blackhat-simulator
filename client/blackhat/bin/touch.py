@@ -1,13 +1,15 @@
+__package__ = "blackhat.bin"
+
 from ..helpers import Result, ResultMessages
 from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
 
+
 __COMMAND__ = "touch"
 __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.0"
-
 
 def parse_args(args=[], doc=False):
     """
@@ -82,7 +84,7 @@ def main(args: list, pipe: bool) -> Result:
         at_least_one_failed = False
 
         for filename in args.files:
-            result = creat(filename)
+            result = creat(filename, 777)
 
             if not result.success:
                 at_least_one_failed = True

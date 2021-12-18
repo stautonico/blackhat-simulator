@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from ..helpers import Result, ResultMessages
 from ..lib.fcntl import copy
 from ..lib.input import ArgParser

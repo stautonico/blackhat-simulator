@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin.installable"
+
 from random import randint
 from time import sleep
 

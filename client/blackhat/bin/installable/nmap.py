@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin.installable"
+
 import ipaddress
 
 from tabulate import tabulate

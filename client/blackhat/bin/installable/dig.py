@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin.installable"
+
 from ...helpers import Result
 from ...lib.input import ArgParser
 from ...lib.output import output

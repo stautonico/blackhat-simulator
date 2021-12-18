@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from types import SimpleNamespace
 
 from ..helpers import Result

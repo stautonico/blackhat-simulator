@@ -22,6 +22,8 @@ from .services.service import Service
 from .session import Session
 from .user import User, Group
 
+from importlib.machinery import SourceFileLoader
+
 
 class Computer:
     def __init__(self) -> None:
@@ -237,41 +239,47 @@ class Computer:
             print(f"{command}: command not found")
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        exists = False
-
-        binary_object = None
-
         for dir in bin_dirs:
             if command in list(dir.files.keys()):
                 binary_object = dir.files[command]
-                to_run = True
                 break
         else:
             print(f"{command}: command not found")
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        try:
-            module = importlib.import_module(f"blackhat.bin.{command}")
+        # TODO: Check that the "binary_object" is not a directory and has executable permission
+        if binary_object.is_directory():
+            print(f"shell: {command}: is a directory")
+            return Result(success=False, message=ResultMessages.IS_DIRECTORY)
 
-        except ImportError:
-            try:
-                module = importlib.import_module(f"blackhat.bin.installable.{command}")
-            except ImportError:
-                print(f"There was an error when running command: {command}")
-                return Result(success=False, message=ResultMessages.GENERIC)
+        # NOTE: Disabled for debugging
+        # if not binary_object.check_perm("execute", self).success:
+        #     print(f"shell: permission denied: {command}")
+        #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
+
+
+        random_filename = f"/tmp/{token_hex(6)}.py"
+
+        with open(random_filename, "w") as f:
+            f.write(binary_object.content)
 
         # If the binary is a setuid, we will change the uid
-        old_uid = self.sys_getuid()
         if binary_object.setuid:
-            self.sys_setuid(binary_object.owner)
+            self.sessions[-1].effective_uid = binary_object.owner
+            # self.sys_setuid(binary_object.owner)
 
         try:
+            module = SourceFileLoader("main",
+                                      random_filename).load_module()
+
             response = module.main(args, pipe)
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"{command}: Segmentation violation")
+            if os.getenv("DEBUGMODE") == "true":
+                print(f"segmentation fault (core dumped) ({e})  {command}")
+            else:
+                print(f"segmentation fault (core dumped)  {command}")
+
             return Result(success=False, message=ResultMessages.GENERIC)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
@@ -755,7 +763,7 @@ class Computer:
         """
         # Temporary: Disable saving because it doesn't work anyway
         if True == False:
-        # if os.getenv("DEBUGMODE") == "false":
+            # if os.getenv("DEBUGMODE") == "false":
             try:
                 with open(output_file, "wb") as f:
                     pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)

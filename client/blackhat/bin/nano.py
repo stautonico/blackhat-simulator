@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from os import system, remove
 from secrets import token_hex
 
@@ -25,6 +27,7 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
+    # TODO: Fix this, I copied and pasted from reboot and forgot to change it
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("-p", "--poweroff", action="store_true",
                         help="Power-off the machine, regardless of which one of the two commands is invoked.")
@@ -125,9 +128,9 @@ def main(args: list, pipe: bool) -> Result:
         temp_file = token_hex(6)
 
         try:
-            if exists:
-                with open(f"/tmp/{temp_file}", "w") as f:
-                    f.write(read_file_result.data)
+            # if exists:
+            #     with open(f"/tmp/{temp_file}", "w") as f:
+            #         f.write(read_file_result.data)
 
             system(f"nano /tmp/{temp_file}")
 
@@ -144,4 +147,5 @@ def main(args: list, pipe: bool) -> Result:
             return output("", pipe)
 
         except Exception as e:
+            print(e)
             return output(f"{__COMMAND__}: Failed to write file!", pipe, success=False)

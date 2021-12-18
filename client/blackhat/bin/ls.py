@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 import os
 
 from colorama import Fore, Style
@@ -106,7 +108,9 @@ def calculate_output(filename, file_struct: stat_struct, long=False, nocolor=Fal
         username = username_lookup.data.username if username_lookup.success else "?"
         group_name = group_lookup.data.name if group_lookup.success else "?"
 
-        output_text += f'{calculate_permission_string(file_struct.st_mode)} {username} {group_name} {round(file_struct.st_size, 1)}kB {color}{base_filename}{Style.RESET_ALL}\n'
+        file_size_in_kb = round(file_struct.st_size / 1024, 1)
+
+        output_text += f'{calculate_permission_string(file_struct.st_mode)} {username} {group_name} {file_size_in_kb}kB {color}{base_filename}{Style.RESET_ALL}\n'
     else:
         output_text += f"{color}{base_filename}{Style.RESET_ALL} "
 

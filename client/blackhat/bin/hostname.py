@@ -1,3 +1,5 @@
+__package__ = "blackhat.bin"
+
 from ..helpers import Result
 from ..lib.arpa.inet import get_ip
 from ..lib.input import ArgParser
