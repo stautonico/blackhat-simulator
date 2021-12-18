@@ -27,15 +27,17 @@ class ResultMessages(Enum):
     """Same as generic `NOT_ALLOWED` but more specific"""
     NOT_ALLOWED_WRITE = 10
     """Same as generic `NOT_ALLOWED` but more specific"""
-    EMPTY = 11
+    NOT_ALLOWED_EXECUTE = 11
+    """Same as generic `NOT_ALLOWED` but more specific"""
+    EMPTY = 12
     """We're trying to use a space that is completely full"""
-    NOT_EMPTY = 12
+    NOT_EMPTY = 13
     """We're trying to remove a directory thats not empty"""
-    GENERIC_NETWORK = 13
+    GENERIC_NETWORK = 14
     """Something went wrong with the service or the connection on another machine. Similar to error http 500"""
-    INVALID_ARGUMENT = 14
+    INVALID_ARGUMENT = 15
     """The argument given to the command was invalid for one reason or another"""
-    NOT_CONNECTED = 15
+    NOT_CONNECTED = 16
     """The socket we're trying to write to isn't connected to anything"""
 
 

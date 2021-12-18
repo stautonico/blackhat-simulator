@@ -44,7 +44,7 @@ class FSBaseObject:
         self.owner: int = owner
         self.group_owner: int = group_owner
         self.link_count: int
-        self.size: int
+        self.size: int  # Size in bytes
         self.atime: int  # Last access time (unix time stamp)
         """int: Access time; when file was last read from/accessed"""
         self.mtime: int  # Last modified time (unix time stamp)
@@ -508,12 +508,10 @@ class StandardFS:
         for file in os.listdir("./blackhat/bin"):
             # Ignore the __init__.py and __pycache__ because those aren't bins (auto generated)
             if file not in ["__init__.py", "__pycache__", "installable"]:
-                current_file = File(file.replace(".py", ""), "[BINARY DATA]", bin_dir, 0, 0)
-                try:
-                    with open(f"./blackhat/bin/{file}", "r") as f:
-                        current_file.size = sys.getsizeof(f.read()) / 32
-                except IsADirectoryError:
-                    current_file.size = 0
+                with open(os.path.join("./blackhat/bin", file), "r") as f:
+                    source_code = f.read()
+                current_file = File(file.replace(".py", ""), source_code, bin_dir, 0, 0)
+                current_file.size = os.path.getsize(os.path.join("./blackhat/bin", file))
 
                 current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                             "execute": ["owner", "group", "public"]}

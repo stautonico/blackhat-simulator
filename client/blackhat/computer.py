@@ -741,8 +741,8 @@ class Computer:
                 for line in shellrc_lines.data.split("\n"):
                     if line != "":
                         line = line.split()
-                        # TODO: replace with execvp
-                        result = self.run_command(line[0], line[1:], pipe=False)
+                        result = self.sys_execvp(line[0], line[1:])
+                        # result = self.run_command(line[0], line[1:], pipe=False)
 
     def save(self, output_file: str = "blackhat.save") -> bool:
         """
@@ -963,8 +963,9 @@ class Computer:
         # If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
         # If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
 
-        # if self.sys_getuid() == 0:
-        self.sessions[-1].effective_uid = uid
+        if self.sys_getuid() == 0:
+            self.sessions[-1].effective_uid = uid
+
         return Result(success=True)
         # else:
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED)
@@ -1107,7 +1108,7 @@ class Computer:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
 
         # Do we need read permissions to stat this file?
-        #if not find_file.data.check_perm("read", self).success:
+        # if not find_file.data.check_perm("read", self).success:
         #    return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
         file = find_file.data
