@@ -170,8 +170,14 @@ if not load_save_success:
         for file in os.listdir("./blackhat/bin/installable"):
             if file not in ["__init__.py", "__pycache__", "ping.py", "curl.py", "dig.py", "ifconfig.py", "john.py",
                             "unshadow.py"]:
+                with open(f"./blackhat/bin/installable/{file}", "r") as f:
+                    source_code = f.read()
                 file = file.replace(".py", "")
                 lan2_client2.run_command("touch", [file], pipe=True)
+                # NOTE: WE WERE HERE
+                # TODO: Set the file's content to 'source_code'
+                new_file_object = lan2_client2.fs.find(f"/var/www/html/repo/{file}")
+
 
         lan2_client2.run_command("mkdir", ["netutils"], True)
         lan2_client2.run_command("cd", ["netutils"], True)

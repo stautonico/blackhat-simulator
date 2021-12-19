@@ -274,6 +274,9 @@ class Computer:
 
             response = module.main(args, pipe)
 
+        except TypeError:
+            # The code we're running doesn't take a pipe argument
+            response = module.main(args)
         except Exception as e:
             if os.getenv("DEBUGMODE") == "true":
                 print(f"segmentation fault (core dumped) ({e})  {command}")
@@ -281,6 +284,14 @@ class Computer:
                 print(f"segmentation fault (core dumped)  {command}")
 
             return Result(success=False, message=ResultMessages.GENERIC)
+
+        if not response:
+            response = Result(success=False)
+        else:
+            if type(response) == int:
+                response = Result(success=response==0)
+
+
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
