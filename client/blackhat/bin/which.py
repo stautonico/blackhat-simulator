@@ -91,6 +91,10 @@ def main(args: list, pipe: bool) -> Result:
             path_dirs.remove("")
 
         for command in args.commands:
+            # Check for shell builtins
+            if command in ["alias", "unalias"]:
+                output_text = f"{command}: shell built-in command"
+                continue
             for path in path_dirs:
                 read_result = readdir(path)
                 if read_result.success:
