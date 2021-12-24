@@ -679,7 +679,11 @@ class StandardFS:
             skel_dir.add_file(current_dir)
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-        skel_dir.add_file(File(".shellrc", "", skel_dir, 0, 0))
+        DEFAULT_SHELLRC_CONTENT = "alias lsa=ls -l -a\n" \
+                                  "alias la=ls -a\n" \
+                                  "alias ll=ls -l\n" \
+
+        skel_dir.add_file(File(".shellrc", DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0))
 
         etc_dir.add_file(skel_dir)
 

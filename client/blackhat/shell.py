@@ -237,7 +237,15 @@ class Shell:
 
         # Check if we're running an alias
         if command_name in self.aliases.keys():
+            # We need to resplit the args to get the alias args
+            command = self.aliases[command_name]
 
+            command = command.split()
+            while "" in command:
+                command.remove("")
+            command_name = command[0]
+            # Delete the command name from the command list (since we already have it)
+            del command[0]
 
 
         # Easy cases if there are no special characters
