@@ -279,6 +279,9 @@ class File(FSBaseObject):
         self.content = content
         self.size = sys.getsizeof(self.name + self.content)
 
+        if self.parent:
+            self.parent.add_file(self)
+
     def read(self, computer) -> Result:
         """
         Check if the current UID has permission to read the content of the file. Afterwards, return the content if allowed
@@ -483,8 +486,6 @@ class StandardFS:
                 directory.permissions = {"read": ["owner", "group", "public"], "write": ["owner", "group"],
                                          "execute": ["owner", "group", "public"]}
 
-            self.files.add_file(directory)
-
         # TODO: Replace all these with `mkdir -p` commands
         # NOTE: FS doesn't exist at this point so running commands might not be possible (since some commands need fs)
         # Individually setup each directory in the root
@@ -522,8 +523,6 @@ class StandardFS:
                 # Add setuid bit to specific binaries
                 if file.replace(".py", "") in ["sudo"]:
                     current_file.setuid = True
-
-                bin_dir.add_file(current_file)
 
     def setup_etc(self) -> None:
         """
@@ -661,17 +660,14 @@ class StandardFS:
 
         passwd_file.add_event_listener("write", update_passwd)
 
-        etc_dir.add_file(passwd_file)
         # Create the /etc/shadow file and change its perms (rw-------)
         shadow_file: File = File("shadow", f"", etc_dir, 0, 0)
         shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
         shadow_file.add_event_listener("write", update_shadow)
-        etc_dir.add_file(shadow_file)
 
         # Create the /etc/groups file
         group_file: File = File("group", f"root:x:0", etc_dir, 0, 0)
         group_file.add_event_listener("write", update_group)
-        etc_dir.add_file(group_file)
 
         # /etc/skel (home dir template)
         skel_dir: Directory = Directory("skel", etc_dir, 0, 0)
@@ -680,34 +676,27 @@ class StandardFS:
             current_dir = Directory(dir, skel_dir, 0, 0)
             current_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                        "execute": ["owner", "group", "public"]}
-            skel_dir.add_file(current_dir)
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-        skel_dir.add_file(File(".shellrc", "", skel_dir, 0, 0))
-
-        etc_dir.add_file(skel_dir)
+        File(".shellrc", "", skel_dir, 0, 0)
 
         # /etc/hostname (holds system hostname)
         # Stupid windows style default hostnames (for fun, might change later)
         new_hostname = f"DESKTOP-{''.join([choice(ascii_uppercase + digits) for _ in range(7)])}"
-        etc_dir.add_file(File("hostname", new_hostname, etc_dir, 0, 0))
+        File("hostname", new_hostname, etc_dir, 0, 0)
 
         # /etc/sudoers (holds sudo permissions)
         # Sudoers has permissions r--r-----
         sudoers_file: File = File("sudoers", "root ALL=(ALL) ALL\n", etc_dir, 0, 0)
         sudoers_file.permissions = {"read": ["owner", "group"], "write": [], "execute": []}
-        etc_dir.add_file(sudoers_file)
 
         # /etc/apt/sources.list
         apt_dir: Directory = Directory("apt", etc_dir, 0, 0)
-        etc_dir.add_file(apt_dir)
 
-        sources_file: File = File("sources.list", "", apt_dir, 0, 0)
-        apt_dir.add_file(sources_file)
+        File("sources.list", "", apt_dir, 0, 0)
 
         # /etc/resolv.conf
-        resolv_conf: File = File("resolv.conf", "nameserver 1.1.1.1", etc_dir, 0, 0)
-        etc_dir.add_file(resolv_conf)
+        File("resolv.conf", "nameserver 1.1.1.1", etc_dir, 0, 0)
 
     def setup_proc(self) -> None:
         """
@@ -730,7 +719,6 @@ class StandardFS:
         uptime_file.permissions = {"read": ["owner", "group", "public"], "write": [], "execute": []}
 
         uptime_file.add_event_listener("read", update_uptime, when="before")
-        proc_dir.add_file(uptime_file)
 
     def setup_root(self) -> None:
         """
@@ -743,8 +731,7 @@ class StandardFS:
         # Create /root/.shellrc
         root_dir: Directory = self.files.find("root")
 
-        root_shellrc: File = File(".shellrc", "export HOME=/root\nexport USER=root", root_dir, 0, 0)
-        root_dir.add_file(root_shellrc)
+        File(".shellrc", "export HOME=/root\nexport USER=root", root_dir, 0, 0)
 
     def setup_run(self) -> None:
         """
@@ -761,7 +748,6 @@ class StandardFS:
         # Create /run/sudo and /run/sudo/ts
         run_sudo: Directory = Directory("sudo", run_dir, 0, 0)
         run_sudo.permissions = {"read": ["owner"], "write": ["owner"], "execute": ["owner", "group", "public"]}
-        # run_dir.add_file(run_sudo)
 
         run_sudo_ts: Directory = Directory("ts", run_sudo, 0, 0)
         run_sudo_ts.permissions = {"read": ["owner"], "write": ["owner"], "execute": ["owner"]}
@@ -781,11 +767,9 @@ class StandardFS:
         usr_dir: Directory = self.files.find("usr")
 
         share_dir: Directory = Directory("share", usr_dir, 0, 0)
-        usr_dir.add_file(share_dir)
 
         # /usr/share/man
-        man_dir: Directory = Directory("man", share_dir, 0, 0)
-        share_dir.add_file(man_dir)
+        Directory("man", share_dir, 0, 0)
 
         self.generate_manpages()
 
@@ -796,7 +780,6 @@ class StandardFS:
         bin_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                "execute": ["owner", "group", "public"]}
         bin_dir.add_event_listener("write", generate_manpages)
-        usr_dir.add_file(bin_dir)
 
     def setup_var(self) -> None:
         """
@@ -817,28 +800,21 @@ class StandardFS:
 
         # Create /var/log
         log_dir: Directory = Directory("log", var_dir, 0, 0)
-        # mv log -> var
-        var_dir.add_file(log_dir)
 
         # Create the `syslog` in /var/log
-        log_dir.add_file(File("syslog", "", log_dir, 0, 0))
+        File("syslog", "", log_dir, 0, 0)
 
         # Create /var/lib/dpkg/status
         lib_dir: Directory = Directory("lib", var_dir, 0, 0)
-        var_dir.add_file(lib_dir)
 
         dpkg_dir: Directory = Directory("dpkg", lib_dir, 0, 0)
-        lib_dir.add_file(dpkg_dir)
 
-        status_file: File = File("status", "", dpkg_dir, 0, 0)
-        dpkg_dir.add_file(status_file)
+        File("status", "", dpkg_dir, 0, 0)
 
         # Create /var/www/html
         www_dir: Directory = Directory("www", var_dir, 0, 0)
-        var_dir.add_file(www_dir)
 
-        html_dir: Directory = Directory("html", www_dir, 0, 0)
-        www_dir.add_file(html_dir)
+        Directory("html", www_dir, 0, 0)
 
     def find(self, pathname: str) -> Result:
         """
@@ -962,8 +938,7 @@ class StandardFS:
                     manpage = module.parse_args(args=[], doc=True).replace("**", Style.BRIGHT).replace("*/",
                                                                                                        Style.RESET_ALL)
                     manpage = manpage.removeprefix("\n").removesuffix("\n")
-                    current_manpage = File(binary, manpage, man_dir, 0, 0)
-                    man_dir.add_file(current_manpage)
+                    File(binary, manpage, man_dir, 0, 0)
                 except AttributeError:
                     continue
 
@@ -1037,7 +1012,6 @@ def copy(computer, src_path: str, dst_path: str) -> Result:
                     new_filename = new_file_name
                     new_file = File(new_filename, src.content, to_write, computer.sys_getuid(), computer.sys_getgid())
                     new_file.events = src.events
-                    to_write.add_file(new_file)
                     # We have to do this so the permissions work no matter if we're overwriting or not
                     to_write = new_file
 
@@ -1076,7 +1050,6 @@ def copy(computer, src_path: str, dst_path: str) -> Result:
                 else:
                     new_dir = Directory(new_file_name, to_write, computer.sys_getuid(), computer.sys_getgid())
                     new_dir.events = to_write.events
-                    to_write.add_file(new_dir)
                     # Set a temporary write permission no matter what the new dir's permissions were so we can add its children
                     new_dir.permissions["write"] = ["owner"]
                     # Go through all the source's files and copy them into the new dir
@@ -1093,48 +1066,3 @@ def copy(computer, src_path: str, dst_path: str) -> Result:
 
         new_dir.handle_event("move")
         return Result(success=True)
-
-# TODO: Re-write the copy function so its not so shit
-
-
-# def copy(computer, src_path: str, dst_path: str) -> Result:
-#     # Make sure the src exists
-#     find_src = computer.fs.find(src_path)
-#
-#     if "/" not in src_path:
-#         src_path = "./" + src_path
-#
-#     src_filename = src_path.split("/")[-1]
-#
-#     if not find_src.success:
-#         return Result(success=False, message=ResultMessages.NOT_FOUND)
-#
-#     # We need read permissions to copy
-#     if not find_src.data.check_perm("read", computer).success:
-#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_READ)
-#
-#     if "/" not in dst_path:
-#         dst_path = "/" + dst_path
-#
-#     find_dst = computer.fs.find(dst_path)
-#
-#     if not find_dst.success:
-#         # Try to find the destination file parent folder
-#         find_dst = computer.fs.find("/".join(dst_path.split("/")[:-1]))
-#         if not find_dst.success:
-#             return Result(success=False, message=ResultMessages.NOT_FOUND)
-#
-#     # We need write permissions of the dest
-#     if not find_dst.data.check_perm("write", computer).success:
-#         return Result(success=False, message=ResultMessages.NOT_ALLOWED_WRITE)
-#
-#     if find_src.data.is_file():
-#         copy_file = File(src_filename, find_src.data.content, find_dst.data, find_src.data.owner,
-#                          find_src.data.group_owner)
-#     else:
-#         copy_file = Directory(src_filename, find_dst.data, find_src.data.owner,
-#                               find_src.data.group_owner)
-#
-#     find_dst.data.add_file(copy_file)
-#
-#     return Result(success=True)
