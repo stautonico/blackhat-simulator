@@ -178,7 +178,7 @@ def main(args: list, pipe: bool) -> Result:
             new_shellrc_result = stat(f"/home/{args.username}/.shellrc")
 
             if new_shellrc_result.success:
-                write(f"/home/{args.username}/.shellrc", f"export PATH=/bin:\nexport HOME=/home/{args.username}")
+                write(f"/home/{args.username}/.shellrc", f"export PATH=/bin:\nexport HOME=/home/{args.username}\nexport USER={args.username}\n")
 
         # Check if we should ask the user for Full name, etc
         if args.noninteractive:

@@ -8,16 +8,18 @@ from hashlib import md5
 from ..helpers import ResultMessages, Result
 from ..lib.fcntl import creat
 from ..lib.output import output
+from ..lib.stdlib import get_env
 from ..lib.sys.stat import stat
 from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp, write
 
 __COMMAND__ = "sudo"
 __VERSION__ = "1.1"
 
+
 def run_as_user(args, user, current_user):
     # Save the current timestamp to /run/sudo/ts/USERNAME
-    creat(f"/run/sudo/{current_user.username}", 0o600)
-    write(f"/run/sudo/{current_user.username}", str(datetime.datetime.now().timestamp()))
+    creat(f"/run/sudo/ts/{current_user.username}", 0o600)
+    write(f"/run/sudo/ts/{current_user.username}", str(datetime.datetime.now().timestamp()))
 
     setuid(user.uid)
     # args[0] : command
@@ -27,7 +29,6 @@ def run_as_user(args, user, current_user):
     setuid(current_user.uid)
     return result
 
-# TODO: CONTIMUE THIS
 
 def main(args: list, pipe: bool) -> Result:
     # TODO: Find a way to do this with arg parser without it breaking lol
@@ -82,12 +83,17 @@ def main(args: list, pipe: bool) -> Result:
     else:
         user = get_user(uid=0).data
 
-    current_user = get_user(uid=getuid()).data
+    # We can't do a getuid() because this is a setuid binary and it'll always be root
+    # Instead, we'll try to get the $USER environment variable
+    # If it's not set, we'll crash
+    username = get_env("USER")
+    if not username:
+        return output(f"{__COMMAND__}: cannot determine user", pipe, success=False)
+
+    current_user = get_user(username=username).data
 
     # Check if we have a timeout for this user
     timeout_file = stat(f"/run/sudo/{current_user.username}")
-
-    has_valid_timeout = False
 
     if timeout_file.success:
         # Check if the timeout is < 5 minutes
@@ -95,11 +101,9 @@ def main(args: list, pipe: bool) -> Result:
         if timeout_data.success:
             timeout_timestamp = datetime.datetime.fromtimestamp(float(timeout_data.data))
             if timeout_timestamp + datetime.timedelta(minutes=5) > datetime.datetime.now():
-                # The timeout is still valid, don't ask for password
-                has_valid_timeout = True
+                return run_as_user(args, user, current_user)
 
     # We need to authenticate as that user before we can run any commands
-    if not has_valid_timeout:
     for x in range(3):
         password = getpass()
 
@@ -157,17 +161,7 @@ def main(args: list, pipe: bool) -> Result:
                     f"{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported",
                     pipe, success=False)
 
-            # Save the current timestamp to /run/sudo/ts/USERNAME
-            creat(f"/run/sudo/{current_user.username}", 0o600)
-            write(f"/run/sudo/{current_user.username}", str(datetime.datetime.now().timestamp()))
-
-            setuid(user.uid)
-            # args[0] : command
-            # args[1:] : arguments
-            result = execvp(args[0], args[1:])
-            # Reset the effective user after running command
-            setuid(current_user.uid)
-            return result
+            return run_as_user(args, user, current_user)
         else:
             # Simulates the password checking delay when wrong password is entered
             sleep(0.25)

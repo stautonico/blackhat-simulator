@@ -743,7 +743,7 @@ class StandardFS:
         # Create /root/.shellrc
         root_dir: Directory = self.files.find("root")
 
-        root_shellrc: File = File(".shellrc", "export HOME=/root", root_dir, 0, 0)
+        root_shellrc: File = File(".shellrc", "export HOME=/root\nexport USER=root", root_dir, 0, 0)
         root_dir.add_file(root_shellrc)
 
     def setup_run(self) -> None:
