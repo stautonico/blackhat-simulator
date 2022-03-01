@@ -368,6 +368,9 @@ class Directory(FSBaseObject):
         self.files = {}
         self.size = None
 
+        if parent:
+            parent.add_file(self)
+
         self.update_size()
 
     def add_file(self, file: Union[File, "Directory"]) -> Result:
@@ -465,7 +468,7 @@ class StandardFS:
             None
         """
         # Setup the directory structure in the file system (Unix FHS)
-        for dir in ["bin", "etc", "home", "lib", "root", "proc", "tmp", "usr", "var"]:
+        for dir in ["bin", "etc", "home", "lib", "root", "run", "proc", "tmp", "usr", "var"]:
             directory = Directory(dir, self.files, 0, 0)
             # Special case for /tmp (read and write by everyone)
             if dir == "tmp":
@@ -491,6 +494,7 @@ class StandardFS:
         # self.setup_lib()
         self.setup_proc()
         self.setup_root()
+        self.setup_run()
         # self.setup_tmp()
         self.setup_usr()
         self.setup_var()
@@ -741,6 +745,26 @@ class StandardFS:
 
         root_shellrc: File = File(".shellrc", "export HOME=/root", root_dir, 0, 0)
         root_dir.add_file(root_shellrc)
+
+    def setup_run(self) -> None:
+        """
+        Sets up:
+        <ul>
+            <li>/run/sudo/ts/ - Contains auth timeout timestamps for <code>sudo</code></li>
+        </ul>
+
+        Returns:
+            None
+        """
+        run_dir: Directory = self.files.find("run")
+
+        # Create /run/sudo and /run/sudo/ts
+        run_sudo: Directory = Directory("sudo", run_dir, 0, 0)
+        run_sudo.permissions = {"read": ["owner"], "write": ["owner"], "execute": ["owner", "group", "public"]}
+        # run_dir.add_file(run_sudo)
+
+        run_sudo_ts: Directory = Directory("ts", run_sudo, 0, 0)
+        run_sudo_ts.permissions = {"read": ["owner"], "write": ["owner"], "execute": ["owner"]}
 
     def setup_usr(self) -> None:
         """
