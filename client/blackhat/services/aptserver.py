@@ -1,6 +1,7 @@
 from .service import Service
 from ..fs import Directory
 from ..helpers import Result, ResultMessages
+from packaging import version as packaging_version
 
 
 class AptServer(Service):
@@ -66,8 +67,26 @@ class AptServer(Service):
                         else:
                             # Find the most recent version number
                             # TODO: Find the proper version number and return
-                            output["obtained"].append(find_package)
+                            # print(f"LS RESULT!!!: ")
+                            # execvp("ls", ["/var/www/html", "-l", "-a"])
+                            read_dir = self.computer.fs.find(f"/var/www/html/repo/{package_name}")
+                            if read_dir.success:
+                                if len(read_dir.data.files) == 999:
+                                    output["obtained"].append(read_dir.data.files[list(read_dir.data.files.keys())[0]])
+                                else:
+                                    filenames = list(read_dir.data.files.keys())
 
+                                    # TODO: Keep a manifest of versions with dates to compare versions instead of parsing version numbers
+                                    max_version = packaging_version.parse("0.0.0")
+
+                                    for vers in filenames:
+                                        parsed_version = packaging_version.parse(vers)
+                                        if parsed_version > max_version:
+                                            max_version = parsed_version
+
+                                    output["obtained"].append(read_dir.data.files[str(max_version)])
+                            else:
+                                output["missing"].append(package_name)
                 return Result(success=True, data=output)
             else:
                 return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)

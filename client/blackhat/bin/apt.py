@@ -122,7 +122,7 @@ def main(args: list, pipe: bool) -> Result:
                 resolve_hostname = gethostbyname(host)
 
                 sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+                sock_addr = socket.SockAddr(socket.AF_INET, port, resolve_hostname.data.h_addr)
                 connection_result = socket.connect(sock, sock_addr)
 
                 if not connection_result.success:
@@ -130,7 +130,10 @@ def main(args: list, pipe: bool) -> Result:
 
                 ask_server_result = write(sock, {"packages": [x for x in outstanding_packages]})
 
-                print(ask_server_result.data["obtained"][0].files)
+                print(ask_server_result)
+                # print(ask_server_result.data["obtained"][0].files)
+
+                return output("", success=True, pipe=pipe)
 
                 if ask_server_result.success:
                     if ask_server_result.data.get("have"):
