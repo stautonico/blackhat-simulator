@@ -130,6 +130,8 @@ def main(args: list, pipe: bool) -> Result:
 
                 ask_server_result = write(sock, {"packages": [x for x in outstanding_packages]})
 
+                print(ask_server_result.data["obtained"][0].files)
+
                 if ask_server_result.success:
                     if ask_server_result.data.get("have"):
                         for package in ask_server_result.data.get("have"):

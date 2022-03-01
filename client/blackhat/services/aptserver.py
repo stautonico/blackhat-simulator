@@ -9,6 +9,17 @@ class AptServer(Service):
         Apt repository server that handles requests for installing packages
 
         NOTE: I have no clue how apt repos work, so this is my best guess from what I read in a medium article 🤷‍♂️
+
+        The apt server works as follows:
+        The apt server stores a directory in /var/www/html/repo/ for each package.
+        Inside each package directory is folder with a version number
+        Inside each version number folder is a directory structure that contains the package files.
+        The directory structure tells the client how to install the package.
+
+        The client then sends a request to the apt server with the package name(s) and an optional version number.
+        The apt server then checks if the package exists and if it does, it returns the directory structure.
+        If the package doesn't exist, it returns an error message.
+
         # TODO: Create ability to install specific version of a package with apt install nmap=1.1
         """
         super().__init__("AptServer", 80, computer)
@@ -30,20 +41,33 @@ class AptServer(Service):
         else:
             repo_dir: Directory = find_var_www_html_repo.data
             if args.get("packages"):
-                packages_we_have = []
-                packages_we_dont_have = []
-                for package in args.get("packages"):
-                    find_package = repo_dir.find(package)
-                    if find_package:
-                        # We want to check if its a directory (because then we then we pass all the packages within)
-                        if find_package.is_directory():
-                            for subpackage in find_package.files.keys():
-                                packages_we_have.append(subpackage)
-                        else:
-                            packages_we_have.append(package)
-                    else:
-                        packages_we_dont_have.append(package)
+                output = {"obtained": [], "missing": []}
 
-                return Result(success=True, data={"have": packages_we_have, "dont_have": packages_we_dont_have})
+                for package in args.get("packages"):
+                    # Check if we have a version number
+                    if "=" in package:
+                        package_name, version = package.split("=")
+                    else:
+                        package_name = package
+                        version = None
+
+                    # Check if the package exists
+                    find_package = repo_dir.find(package_name)
+                    if not find_package:
+                        output["missing"].append(package_name)
+                    else:
+                        # Check if we have a version number
+                        if version:
+                            find_version = find_package.find(version)
+                            if not find_version:
+                                output["missing"].append(package)
+                            else:
+                                output["obtained"].append(find_version)
+                        else:
+                            # Find the most recent version number
+                            # TODO: Find the proper version number and return
+                            output["obtained"].append(find_package)
+
+                return Result(success=True, data=output)
             else:
                 return Result(success=False, message=ResultMessages.MISSING_ARGUMENT)
