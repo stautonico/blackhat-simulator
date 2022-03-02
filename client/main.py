@@ -193,6 +193,9 @@ if not load_save_success:
                     package_dir: Directory = lan2_client2.fs.find(f"/var/www/html/repo/{package}/1.0/usr/bin").data
                     with open(f"blackhat/bin/installable/{package}.py", "r") as f:
                         File(package, f.read(), package_dir, 0, 0)
+                        lan2_client2.run_command("mkdir", ["-p", f"/var/www/html/repo/{package}/1.0/etc/{package}/"], pipe=True)
+                        conf_directory = lan2_client2.fs.find(f"/var/www/html/repo/{package}/1.0/etc/{package}/").data
+                        File(f"{package}.conf", "0x0", conf_directory, 0, 0)
 
         #
         # for file in os.listdir("./blackhat/bin/installable"):

@@ -352,6 +352,42 @@ class File(FSBaseObject):
         if self.parent:
             self.parent.update_size()
 
+    def get_perm_octal(self):
+        result = 0o000
+
+        # TODO: Find a less shit way to do this
+        # Owner
+        if "owner" in self.permissions["read"]:
+            result += 0o400
+
+        if "owner" in self.permissions["write"]:
+            result += 0o200
+
+        if "owner" in self.permissions["execute"]:
+            result += 0o100
+
+        # Group
+        if "group" in self.permissions["read"]:
+            result += 0o040
+
+        if "group" in self.permissions["write"]:
+            result += 0o020
+
+        if "group" in self.permissions["execute"]:
+            result += 0o010
+
+        # Public
+        if "public" in self.permissions["read"]:
+            result += 0o004
+
+        if "public" in self.permissions["write"]:
+            result += 0o002
+
+        if "public" in self.permissions["execute"]:
+            result += 0o001
+
+        return result
+
     def __str__(self):
         return f"{self.name} - {self.owner}"
 

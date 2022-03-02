@@ -61,9 +61,10 @@ class AptServer(Service):
                         if version:
                             find_version = find_package.find(version)
                             if not find_version:
-                                output["missing"].append(package)
+                                output["missing"].append(package_name)
                             else:
-                                output["obtained"].append(find_version)
+                                output["obtained"].append({"name": find_version.name, "version": version, "data": find_version})
+                                # output["obtained"][find_version.name] = find_version
                         else:
                             # Find the most recent version number
                             # TODO: Find the proper version number and return
@@ -71,20 +72,17 @@ class AptServer(Service):
                             # execvp("ls", ["/var/www/html", "-l", "-a"])
                             read_dir = self.computer.fs.find(f"/var/www/html/repo/{package_name}")
                             if read_dir.success:
-                                if len(read_dir.data.files) == 999:
-                                    output["obtained"].append(read_dir.data.files[list(read_dir.data.files.keys())[0]])
-                                else:
-                                    filenames = list(read_dir.data.files.keys())
+                                filenames = list(read_dir.data.files.keys())
+                                # TODO: Keep a manifest of versions with dates to compare versions instead of parsing version numbers
+                                max_version = packaging_version.parse("0.0.0")
 
-                                    # TODO: Keep a manifest of versions with dates to compare versions instead of parsing version numbers
-                                    max_version = packaging_version.parse("0.0.0")
+                                for vers in filenames:
+                                    parsed_version = packaging_version.parse(vers)
+                                    if parsed_version > max_version:
+                                        max_version = parsed_version
 
-                                    for vers in filenames:
-                                        parsed_version = packaging_version.parse(vers)
-                                        if parsed_version > max_version:
-                                            max_version = parsed_version
-
-                                    output["obtained"].append(read_dir.data.files[str(max_version)])
+                                output["obtained"].append({"name": package_name, "version": str(max_version), "data": read_dir.data.files[str(max_version)]})
+                                # output["obtained"][package_name] = read_dir.data.files[str(max_version)]
                             else:
                                 output["missing"].append(package_name)
                 return Result(success=True, data=output)

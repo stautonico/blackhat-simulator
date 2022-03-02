@@ -278,7 +278,9 @@ class Computer:
             response = module.main(args)
         except Exception as e:
             if os.getenv("DEBUGMODE") == "true":
+                import traceback
                 print(f"segmentation fault (core dumped) ({e})  {command}")
+                traceback.print_exc()
             else:
                 print(f"segmentation fault (core dumped)  {command}")
 
