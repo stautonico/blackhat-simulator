@@ -31,6 +31,8 @@ import unittest
 from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 from time import sleep
+import unittest.mock
+from getpass import getpass
 
 from .setup_computers_universal import init
 from ..helpers import Result, ResultMessages
@@ -47,9 +49,17 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -&gt; None:
         self.computer = init()
 
+    def run_command(self, command, args):
+
+        result = self.computer.run_command(command, args, True).data
+        # This avoids &#34;None type as no attribute strip&#34;
+        if not result:
+            result = &#34;&#34;
+        return result.strip(&#34;\n&#34;)
+
     def test_add_user(self):
-        self.computer.run_command(&#34;adduser&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;adduser&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;adduser&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;adduser&#34;, [&#34;--help&#34;])
 
         fail_bc_not_root_result = self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;], True)
         expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED,
@@ -75,69 +85,69 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
-        self.computer.run_command(&#34;base32&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;base32&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;base32&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;base32&#34;, [&#34;--help&#34;])
 
         message = &#34;Hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        base32_result = self.computer.run_command(&#34;base32&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+        base32_result = self.run_command(&#34;base32&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1].strip(&#34;\n&#34;)
         self.assertEqual(b32decode(base32_result).decode().strip(&#34;\n&#34;), message)
 
     def test_base64(self):
-        self.computer.run_command(&#34;base64&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;base64&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;base64&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;base64&#34;, [&#34;--help&#34;])
 
         message = &#34;Hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        base64_result = self.computer.run_command(&#34;base64&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+        base64_result = self.run_command(&#34;base64&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1]
         self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)
 
     def test_cd(self):
-        self.computer.run_command(&#34;cd&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;cd&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;--help&#34;])
 
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;..&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;..&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;...&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;...&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/etc/skel/Desktop&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;~&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;~&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)
 
     def test_chown(self):
-        self.computer.run_command(&#34;chown&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;chown&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;chown&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;chown&#34;, [&#34;--help&#34;])
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;testfile&#34;])
 
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 1000)
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 1000)
 
-        self.computer.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;], True)
+        self.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;])
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 0)
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 0)
 
     def test_clear(self):
-        self.computer.run_command(&#34;clear&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;clear&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-        self.computer.run_command(&#34;clear&#34;, [], True)
+        self.run_command(&#34;clear&#34;, [])
 
     def test_commands(self):
-        self.computer.run_command(&#34;commands&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;commands&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-        commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+        commands_result = self.run_command(&#34;commands&#34;, [])
         self.assertIn(&#34;ls&#34;, commands_result)
 
         # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -146,14 +156,14 @@ class TestIncludedBinaries(unittest.TestCase):
         move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+        commands_result = self.run_command(&#34;commands&#34;, [])
         self.assertNotIn(&#34;ls&#34;, commands_result)
 
     def test_date(self):
-        self.computer.run_command(&#34;date&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;date&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;date&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-        date_result = self.computer.run_command(&#34;date&#34;, [], True)
+        date_result = self.run_command(&#34;date&#34;, [])
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -161,47 +171,47 @@ class TestIncludedBinaries(unittest.TestCase):
 
         expected_result = f&#34;{time_first} {local_timezone} {time_second}&#34;
 
-        self.assertEqual(date_result.data.strip(&#34;\n&#34;), expected_result)
+        self.assertEqual(date_result, expected_result)
 
     def test_echo(self):
-        self.computer.run_command(&#34;echo&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;echo&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;echo&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;echo&#34;, [&#34;--help&#34;])
 
-        echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True)
-        self.assertEqual(echo_result.data, &#34;hello!\n&#34;)
+        echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True).data
+        self.assertEqual(echo_result, &#34;hello!\n&#34;)
 
         # Test -e flag
-        echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True)
-        self.assertEqual(echo_e_flag_result.data, &#34;hello\n\tworld!\n&#34;)
+        echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True).data
+        self.assertEqual(echo_e_flag_result, &#34;hello\n\tworld!\n&#34;)
 
         # Test -n flag
-        echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True)
-        self.assertEqual(echo_n_flag_result.data, &#34;hello world!\n&#34;)
+        echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True).data
+        self.assertEqual(echo_n_flag_result, &#34;hello world!\n&#34;)
 
     def test_env(self):
-        self.computer.run_command(&#34;env&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;env&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;env&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.computer.run_command(&#34;env&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;env&#34;, [])
         print(f&#34;ENVRESULT: {env_result}&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_export(self):
-        self.computer.run_command(&#34;export&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;export&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-        self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
     def test_hostname(self):
-        self.computer.run_command(&#34;hostname&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;hostname&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;hostname&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;hostname&#34;, [&#34;--help&#34;])
 
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
@@ -213,46 +223,46 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-        self.assertNotEqual(get_hostname_result.data, &#34;localhost&#34;)
+        self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
         # Switch to root then change hostname
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
-        get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+        self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
+        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-        self.assertEqual(get_hostname_result.data.strip(&#34;\n&#34;), &#34;localhost&#34;)
+        self.assertEqual(get_hostname_result, &#34;localhost&#34;)
 
     def test_id(self):
-        self.computer.run_command(&#34;id&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;id&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;id&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-        self_id_result = self.computer.run_command(&#34;id&#34;, [], True).data.strip(&#34;\n&#34;)
+        self_id_result = self.run_command(&#34;id&#34;, [])
         expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
         self.assertEqual(self_id_result, expected_self_id_result)
 
-        root_id_result = self.computer.run_command(&#34;id&#34;, [&#34;root&#34;], True).data.strip(&#34;\n&#34;)
-        root_id_by_uid_result = self.computer.run_command(&#34;id&#34;, [&#34;0&#34;], True).data.strip(&#34;\n&#34;)
+        root_id_result = self.run_command(&#34;id&#34;, [&#34;root&#34;])
+        root_id_by_uid_result = self.run_command(&#34;id&#34;, [&#34;0&#34;])
         expected_root_result = &#34;uid=0(root) gid=0(root) &#34;
         self.assertEqual(root_id_result, expected_root_result)
         self.assertEqual(root_id_by_uid_result, expected_root_result)
 
         # Check the flags
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-g&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-g&#34;])
         self.assertEqual(id_result, &#34;1000&#34;)
 
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-G&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-G&#34;])
         self.assertEqual(id_result, &#34;1000&#34;)
 
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-n&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-n&#34;])
         self.assertEqual(id_result, &#34;steve&#34;)
 
     def test_ls(self):
         import re
-        self.computer.run_command(&#34;ls&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;ls&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;ls&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;ls&#34;, [&#34;--help&#34;])
 
         # In the user&#39;s home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;], True)
@@ -260,9 +270,6 @@ class TestIncludedBinaries(unittest.TestCase):
                                     data=&#34;Desktop Documents Downloads Music Pictures Public Templates Videos &#34;)
 
         ls_result.data = ls_result.data.strip(&#34;\n&#34;)
-
-        print(ls_result)
-        print(expected_ls_result)
 
         color_filter = re.compile(r&#39;\x1b[^m]*m&#39;)
         stripped_color = color_filter.sub(&#39;&#39;, ls_result.data)
@@ -272,33 +279,31 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertNotIn(&#34;.shellrc&#34;, ls_result.data)
 
         # Test -a flag (show hidden files)
-        ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;], True)
-        self.assertIn(&#34;.shellrc&#34;, ls_result.data)
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;])
+        self.assertIn(&#34;.shellrc&#34;, ls_result)
 
         # Make sure -l flag works
-        ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;], True)
-        self.assertIn(&#34;steve&#34;, ls_result.data)
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;])
+        self.assertIn(&#34;steve&#34;, ls_result)
 
     def test_md5sum(self):
-        self.computer.run_command(&#34;md5sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;md5sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;md5sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;md5sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertIn(md5(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;]))
+        self.assertIn(md5(message.encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;MD5 (file) = {md5(message.encode()).hexdigest()}&#34;)
 
     def test_mv(self):
-        self.computer.run_command(&#34;mv&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;mv&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;mv&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;mv&#34;, [&#34;--help&#34;])
 
         # Make sure /bin/pwd exists
         find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -318,7 +323,7 @@ class TestIncludedBinaries(unittest.TestCase):
         # Root perms!
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;], True)
+        self.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;])
 
         # Make sure /bin/pwd DOESN&#39;T exists
         find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -329,165 +334,185 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertTrue(find_pwd.success)
 
     def test_printenv(self):
-        self.computer.run_command(&#34;printenv&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;printenv&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_pwd(self):
-        self.computer.run_command(&#34;pwd&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;pwd&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-        pwd_result = self.computer.run_command(&#34;pwd&#34;, [], True).data.strip(&#34;\n&#34;)
+        pwd_result = self.run_command(&#34;pwd&#34;, [])
 
         self.assertEqual(&#34;/home/steve&#34;, pwd_result)
 
     def test_sha1sum(self):
-        self.computer.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertIn(sha1(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;]))
+        self.assertIn(sha1(message.encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA1 (file) = {sha1(message.encode()).hexdigest()}&#34;)
 
     def test_sha224sum(self):
-        self.computer.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha224((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha224(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA224 (file) = {sha224(message.encode()).hexdigest()}&#34;)
 
     def test_sha256sum(self):
-        self.computer.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha256((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha256(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA256 (file) = {sha256(message.encode()).hexdigest()}&#34;)
 
     def test_sha384sum(self):
-        self.computer.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha384((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha384(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA384 (file) = {sha384(message.encode()).hexdigest()}&#34;)
 
     def test_sha512sum(self):
-        self.computer.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha512((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha512(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)
 
+    def test_sudo(self):
+        # Sanity check
+        sudo_result = self.run_command(&#34;id&#34;, [])
+
+        self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
+
+        # Add a new user to test later
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
+        self.computer.sessions.pop()
+
+
+        # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
+        # (pycharm&#39;s one for example) uses the fallback function
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+                sudo_root_result = self.run_command(&#34;sudo&#34;, [&#34;id&#34;])
+                self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, sudo_root_result)
+
+                other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
+                self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)
+
     def test_touch(self):
-        self.computer.run_command(&#34;touch&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;touch&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;--help&#34;])
 
         touch_result = self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
         expected_touch_result = Result(success=True)
 
-        # We should double check that the file exists in our home directory
-        self.assertIn(&#34;testfile&#34;, self.computer.run_command(&#34;ls&#34;, [], True).data)
+        # We should double-check that the file exists in our home directory
+        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
 
         self.assertEqual(touch_result, expected_touch_result)
 
     def test_uname(self):
-        self.computer.run_command(&#34;uname&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;uname&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;uname&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
         # Test some misc uname configurations
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [], True).data.strip(&#34;\n&#34;), &#34;Linux&#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-a&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                          f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-mns&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
                          f&#34;Linux {self.computer.hostname} x86_64 &#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;]),
                          &#34;unknown unknown Blackhat/Linux &#34;)
 
     def test_unset(self):
-        self.computer.run_command(&#34;unset&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;unset&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;unset&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-        self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
-        self.computer.run_command(&#34;unset&#34;, [&#34;BASH&#34;], True)
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_uptime(self):
-        self.computer.run_command(&#34;uptime&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;uptime&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;uptime&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
         # Make sure it doesn&#39;t crash
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [])
         # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
         sleep(5)
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [])
         self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-p&#34;], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
         self.assertEqual(uptime_result, &#34;up 0 minutes&#34;)
 
         now = datetime.datetime.now().strftime(&#34;%Y-%m-%d %H:%M:%S&#34;)
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-s&#34;], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-s&#34;])
 
         # I&#39;m going to strip out the seconds because different speed test runners can take different amount of times
         # to run
@@ -495,37 +520,46 @@ class TestIncludedBinaries(unittest.TestCase):
         now = &#34;:&#34;.join(now.split(&#34;:&#34;)[:-1])
         uptime_result = &#34;:&#34;.join(uptime_result.split(&#34;:&#34;)[:-1])
 
-        self.assertEqual(now, uptime_result)
+        # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
+        minus_one_minute = uptime_result.split(&#34;:&#34;)
+        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+        minus_one_minute = &#34;:&#34;.join(minus_one_minute)
+
+        plus_one_minute = uptime_result.split(&#34;:&#34;)
+        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+        plus_one_minute = &#34;:&#34;.join(plus_one_minute)
+
+        self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
 
     def test_users(self):
-        self.computer.run_command(&#34;users&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;users&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;users&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
         # One session = only one user
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve &#34;)
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve root &#34;)
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve root steve &#34;)
 
     def test_wc(self):
-        self.computer.run_command(&#34;wc&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;wc&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;wc&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;wc&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
         message_len = len(message + &#34;\n&#34;)
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -538,7 +572,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(int(total_new_line_count), 1)
         self.assertEqual(int(total_word_count), 1)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -548,7 +582,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         self.assertEqual(int(total_byte_count), message_len)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -559,17 +593,17 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(int(total_byte_count), message_len)
 
     def test_who(self):
-        self.computer.run_command(&#34;who&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;who&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;who&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-        who_result = self.computer.run_command(&#34;who&#34;, [], True).data.strip(&#34;\n&#34;)
+        who_result = self.run_command(&#34;who&#34;, [])
         self.assertEqual(who_result, &#34;steve\tpts/0&#34;)
 
     def test_whoami(self):
-        self.computer.run_command(&#34;whoami&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;whoami&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-        whoami_result = self.computer.run_command(&#34;whoami&#34;, [], True).data.strip(&#34;\n&#34;)
+        whoami_result = self.run_command(&#34;whoami&#34;, [])
 
         self.assertEqual(whoami_result, &#34;steve&#34;)
 
@@ -617,9 +651,17 @@ not have a method with the specified name.</p></div>
     def setUp(self) -&gt; None:
         self.computer = init()
 
+    def run_command(self, command, args):
+
+        result = self.computer.run_command(command, args, True).data
+        # This avoids &#34;None type as no attribute strip&#34;
+        if not result:
+            result = &#34;&#34;
+        return result.strip(&#34;\n&#34;)
+
     def test_add_user(self):
-        self.computer.run_command(&#34;adduser&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;adduser&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;adduser&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;adduser&#34;, [&#34;--help&#34;])
 
         fail_bc_not_root_result = self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;], True)
         expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED,
@@ -645,69 +687,69 @@ not have a method with the specified name.</p></div>
         self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
-        self.computer.run_command(&#34;base32&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;base32&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;base32&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;base32&#34;, [&#34;--help&#34;])
 
         message = &#34;Hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        base32_result = self.computer.run_command(&#34;base32&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+        base32_result = self.run_command(&#34;base32&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1].strip(&#34;\n&#34;)
         self.assertEqual(b32decode(base32_result).decode().strip(&#34;\n&#34;), message)
 
     def test_base64(self):
-        self.computer.run_command(&#34;base64&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;base64&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;base64&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;base64&#34;, [&#34;--help&#34;])
 
         message = &#34;Hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        base64_result = self.computer.run_command(&#34;base64&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+        base64_result = self.run_command(&#34;base64&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1]
         self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)
 
     def test_cd(self):
-        self.computer.run_command(&#34;cd&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;cd&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;--help&#34;])
 
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;..&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;..&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;...&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;...&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/etc/skel/Desktop&#34;)
-        self.computer.run_command(&#34;cd&#34;, [&#34;~&#34;], True)
+        self.run_command(&#34;cd&#34;, [&#34;~&#34;])
         self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)
 
     def test_chown(self):
-        self.computer.run_command(&#34;chown&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;chown&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;chown&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;chown&#34;, [&#34;--help&#34;])
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;testfile&#34;])
 
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 1000)
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 1000)
 
-        self.computer.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;], True)
+        self.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;])
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 0)
         self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 0)
 
     def test_clear(self):
-        self.computer.run_command(&#34;clear&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;clear&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-        self.computer.run_command(&#34;clear&#34;, [], True)
+        self.run_command(&#34;clear&#34;, [])
 
     def test_commands(self):
-        self.computer.run_command(&#34;commands&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;commands&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-        commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+        commands_result = self.run_command(&#34;commands&#34;, [])
         self.assertIn(&#34;ls&#34;, commands_result)
 
         # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -716,14 +758,14 @@ not have a method with the specified name.</p></div>
         move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+        commands_result = self.run_command(&#34;commands&#34;, [])
         self.assertNotIn(&#34;ls&#34;, commands_result)
 
     def test_date(self):
-        self.computer.run_command(&#34;date&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;date&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;date&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-        date_result = self.computer.run_command(&#34;date&#34;, [], True)
+        date_result = self.run_command(&#34;date&#34;, [])
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -731,47 +773,47 @@ not have a method with the specified name.</p></div>
 
         expected_result = f&#34;{time_first} {local_timezone} {time_second}&#34;
 
-        self.assertEqual(date_result.data.strip(&#34;\n&#34;), expected_result)
+        self.assertEqual(date_result, expected_result)
 
     def test_echo(self):
-        self.computer.run_command(&#34;echo&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;echo&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;echo&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;echo&#34;, [&#34;--help&#34;])
 
-        echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True)
-        self.assertEqual(echo_result.data, &#34;hello!\n&#34;)
+        echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True).data
+        self.assertEqual(echo_result, &#34;hello!\n&#34;)
 
         # Test -e flag
-        echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True)
-        self.assertEqual(echo_e_flag_result.data, &#34;hello\n\tworld!\n&#34;)
+        echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True).data
+        self.assertEqual(echo_e_flag_result, &#34;hello\n\tworld!\n&#34;)
 
         # Test -n flag
-        echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True)
-        self.assertEqual(echo_n_flag_result.data, &#34;hello world!\n&#34;)
+        echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True).data
+        self.assertEqual(echo_n_flag_result, &#34;hello world!\n&#34;)
 
     def test_env(self):
-        self.computer.run_command(&#34;env&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;env&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;env&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.computer.run_command(&#34;env&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;env&#34;, [])
         print(f&#34;ENVRESULT: {env_result}&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_export(self):
-        self.computer.run_command(&#34;export&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;export&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-        self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
     def test_hostname(self):
-        self.computer.run_command(&#34;hostname&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;hostname&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;hostname&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;hostname&#34;, [&#34;--help&#34;])
 
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
@@ -783,46 +825,46 @@ not have a method with the specified name.</p></div>
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-        self.assertNotEqual(get_hostname_result.data, &#34;localhost&#34;)
+        self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
         # Switch to root then change hostname
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
-        get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+        self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
+        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-        self.assertEqual(get_hostname_result.data.strip(&#34;\n&#34;), &#34;localhost&#34;)
+        self.assertEqual(get_hostname_result, &#34;localhost&#34;)
 
     def test_id(self):
-        self.computer.run_command(&#34;id&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;id&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;id&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-        self_id_result = self.computer.run_command(&#34;id&#34;, [], True).data.strip(&#34;\n&#34;)
+        self_id_result = self.run_command(&#34;id&#34;, [])
         expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
         self.assertEqual(self_id_result, expected_self_id_result)
 
-        root_id_result = self.computer.run_command(&#34;id&#34;, [&#34;root&#34;], True).data.strip(&#34;\n&#34;)
-        root_id_by_uid_result = self.computer.run_command(&#34;id&#34;, [&#34;0&#34;], True).data.strip(&#34;\n&#34;)
+        root_id_result = self.run_command(&#34;id&#34;, [&#34;root&#34;])
+        root_id_by_uid_result = self.run_command(&#34;id&#34;, [&#34;0&#34;])
         expected_root_result = &#34;uid=0(root) gid=0(root) &#34;
         self.assertEqual(root_id_result, expected_root_result)
         self.assertEqual(root_id_by_uid_result, expected_root_result)
 
         # Check the flags
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-g&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-g&#34;])
         self.assertEqual(id_result, &#34;1000&#34;)
 
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-G&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-G&#34;])
         self.assertEqual(id_result, &#34;1000&#34;)
 
-        id_result = self.computer.run_command(&#34;id&#34;, [&#34;-n&#34;], True).data.strip(&#34;\n&#34;)
+        id_result = self.run_command(&#34;id&#34;, [&#34;-n&#34;])
         self.assertEqual(id_result, &#34;steve&#34;)
 
     def test_ls(self):
         import re
-        self.computer.run_command(&#34;ls&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;ls&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;ls&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;ls&#34;, [&#34;--help&#34;])
 
         # In the user&#39;s home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;], True)
@@ -830,9 +872,6 @@ not have a method with the specified name.</p></div>
                                     data=&#34;Desktop Documents Downloads Music Pictures Public Templates Videos &#34;)
 
         ls_result.data = ls_result.data.strip(&#34;\n&#34;)
-
-        print(ls_result)
-        print(expected_ls_result)
 
         color_filter = re.compile(r&#39;\x1b[^m]*m&#39;)
         stripped_color = color_filter.sub(&#39;&#39;, ls_result.data)
@@ -842,33 +881,31 @@ not have a method with the specified name.</p></div>
         self.assertNotIn(&#34;.shellrc&#34;, ls_result.data)
 
         # Test -a flag (show hidden files)
-        ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;], True)
-        self.assertIn(&#34;.shellrc&#34;, ls_result.data)
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;])
+        self.assertIn(&#34;.shellrc&#34;, ls_result)
 
         # Make sure -l flag works
-        ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;], True)
-        self.assertIn(&#34;steve&#34;, ls_result.data)
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;])
+        self.assertIn(&#34;steve&#34;, ls_result)
 
     def test_md5sum(self):
-        self.computer.run_command(&#34;md5sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;md5sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;md5sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;md5sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertIn(md5(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;]))
+        self.assertIn(md5(message.encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;MD5 (file) = {md5(message.encode()).hexdigest()}&#34;)
 
     def test_mv(self):
-        self.computer.run_command(&#34;mv&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;mv&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;mv&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;mv&#34;, [&#34;--help&#34;])
 
         # Make sure /bin/pwd exists
         find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -888,7 +925,7 @@ not have a method with the specified name.</p></div>
         # Root perms!
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;], True)
+        self.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;])
 
         # Make sure /bin/pwd DOESN&#39;T exists
         find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -899,165 +936,185 @@ not have a method with the specified name.</p></div>
         self.assertTrue(find_pwd.success)
 
     def test_printenv(self):
-        self.computer.run_command(&#34;printenv&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;printenv&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_pwd(self):
-        self.computer.run_command(&#34;pwd&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;pwd&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-        pwd_result = self.computer.run_command(&#34;pwd&#34;, [], True).data.strip(&#34;\n&#34;)
+        pwd_result = self.run_command(&#34;pwd&#34;, [])
 
         self.assertEqual(&#34;/home/steve&#34;, pwd_result)
 
     def test_sha1sum(self):
-        self.computer.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertIn(sha1(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;]))
+        self.assertIn(sha1(message.encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA1 (file) = {sha1(message.encode()).hexdigest()}&#34;)
 
     def test_sha224sum(self):
-        self.computer.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha224((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha224(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA224 (file) = {sha224(message.encode()).hexdigest()}&#34;)
 
     def test_sha256sum(self):
-        self.computer.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha256((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha256(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA256 (file) = {sha256(message.encode()).hexdigest()}&#34;)
 
     def test_sha384sum(self):
-        self.computer.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha384((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha384(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA384 (file) = {sha384(message.encode()).hexdigest()}&#34;)
 
     def test_sha512sum(self):
-        self.computer.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
         self.assertIn(sha512((message + &#34;\n&#34;).encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                      self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;]))
         self.assertIn(sha512(message.encode()).hexdigest(),
-                      self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-        self.assertEqual(self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                      self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+        self.assertEqual(self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)
 
+    def test_sudo(self):
+        # Sanity check
+        sudo_result = self.run_command(&#34;id&#34;, [])
+
+        self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
+
+        # Add a new user to test later
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
+        self.computer.sessions.pop()
+
+
+        # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
+        # (pycharm&#39;s one for example) uses the fallback function
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+                sudo_root_result = self.run_command(&#34;sudo&#34;, [&#34;id&#34;])
+                self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, sudo_root_result)
+
+                other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
+                self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)
+
     def test_touch(self):
-        self.computer.run_command(&#34;touch&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;touch&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;--help&#34;])
 
         touch_result = self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
         expected_touch_result = Result(success=True)
 
-        # We should double check that the file exists in our home directory
-        self.assertIn(&#34;testfile&#34;, self.computer.run_command(&#34;ls&#34;, [], True).data)
+        # We should double-check that the file exists in our home directory
+        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
 
         self.assertEqual(touch_result, expected_touch_result)
 
     def test_uname(self):
-        self.computer.run_command(&#34;uname&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;uname&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;uname&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
         # Test some misc uname configurations
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [], True).data.strip(&#34;\n&#34;), &#34;Linux&#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-a&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                          f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-mns&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
                          f&#34;Linux {self.computer.hostname} x86_64 &#34;)
-        self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;], True).data.strip(&#34;\n&#34;),
+        self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;]),
                          &#34;unknown unknown Blackhat/Linux &#34;)
 
     def test_unset(self):
-        self.computer.run_command(&#34;unset&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;unset&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;unset&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-        self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+        self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
-        self.computer.run_command(&#34;unset&#34;, [&#34;BASH&#34;], True)
-        env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+        self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
+        env_result = self.run_command(&#34;printenv&#34;, [])
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_uptime(self):
-        self.computer.run_command(&#34;uptime&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;uptime&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;uptime&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
         # Make sure it doesn&#39;t crash
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [])
         # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
         sleep(5)
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [])
         self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-p&#34;], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
         self.assertEqual(uptime_result, &#34;up 0 minutes&#34;)
 
         now = datetime.datetime.now().strftime(&#34;%Y-%m-%d %H:%M:%S&#34;)
-        uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-s&#34;], True).data.strip(&#34;\n&#34;)
+        uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-s&#34;])
 
         # I&#39;m going to strip out the seconds because different speed test runners can take different amount of times
         # to run
@@ -1065,37 +1122,46 @@ not have a method with the specified name.</p></div>
         now = &#34;:&#34;.join(now.split(&#34;:&#34;)[:-1])
         uptime_result = &#34;:&#34;.join(uptime_result.split(&#34;:&#34;)[:-1])
 
-        self.assertEqual(now, uptime_result)
+        # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
+        minus_one_minute = uptime_result.split(&#34;:&#34;)
+        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+        minus_one_minute = &#34;:&#34;.join(minus_one_minute)
+
+        plus_one_minute = uptime_result.split(&#34;:&#34;)
+        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+        plus_one_minute = &#34;:&#34;.join(plus_one_minute)
+
+        self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
 
     def test_users(self):
-        self.computer.run_command(&#34;users&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;users&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;users&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
         # One session = only one user
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve &#34;)
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve root &#34;)
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+        users_result = self.run_command(&#34;users&#34;, [])
         self.assertEqual(users_result, &#34;steve root steve &#34;)
 
     def test_wc(self):
-        self.computer.run_command(&#34;wc&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;wc&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;wc&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;wc&#34;, [&#34;--help&#34;])
 
         message = &#34;hello!&#34;
         message_len = len(message + &#34;\n&#34;)
 
-        self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
         # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
         self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -1108,7 +1174,7 @@ not have a method with the specified name.</p></div>
         self.assertEqual(int(total_new_line_count), 1)
         self.assertEqual(int(total_word_count), 1)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -1118,7 +1184,7 @@ not have a method with the specified name.</p></div>
 
         self.assertEqual(int(total_byte_count), message_len)
 
-        wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;], True).data.strip(&#34;\n&#34;)
+        wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;])
 
         wc_split_results = wc_result.split(&#34; &#34;)
         while &#34;&#34; in wc_split_results:
@@ -1129,17 +1195,17 @@ not have a method with the specified name.</p></div>
         self.assertEqual(int(total_byte_count), message_len)
 
     def test_who(self):
-        self.computer.run_command(&#34;who&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;who&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;who&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-        who_result = self.computer.run_command(&#34;who&#34;, [], True).data.strip(&#34;\n&#34;)
+        who_result = self.run_command(&#34;who&#34;, [])
         self.assertEqual(who_result, &#34;steve\tpts/0&#34;)
 
     def test_whoami(self):
-        self.computer.run_command(&#34;whoami&#34;, [&#34;--version&#34;], True)
-        self.computer.run_command(&#34;whoami&#34;, [&#34;--help&#34;], True)
+        self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-        whoami_result = self.computer.run_command(&#34;whoami&#34;, [], True).data.strip(&#34;\n&#34;)
+        whoami_result = self.run_command(&#34;whoami&#34;, [])
 
         self.assertEqual(whoami_result, &#34;steve&#34;)</code></pre>
 </details>
@@ -1149,6 +1215,24 @@ not have a method with the specified name.</p></div>
 </ul>
 <h3>Methods</h3>
 <dl>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.run_command"><code class="name flex">
+<span>def <span class="ident">run_command</span></span>(<span>self, command, args)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def run_command(self, command, args):
+
+    result = self.computer.run_command(command, args, True).data
+    # This avoids &#34;None type as no attribute strip&#34;
+    if not result:
+        result = &#34;&#34;
+    return result.strip(&#34;\n&#34;)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.setUp"><code class="name flex">
 <span>def <span class="ident">setUp</span></span>(<span>self) ‑> None</span>
 </code></dt>
@@ -1172,8 +1256,8 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_add_user(self):
-    self.computer.run_command(&#34;adduser&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;adduser&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;adduser&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;adduser&#34;, [&#34;--help&#34;])
 
     fail_bc_not_root_result = self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;], True)
     expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED,
@@ -1209,16 +1293,16 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_base32(self):
-    self.computer.run_command(&#34;base32&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;base32&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;base32&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;base32&#34;, [&#34;--help&#34;])
 
     message = &#34;Hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-    base32_result = self.computer.run_command(&#34;base32&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+    base32_result = self.run_command(&#34;base32&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1].strip(&#34;\n&#34;)
     self.assertEqual(b32decode(base32_result).decode().strip(&#34;\n&#34;), message)</code></pre>
 </details>
 </dd>
@@ -1232,16 +1316,16 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_base64(self):
-    self.computer.run_command(&#34;base64&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;base64&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;base64&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;base64&#34;, [&#34;--help&#34;])
 
     message = &#34;Hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-    base64_result = self.computer.run_command(&#34;base64&#34;, [&#34;file&#34;], True).data.replace(&#34;\n&#34;, &#34;&#34;).split(&#34; &#34;)[1]
+    base64_result = self.run_command(&#34;base64&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1]
     self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)</code></pre>
 </details>
 </dd>
@@ -1255,17 +1339,17 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_cd(self):
-    self.computer.run_command(&#34;cd&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;cd&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;cd&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;cd&#34;, [&#34;--help&#34;])
 
     self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)
-    self.computer.run_command(&#34;cd&#34;, [&#34;..&#34;], True)
+    self.run_command(&#34;cd&#34;, [&#34;..&#34;])
     self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home&#34;)
-    self.computer.run_command(&#34;cd&#34;, [&#34;...&#34;], True)
+    self.run_command(&#34;cd&#34;, [&#34;...&#34;])
     self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/&#34;)
-    self.computer.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;], True)
+    self.run_command(&#34;cd&#34;, [&#34;/etc/skel/Desktop&#34;])
     self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/etc/skel/Desktop&#34;)
-    self.computer.run_command(&#34;cd&#34;, [&#34;~&#34;], True)
+    self.run_command(&#34;cd&#34;, [&#34;~&#34;])
     self.assertEqual(self.computer.sys_getcwd().pwd(), &#34;/home/steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1279,15 +1363,15 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_chown(self):
-    self.computer.run_command(&#34;chown&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;chown&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;chown&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;chown&#34;, [&#34;--help&#34;])
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;testfile&#34;])
 
     self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 1000)
     self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 1000)
 
-    self.computer.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;], True)
+    self.run_command(&#34;chown&#34;, [&#34;root:root&#34;, &#34;testfile&#34;])
     self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.owner, 0)
     self.assertEqual(self.computer.fs.find(&#34;/home/steve/testfile&#34;).data.group_owner, 0)</code></pre>
 </details>
@@ -1302,10 +1386,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_clear(self):
-    self.computer.run_command(&#34;clear&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;clear&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-    self.computer.run_command(&#34;clear&#34;, [], True)</code></pre>
+    self.run_command(&#34;clear&#34;, [])</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_commands"><code class="name flex">
@@ -1318,10 +1402,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_commands(self):
-    self.computer.run_command(&#34;commands&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;commands&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-    commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+    commands_result = self.run_command(&#34;commands&#34;, [])
     self.assertIn(&#34;ls&#34;, commands_result)
 
     # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -1330,7 +1414,7 @@ not have a method with the specified name.</p></div>
     move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
     self.assertTrue(move_result.success)
 
-    commands_result = self.computer.run_command(&#34;commands&#34;, [], True).data.strip(&#34;\n&#34;)
+    commands_result = self.run_command(&#34;commands&#34;, [])
     self.assertNotIn(&#34;ls&#34;, commands_result)</code></pre>
 </details>
 </dd>
@@ -1344,10 +1428,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_date(self):
-    self.computer.run_command(&#34;date&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;date&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;date&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-    date_result = self.computer.run_command(&#34;date&#34;, [], True)
+    date_result = self.run_command(&#34;date&#34;, [])
 
     local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
     time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -1355,7 +1439,7 @@ not have a method with the specified name.</p></div>
 
     expected_result = f&#34;{time_first} {local_timezone} {time_second}&#34;
 
-    self.assertEqual(date_result.data.strip(&#34;\n&#34;), expected_result)</code></pre>
+    self.assertEqual(date_result, expected_result)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_echo"><code class="name flex">
@@ -1368,19 +1452,19 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_echo(self):
-    self.computer.run_command(&#34;echo&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;echo&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;echo&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;echo&#34;, [&#34;--help&#34;])
 
-    echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True)
-    self.assertEqual(echo_result.data, &#34;hello!\n&#34;)
+    echo_result = self.computer.run_command(&#34;echo&#34;, [&#34;hello!&#34;], True).data
+    self.assertEqual(echo_result, &#34;hello!\n&#34;)
 
     # Test -e flag
-    echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True)
-    self.assertEqual(echo_e_flag_result.data, &#34;hello\n\tworld!\n&#34;)
+    echo_e_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-e&#34;, &#34;hello\n\tworld!&#34;], True).data
+    self.assertEqual(echo_e_flag_result, &#34;hello\n\tworld!\n&#34;)
 
     # Test -n flag
-    echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True)
-    self.assertEqual(echo_n_flag_result.data, &#34;hello world!\n&#34;)</code></pre>
+    echo_n_flag_result = self.computer.run_command(&#34;echo&#34;, [&#34;-n&#34;, &#34;hello world!\n&#34;], True).data
+    self.assertEqual(echo_n_flag_result, &#34;hello world!\n&#34;)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_env"><code class="name flex">
@@ -1393,10 +1477,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_env(self):
-    self.computer.run_command(&#34;env&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;env&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;env&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-    env_result = self.computer.run_command(&#34;env&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;env&#34;, [])
     print(f&#34;ENVRESULT: {env_result}&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
@@ -1411,16 +1495,16 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_export(self):
-    self.computer.run_command(&#34;export&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;export&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;export&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-    self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+    self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)</code></pre>
 </details>
 </dd>
@@ -1434,8 +1518,8 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_hostname(self):
-    self.computer.run_command(&#34;hostname&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;hostname&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;hostname&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;hostname&#34;, [&#34;--help&#34;])
 
     # We want to try to set the hostname without root permission (should fail)
     set_hostname_result = self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
@@ -1447,17 +1531,17 @@ not have a method with the specified name.</p></div>
     self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
     # Make sure it failed
-    get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+    get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-    self.assertNotEqual(get_hostname_result.data, &#34;localhost&#34;)
+    self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
     # Switch to root then change hostname
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-    self.computer.run_command(&#34;hostname&#34;, [&#34;localhost&#34;], True)
-    get_hostname_result = self.computer.run_command(&#34;hostname&#34;, [], True)
+    self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
+    get_hostname_result = self.run_command(&#34;hostname&#34;, [])
 
-    self.assertEqual(get_hostname_result.data.strip(&#34;\n&#34;), &#34;localhost&#34;)</code></pre>
+    self.assertEqual(get_hostname_result, &#34;localhost&#34;)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_id"><code class="name flex">
@@ -1470,27 +1554,27 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_id(self):
-    self.computer.run_command(&#34;id&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;id&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;id&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-    self_id_result = self.computer.run_command(&#34;id&#34;, [], True).data.strip(&#34;\n&#34;)
+    self_id_result = self.run_command(&#34;id&#34;, [])
     expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
     self.assertEqual(self_id_result, expected_self_id_result)
 
-    root_id_result = self.computer.run_command(&#34;id&#34;, [&#34;root&#34;], True).data.strip(&#34;\n&#34;)
-    root_id_by_uid_result = self.computer.run_command(&#34;id&#34;, [&#34;0&#34;], True).data.strip(&#34;\n&#34;)
+    root_id_result = self.run_command(&#34;id&#34;, [&#34;root&#34;])
+    root_id_by_uid_result = self.run_command(&#34;id&#34;, [&#34;0&#34;])
     expected_root_result = &#34;uid=0(root) gid=0(root) &#34;
     self.assertEqual(root_id_result, expected_root_result)
     self.assertEqual(root_id_by_uid_result, expected_root_result)
 
     # Check the flags
-    id_result = self.computer.run_command(&#34;id&#34;, [&#34;-g&#34;], True).data.strip(&#34;\n&#34;)
+    id_result = self.run_command(&#34;id&#34;, [&#34;-g&#34;])
     self.assertEqual(id_result, &#34;1000&#34;)
 
-    id_result = self.computer.run_command(&#34;id&#34;, [&#34;-G&#34;], True).data.strip(&#34;\n&#34;)
+    id_result = self.run_command(&#34;id&#34;, [&#34;-G&#34;])
     self.assertEqual(id_result, &#34;1000&#34;)
 
-    id_result = self.computer.run_command(&#34;id&#34;, [&#34;-n&#34;], True).data.strip(&#34;\n&#34;)
+    id_result = self.run_command(&#34;id&#34;, [&#34;-n&#34;])
     self.assertEqual(id_result, &#34;steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1505,8 +1589,8 @@ not have a method with the specified name.</p></div>
 </summary>
 <pre><code class="python">def test_ls(self):
     import re
-    self.computer.run_command(&#34;ls&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;ls&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;ls&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;ls&#34;, [&#34;--help&#34;])
 
     # In the user&#39;s home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
     ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;], True)
@@ -1514,9 +1598,6 @@ not have a method with the specified name.</p></div>
                                 data=&#34;Desktop Documents Downloads Music Pictures Public Templates Videos &#34;)
 
     ls_result.data = ls_result.data.strip(&#34;\n&#34;)
-
-    print(ls_result)
-    print(expected_ls_result)
 
     color_filter = re.compile(r&#39;\x1b[^m]*m&#39;)
     stripped_color = color_filter.sub(&#39;&#39;, ls_result.data)
@@ -1526,12 +1607,12 @@ not have a method with the specified name.</p></div>
     self.assertNotIn(&#34;.shellrc&#34;, ls_result.data)
 
     # Test -a flag (show hidden files)
-    ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;], True)
-    self.assertIn(&#34;.shellrc&#34;, ls_result.data)
+    ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-a&#34;])
+    self.assertIn(&#34;.shellrc&#34;, ls_result)
 
     # Make sure -l flag works
-    ls_result = self.computer.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;], True)
-    self.assertIn(&#34;steve&#34;, ls_result.data)</code></pre>
+    ls_result = self.run_command(&#34;ls&#34;, [&#34;--no-color&#34;, &#34;-l&#34;])
+    self.assertIn(&#34;steve&#34;, ls_result)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_md5sum"><code class="name flex">
@@ -1544,20 +1625,18 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_md5sum(self):
-    self.computer.run_command(&#34;md5sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;md5sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;md5sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;md5sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-    self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertIn(md5(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+    self.assertIn(md5((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;]))
+    self.assertIn(md5(message.encode()).hexdigest(), self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;md5sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;MD5 (file) = {md5(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
@@ -1571,8 +1650,8 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_mv(self):
-    self.computer.run_command(&#34;mv&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;mv&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;mv&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;mv&#34;, [&#34;--help&#34;])
 
     # Make sure /bin/pwd exists
     find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -1592,7 +1671,7 @@ not have a method with the specified name.</p></div>
     # Root perms!
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-    self.computer.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;], True)
+    self.run_command(&#34;mv&#34;, [&#34;/bin/pwd&#34;, &#34;/tmp&#34;])
 
     # Make sure /bin/pwd DOESN&#39;T exists
     find_pwd = self.computer.fs.find(&#34;/bin/pwd&#34;)
@@ -1613,10 +1692,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_printenv(self):
-    self.computer.run_command(&#34;printenv&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;printenv&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1630,10 +1709,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_pwd(self):
-    self.computer.run_command(&#34;pwd&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;pwd&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-    pwd_result = self.computer.run_command(&#34;pwd&#34;, [], True).data.strip(&#34;\n&#34;)
+    pwd_result = self.run_command(&#34;pwd&#34;, [])
 
     self.assertEqual(&#34;/home/steve&#34;, pwd_result)</code></pre>
 </details>
@@ -1648,20 +1727,18 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sha1sum(self):
-    self.computer.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;sha1sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-    self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertIn(sha1(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+    self.assertIn(sha1((message + &#34;\n&#34;).encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;]))
+    self.assertIn(sha1(message.encode()).hexdigest(), self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;sha1sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;SHA1 (file) = {sha1(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
@@ -1675,20 +1752,20 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sha224sum(self):
-    self.computer.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;sha224sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;sha224sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
     self.assertIn(sha224((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                  self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;]))
     self.assertIn(sha224(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                  self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;sha224sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;SHA224 (file) = {sha224(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
@@ -1702,20 +1779,20 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sha256sum(self):
-    self.computer.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;sha256sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;sha256sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
     self.assertIn(sha256((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                  self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;]))
     self.assertIn(sha256(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                  self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;sha256sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;SHA256 (file) = {sha256(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
@@ -1729,20 +1806,20 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sha384sum(self):
-    self.computer.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;sha384sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;sha384sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
     self.assertIn(sha384((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                  self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;]))
     self.assertIn(sha384(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                  self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;sha384sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;SHA384 (file) = {sha384(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
@@ -1756,21 +1833,53 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sha512sum(self):
-    self.computer.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;sha512sum&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;sha512sum&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
     self.assertIn(sha512((message + &#34;\n&#34;).encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;))
+                  self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;]))
     self.assertIn(sha512(message.encode()).hexdigest(),
-                  self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;], True).data.strip(&#34;\n&#34;))
-    self.assertEqual(self.computer.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;], True).data.strip(&#34;\n&#34;),
+                  self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;]))
+    self.assertEqual(self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                      f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo"><code class="name flex">
+<span>def <span class="ident">test_sudo</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_sudo(self):
+    # Sanity check
+    sudo_result = self.run_command(&#34;id&#34;, [])
+
+    self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
+
+    # Add a new user to test later
+    self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+    self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
+    self.computer.sessions.pop()
+
+
+    # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
+    # (pycharm&#39;s one for example) uses the fallback function
+    with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+        with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+            sudo_root_result = self.run_command(&#34;sudo&#34;, [&#34;id&#34;])
+            self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, sudo_root_result)
+
+            other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
+            self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_touch"><code class="name flex">
@@ -1783,14 +1892,14 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_touch(self):
-    self.computer.run_command(&#34;touch&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;touch&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;touch&#34;, [&#34;--help&#34;])
 
     touch_result = self.computer.run_command(&#34;touch&#34;, [&#34;testfile&#34;], True)
     expected_touch_result = Result(success=True)
 
-    # We should double check that the file exists in our home directory
-    self.assertIn(&#34;testfile&#34;, self.computer.run_command(&#34;ls&#34;, [], True).data)
+    # We should double-check that the file exists in our home directory
+    self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
 
     self.assertEqual(touch_result, expected_touch_result)</code></pre>
 </details>
@@ -1805,16 +1914,16 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_uname(self):
-    self.computer.run_command(&#34;uname&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;uname&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;uname&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
     # Test some misc uname configurations
-    self.assertEqual(self.computer.run_command(&#34;uname&#34;, [], True).data.strip(&#34;\n&#34;), &#34;Linux&#34;)
-    self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-a&#34;], True).data.strip(&#34;\n&#34;),
+    self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+    self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                      f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
-    self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-mns&#34;], True).data.strip(&#34;\n&#34;),
+    self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
                      f&#34;Linux {self.computer.hostname} x86_64 &#34;)
-    self.assertEqual(self.computer.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;], True).data.strip(&#34;\n&#34;),
+    self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-op&#34;, &#34;-i&#34;]),
                      &#34;unknown unknown Blackhat/Linux &#34;)</code></pre>
 </details>
 </dd>
@@ -1828,20 +1937,20 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_unset(self):
-    self.computer.run_command(&#34;unset&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;unset&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;unset&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
-    self.computer.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;], True)
+    self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
-    self.computer.run_command(&#34;unset&#34;, [&#34;BASH&#34;], True)
-    env_result = self.computer.run_command(&#34;printenv&#34;, [], True).data.strip(&#34;\n&#34;)
+    self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
+    env_result = self.run_command(&#34;printenv&#34;, [])
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1855,23 +1964,23 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_uptime(self):
-    self.computer.run_command(&#34;uptime&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;uptime&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;uptime&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
     # Make sure it doesn&#39;t crash
-    uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+    uptime_result = self.run_command(&#34;uptime&#34;, [])
     # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
     self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
     sleep(5)
-    uptime_result = self.computer.run_command(&#34;uptime&#34;, [], True).data.strip(&#34;\n&#34;)
+    uptime_result = self.run_command(&#34;uptime&#34;, [])
     self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
-    uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-p&#34;], True).data.strip(&#34;\n&#34;)
+    uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
     self.assertEqual(uptime_result, &#34;up 0 minutes&#34;)
 
     now = datetime.datetime.now().strftime(&#34;%Y-%m-%d %H:%M:%S&#34;)
-    uptime_result = self.computer.run_command(&#34;uptime&#34;, [&#34;-s&#34;], True).data.strip(&#34;\n&#34;)
+    uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-s&#34;])
 
     # I&#39;m going to strip out the seconds because different speed test runners can take different amount of times
     # to run
@@ -1879,7 +1988,16 @@ not have a method with the specified name.</p></div>
     now = &#34;:&#34;.join(now.split(&#34;:&#34;)[:-1])
     uptime_result = &#34;:&#34;.join(uptime_result.split(&#34;:&#34;)[:-1])
 
-    self.assertEqual(now, uptime_result)</code></pre>
+    # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
+    minus_one_minute = uptime_result.split(&#34;:&#34;)
+    minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+    minus_one_minute = &#34;:&#34;.join(minus_one_minute)
+
+    plus_one_minute = uptime_result.split(&#34;:&#34;)
+    plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+    plus_one_minute = &#34;:&#34;.join(plus_one_minute)
+
+    self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_users"><code class="name flex">
@@ -1892,20 +2010,20 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_users(self):
-    self.computer.run_command(&#34;users&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;users&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;users&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
     # One session = only one user
-    users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+    users_result = self.run_command(&#34;users&#34;, [])
     self.assertEqual(users_result, &#34;steve &#34;)
 
     # Add new sessions then test
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-    users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+    users_result = self.run_command(&#34;users&#34;, [])
     self.assertEqual(users_result, &#34;steve root &#34;)
 
     self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-    users_result = self.computer.run_command(&#34;users&#34;, [], True).data.strip(&#34;\n&#34;)
+    users_result = self.run_command(&#34;users&#34;, [])
     self.assertEqual(users_result, &#34;steve root steve &#34;)</code></pre>
 </details>
 </dd>
@@ -1919,17 +2037,17 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_wc(self):
-    self.computer.run_command(&#34;wc&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;wc&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;wc&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;wc&#34;, [&#34;--help&#34;])
 
     message = &#34;hello!&#34;
     message_len = len(message + &#34;\n&#34;)
 
-    self.computer.run_command(&#34;touch&#34;, [&#34;file&#34;], True)
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
     # We&#39;re writing with a new line to replicate what `echo hello! &gt; file` would do
     self.computer.fs.find(&#34;/home/steve/file&#34;).data.write(message + &#34;\n&#34;, self.computer)
 
-    wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;], True).data.strip(&#34;\n&#34;)
+    wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;])
 
     wc_split_results = wc_result.split(&#34; &#34;)
     while &#34;&#34; in wc_split_results:
@@ -1942,7 +2060,7 @@ not have a method with the specified name.</p></div>
     self.assertEqual(int(total_new_line_count), 1)
     self.assertEqual(int(total_word_count), 1)
 
-    wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;], True).data.strip(&#34;\n&#34;)
+    wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-c&#34;])
 
     wc_split_results = wc_result.split(&#34; &#34;)
     while &#34;&#34; in wc_split_results:
@@ -1952,7 +2070,7 @@ not have a method with the specified name.</p></div>
 
     self.assertEqual(int(total_byte_count), message_len)
 
-    wc_result = self.computer.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;], True).data.strip(&#34;\n&#34;)
+    wc_result = self.run_command(&#34;wc&#34;, [&#34;file&#34;, &#34;-m&#34;])
 
     wc_split_results = wc_result.split(&#34; &#34;)
     while &#34;&#34; in wc_split_results:
@@ -1973,10 +2091,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_who(self):
-    self.computer.run_command(&#34;who&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;who&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;who&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-    who_result = self.computer.run_command(&#34;who&#34;, [], True).data.strip(&#34;\n&#34;)
+    who_result = self.run_command(&#34;who&#34;, [])
     self.assertEqual(who_result, &#34;steve\tpts/0&#34;)</code></pre>
 </details>
 </dd>
@@ -1990,10 +2108,10 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_whoami(self):
-    self.computer.run_command(&#34;whoami&#34;, [&#34;--version&#34;], True)
-    self.computer.run_command(&#34;whoami&#34;, [&#34;--help&#34;], True)
+    self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-    whoami_result = self.computer.run_command(&#34;whoami&#34;, [], True).data.strip(&#34;\n&#34;)
+    whoami_result = self.run_command(&#34;whoami&#34;, [])
 
     self.assertEqual(whoami_result, &#34;steve&#34;)</code></pre>
 </details>
@@ -2065,6 +2183,7 @@ not have a method with the specified name.</p></div>
 <li>
 <h4><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries" href="#blackhat.tests.test_binaries.TestIncludedBinaries">TestIncludedBinaries</a></code></h4>
 <ul class="two-column">
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.run_command" href="#blackhat.tests.test_binaries.TestIncludedBinaries.run_command">run_command</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.setUp" href="#blackhat.tests.test_binaries.TestIncludedBinaries.setUp">setUp</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_add_user" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_add_user">test_add_user</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_base32" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_base32">test_base32</a></code></li>
@@ -2089,6 +2208,7 @@ not have a method with the specified name.</p></div>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha256sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha256sum">test_sha256sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha384sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha384sum">test_sha384sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha512sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha512sum">test_sha512sum</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo">test_sudo</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_touch" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_touch">test_touch</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_uname" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_uname">test_uname</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_unset" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_unset">test_unset</a></code></li>
