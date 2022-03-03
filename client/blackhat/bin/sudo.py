@@ -93,11 +93,11 @@ def main(args: list, pipe: bool) -> Result:
     current_user = get_user(username=username).data
 
     # Check if we have a timeout for this user
-    timeout_file = stat(f"/run/sudo/{current_user.username}")
+    timeout_file = stat(f"/run/sudo/ts/{current_user.username}")
 
     if timeout_file.success:
         # Check if the timeout is < 5 minutes
-        timeout_data = read(f"/run/sudo/{current_user.username}")
+        timeout_data = read(f"/run/sudo/ts/{current_user.username}")
         if timeout_data.success:
             timeout_timestamp = datetime.datetime.fromtimestamp(float(timeout_data.data))
             if timeout_timestamp + datetime.timedelta(minutes=5) > datetime.datetime.now():
