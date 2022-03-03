@@ -3,6 +3,8 @@ import unittest
 from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 from time import sleep
+import unittest.mock
+from getpass import getpass
 
 from .setup_computers_universal import init
 from ..helpers import Result, ResultMessages
@@ -19,9 +21,17 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -> None:
         self.computer = init()
 
+    def run_command(self, command, args):
+
+        result = self.computer.run_command(command, args, True).data
+        # This avoids "None type as no attribute strip"
+        if not result:
+            result = ""
+        return result.strip("\n")
+
     def test_add_user(self):
-        self.computer.run_command("adduser", ["--version"], True)
-        self.computer.run_command("adduser", ["--help"], True)
+        self.run_command("adduser", ["--version"])
+        self.run_command("adduser", ["--help"])
 
         fail_bc_not_root_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
         expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED,
@@ -47,69 +57,69 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(get_user_result, expected_get_user_result)
 
     def test_base32(self):
-        self.computer.run_command("base32", ["--version"], True)
-        self.computer.run_command("base32", ["--help"], True)
+        self.run_command("base32", ["--version"])
+        self.run_command("base32", ["--help"])
 
         message = "Hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
-        base32_result = self.computer.run_command("base32", ["file"], True).data.replace("\n", "").split(" ")[1]
+        base32_result = self.run_command("base32", ["file"]).split(" ")[1].strip("\n")
         self.assertEqual(b32decode(base32_result).decode().strip("\n"), message)
 
     def test_base64(self):
-        self.computer.run_command("base64", ["--version"], True)
-        self.computer.run_command("base64", ["--help"], True)
+        self.run_command("base64", ["--version"])
+        self.run_command("base64", ["--help"])
 
         message = "Hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
-        base64_result = self.computer.run_command("base64", ["file"], True).data.replace("\n", "").split(" ")[1]
+        base64_result = self.run_command("base64", ["file"]).split(" ")[1]
         self.assertEqual(b64decode(base64_result).decode().strip("\n"), message)
 
     def test_cd(self):
-        self.computer.run_command("cd", ["--version"], True)
-        self.computer.run_command("cd", ["--help"], True)
+        self.run_command("cd", ["--version"])
+        self.run_command("cd", ["--help"])
 
         self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
-        self.computer.run_command("cd", [".."], True)
+        self.run_command("cd", [".."])
         self.assertEqual(self.computer.sys_getcwd().pwd(), "/home")
-        self.computer.run_command("cd", ["..."], True)
+        self.run_command("cd", ["..."])
         self.assertEqual(self.computer.sys_getcwd().pwd(), "/")
-        self.computer.run_command("cd", ["/etc/skel/Desktop"], True)
+        self.run_command("cd", ["/etc/skel/Desktop"])
         self.assertEqual(self.computer.sys_getcwd().pwd(), "/etc/skel/Desktop")
-        self.computer.run_command("cd", ["~"], True)
+        self.run_command("cd", ["~"])
         self.assertEqual(self.computer.sys_getcwd().pwd(), "/home/steve")
 
     def test_chown(self):
-        self.computer.run_command("chown", ["--version"], True)
-        self.computer.run_command("chown", ["--help"], True)
+        self.run_command("chown", ["--version"])
+        self.run_command("chown", ["--help"])
 
-        self.computer.run_command("touch", ["testfile"], True)
+        self.run_command("touch", ["testfile"])
 
         self.assertEqual(self.computer.fs.find("/home/steve/testfile").data.owner, 1000)
         self.assertEqual(self.computer.fs.find("/home/steve/testfile").data.group_owner, 1000)
 
-        self.computer.run_command("chown", ["root:root", "testfile"], True)
+        self.run_command("chown", ["root:root", "testfile"])
         self.assertEqual(self.computer.fs.find("/home/steve/testfile").data.owner, 0)
         self.assertEqual(self.computer.fs.find("/home/steve/testfile").data.group_owner, 0)
 
     def test_clear(self):
-        self.computer.run_command("clear", ["--version"], True)
-        self.computer.run_command("clear", ["--help"], True)
+        self.run_command("clear", ["--version"])
+        self.run_command("clear", ["--help"])
 
-        self.computer.run_command("clear", [], True)
+        self.run_command("clear", [])
 
     def test_commands(self):
-        self.computer.run_command("commands", ["--version"], True)
-        self.computer.run_command("commands", ["--help"], True)
+        self.run_command("commands", ["--version"])
+        self.run_command("commands", ["--help"])
 
-        commands_result = self.computer.run_command("commands", [], True).data.strip("\n")
+        commands_result = self.run_command("commands", [])
         self.assertIn("ls", commands_result)
 
         # Now lets remove ls from /bin (it shouldn't show up in commands)
@@ -118,14 +128,14 @@ class TestIncludedBinaries(unittest.TestCase):
         move_result = self.computer.run_command("mv", ["/bin/ls", "/tmp"], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.computer.run_command("commands", [], True).data.strip("\n")
+        commands_result = self.run_command("commands", [])
         self.assertNotIn("ls", commands_result)
 
     def test_date(self):
-        self.computer.run_command("date", ["--version"], True)
-        self.computer.run_command("date", ["--help"], True)
+        self.run_command("date", ["--version"])
+        self.run_command("date", ["--help"])
 
-        date_result = self.computer.run_command("date", [], True)
+        date_result = self.run_command("date", [])
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime('%a %b %d %I:%M:%S %p')
@@ -133,47 +143,47 @@ class TestIncludedBinaries(unittest.TestCase):
 
         expected_result = f"{time_first} {local_timezone} {time_second}"
 
-        self.assertEqual(date_result.data.strip("\n"), expected_result)
+        self.assertEqual(date_result, expected_result)
 
     def test_echo(self):
-        self.computer.run_command("echo", ["--version"], True)
-        self.computer.run_command("echo", ["--help"], True)
+        self.run_command("echo", ["--version"])
+        self.run_command("echo", ["--help"])
 
-        echo_result = self.computer.run_command("echo", ["hello!"], True)
-        self.assertEqual(echo_result.data, "hello!\n")
+        echo_result = self.computer.run_command("echo", ["hello!"], True).data
+        self.assertEqual(echo_result, "hello!\n")
 
         # Test -e flag
-        echo_e_flag_result = self.computer.run_command("echo", ["-e", "hello\n\tworld!"], True)
-        self.assertEqual(echo_e_flag_result.data, "hello\n\tworld!\n")
+        echo_e_flag_result = self.computer.run_command("echo", ["-e", "hello\n\tworld!"], True).data
+        self.assertEqual(echo_e_flag_result, "hello\n\tworld!\n")
 
         # Test -n flag
-        echo_n_flag_result = self.computer.run_command("echo", ["-n", "hello world!\n"], True)
-        self.assertEqual(echo_n_flag_result.data, "hello world!\n")
+        echo_n_flag_result = self.computer.run_command("echo", ["-n", "hello world!\n"], True).data
+        self.assertEqual(echo_n_flag_result, "hello world!\n")
 
     def test_env(self):
-        self.computer.run_command("env", ["--version"], True)
-        self.computer.run_command("env", ["--help"], True)
+        self.run_command("env", ["--version"])
+        self.run_command("env", ["--help"])
 
-        env_result = self.computer.run_command("env", [], True).data.strip("\n")
+        env_result = self.run_command("env", [])
         print(f"ENVRESULT: {env_result}")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_export(self):
-        self.computer.run_command("export", ["--version"], True)
-        self.computer.run_command("export", ["--help"], True)
+        self.run_command("export", ["--version"])
+        self.run_command("export", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
-        self.computer.run_command("export", ["BASH=/bin/bash"], True)
+        self.run_command("export", ["BASH=/bin/bash"])
 
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
     def test_hostname(self):
-        self.computer.run_command("hostname", ["--version"], True)
-        self.computer.run_command("hostname", ["--help"], True)
+        self.run_command("hostname", ["--version"])
+        self.run_command("hostname", ["--help"])
 
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command("hostname", ["localhost"], True)
@@ -185,46 +195,46 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.computer.run_command("hostname", [], True)
+        get_hostname_result = self.run_command("hostname", [])
 
-        self.assertNotEqual(get_hostname_result.data, "localhost")
+        self.assertNotEqual(get_hostname_result, "localhost")
 
         # Switch to root then change hostname
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command("hostname", ["localhost"], True)
-        get_hostname_result = self.computer.run_command("hostname", [], True)
+        self.run_command("hostname", ["localhost"])
+        get_hostname_result = self.run_command("hostname", [])
 
-        self.assertEqual(get_hostname_result.data.strip("\n"), "localhost")
+        self.assertEqual(get_hostname_result, "localhost")
 
     def test_id(self):
-        self.computer.run_command("id", ["--version"], True)
-        self.computer.run_command("id", ["--help"], True)
+        self.run_command("id", ["--version"])
+        self.run_command("id", ["--help"])
 
-        self_id_result = self.computer.run_command("id", [], True).data.strip("\n")
+        self_id_result = self.run_command("id", [])
         expected_self_id_result = "uid=1000(steve) gid=1000(steve) "
         self.assertEqual(self_id_result, expected_self_id_result)
 
-        root_id_result = self.computer.run_command("id", ["root"], True).data.strip("\n")
-        root_id_by_uid_result = self.computer.run_command("id", ["0"], True).data.strip("\n")
+        root_id_result = self.run_command("id", ["root"])
+        root_id_by_uid_result = self.run_command("id", ["0"])
         expected_root_result = "uid=0(root) gid=0(root) "
         self.assertEqual(root_id_result, expected_root_result)
         self.assertEqual(root_id_by_uid_result, expected_root_result)
 
         # Check the flags
-        id_result = self.computer.run_command("id", ["-g"], True).data.strip("\n")
+        id_result = self.run_command("id", ["-g"])
         self.assertEqual(id_result, "1000")
 
-        id_result = self.computer.run_command("id", ["-G"], True).data.strip("\n")
+        id_result = self.run_command("id", ["-G"])
         self.assertEqual(id_result, "1000")
 
-        id_result = self.computer.run_command("id", ["-n"], True).data.strip("\n")
+        id_result = self.run_command("id", ["-n"])
         self.assertEqual(id_result, "steve")
 
     def test_ls(self):
         import re
-        self.computer.run_command("ls", ["--version"], True)
-        self.computer.run_command("ls", ["--help"], True)
+        self.run_command("ls", ["--version"])
+        self.run_command("ls", ["--help"])
 
         # In the user's home directory, The files should be: Desktop Documents Downloads Music Pictures Public Templates Videos
         ls_result = self.computer.run_command("ls", ["--no-color"], True)
@@ -232,9 +242,6 @@ class TestIncludedBinaries(unittest.TestCase):
                                     data="Desktop Documents Downloads Music Pictures Public Templates Videos ")
 
         ls_result.data = ls_result.data.strip("\n")
-
-        print(ls_result)
-        print(expected_ls_result)
 
         color_filter = re.compile(r'\x1b[^m]*m')
         stripped_color = color_filter.sub('', ls_result.data)
@@ -244,33 +251,31 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertNotIn(".shellrc", ls_result.data)
 
         # Test -a flag (show hidden files)
-        ls_result = self.computer.run_command("ls", ["--no-color", "-a"], True)
-        self.assertIn(".shellrc", ls_result.data)
+        ls_result = self.run_command("ls", ["--no-color", "-a"])
+        self.assertIn(".shellrc", ls_result)
 
         # Make sure -l flag works
-        ls_result = self.computer.run_command("ls", ["--no-color", "-l"], True)
-        self.assertIn("steve", ls_result.data)
+        ls_result = self.run_command("ls", ["--no-color", "-l"])
+        self.assertIn("steve", ls_result)
 
     def test_md5sum(self):
-        self.computer.run_command("md5sum", ["--version"], True)
-        self.computer.run_command("md5sum", ["--help"], True)
+        self.run_command("md5sum", ["--version"])
+        self.run_command("md5sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
-        self.assertIn(md5((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("md5sum", ["file"], True).data.strip("\n"))
-        self.assertIn(md5(message.encode()).hexdigest(),
-                      self.computer.run_command("md5sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("md5sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+        self.assertIn(md5((message + "\n").encode()).hexdigest(), self.run_command("md5sum", ["file"]))
+        self.assertIn(md5(message.encode()).hexdigest(), self.run_command("md5sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("md5sum", ["file", "-z", "--tag"]),
                          f"MD5 (file) = {md5(message.encode()).hexdigest()}")
 
     def test_mv(self):
-        self.computer.run_command("mv", ["--version"], True)
-        self.computer.run_command("mv", ["--help"], True)
+        self.run_command("mv", ["--version"])
+        self.run_command("mv", ["--help"])
 
         # Make sure /bin/pwd exists
         find_pwd = self.computer.fs.find("/bin/pwd")
@@ -290,7 +295,7 @@ class TestIncludedBinaries(unittest.TestCase):
         # Root perms!
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
-        self.computer.run_command("mv", ["/bin/pwd", "/tmp"], True)
+        self.run_command("mv", ["/bin/pwd", "/tmp"])
 
         # Make sure /bin/pwd DOESN'T exists
         find_pwd = self.computer.fs.find("/bin/pwd")
@@ -301,165 +306,185 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertTrue(find_pwd.success)
 
     def test_printenv(self):
-        self.computer.run_command("printenv", ["--version"], True)
-        self.computer.run_command("printenv", ["--help"], True)
+        self.run_command("printenv", ["--version"])
+        self.run_command("printenv", ["--help"])
 
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_pwd(self):
-        self.computer.run_command("pwd", ["--version"], True)
-        self.computer.run_command("pwd", ["--help"], True)
+        self.run_command("pwd", ["--version"])
+        self.run_command("pwd", ["--help"])
 
-        pwd_result = self.computer.run_command("pwd", [], True).data.strip("\n")
+        pwd_result = self.run_command("pwd", [])
 
         self.assertEqual("/home/steve", pwd_result)
 
     def test_sha1sum(self):
-        self.computer.run_command("sha1sum", ["--version"], True)
-        self.computer.run_command("sha1sum", ["--help"], True)
+        self.run_command("sha1sum", ["--version"])
+        self.run_command("sha1sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
-        self.assertIn(sha1((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("sha1sum", ["file"], True).data.strip("\n"))
-        self.assertIn(sha1(message.encode()).hexdigest(),
-                      self.computer.run_command("sha1sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("sha1sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+        self.assertIn(sha1((message + "\n").encode()).hexdigest(), self.run_command("sha1sum", ["file"]))
+        self.assertIn(sha1(message.encode()).hexdigest(), self.run_command("sha1sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("sha1sum", ["file", "-z", "--tag"]),
                          f"SHA1 (file) = {sha1(message.encode()).hexdigest()}")
 
     def test_sha224sum(self):
-        self.computer.run_command("sha224sum", ["--version"], True)
-        self.computer.run_command("sha224sum", ["--help"], True)
+        self.run_command("sha224sum", ["--version"])
+        self.run_command("sha224sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
         self.assertIn(sha224((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("sha224sum", ["file"], True).data.strip("\n"))
+                      self.run_command("sha224sum", ["file"]))
         self.assertIn(sha224(message.encode()).hexdigest(),
-                      self.computer.run_command("sha224sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("sha224sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+                      self.run_command("sha224sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("sha224sum", ["file", "-z", "--tag"]),
                          f"SHA224 (file) = {sha224(message.encode()).hexdigest()}")
 
     def test_sha256sum(self):
-        self.computer.run_command("sha256sum", ["--version"], True)
-        self.computer.run_command("sha256sum", ["--help"], True)
+        self.run_command("sha256sum", ["--version"])
+        self.run_command("sha256sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
         self.assertIn(sha256((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("sha256sum", ["file"], True).data.strip("\n"))
+                      self.run_command("sha256sum", ["file"]))
         self.assertIn(sha256(message.encode()).hexdigest(),
-                      self.computer.run_command("sha256sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("sha256sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+                      self.run_command("sha256sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("sha256sum", ["file", "-z", "--tag"]),
                          f"SHA256 (file) = {sha256(message.encode()).hexdigest()}")
 
     def test_sha384sum(self):
-        self.computer.run_command("sha384sum", ["--version"], True)
-        self.computer.run_command("sha384sum", ["--help"], True)
+        self.run_command("sha384sum", ["--version"])
+        self.run_command("sha384sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
         self.assertIn(sha384((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("sha384sum", ["file"], True).data.strip("\n"))
+                      self.run_command("sha384sum", ["file"]))
         self.assertIn(sha384(message.encode()).hexdigest(),
-                      self.computer.run_command("sha384sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("sha384sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+                      self.run_command("sha384sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("sha384sum", ["file", "-z", "--tag"]),
                          f"SHA384 (file) = {sha384(message.encode()).hexdigest()}")
 
     def test_sha512sum(self):
-        self.computer.run_command("sha512sum", ["--version"], True)
-        self.computer.run_command("sha512sum", ["--help"], True)
+        self.run_command("sha512sum", ["--version"])
+        self.run_command("sha512sum", ["--help"])
 
         message = "hello!"
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
         self.assertIn(sha512((message + "\n").encode()).hexdigest(),
-                      self.computer.run_command("sha512sum", ["file"], True).data.strip("\n"))
+                      self.run_command("sha512sum", ["file"]))
         self.assertIn(sha512(message.encode()).hexdigest(),
-                      self.computer.run_command("sha512sum", ["file", "-z"], True).data.strip("\n"))
-        self.assertEqual(self.computer.run_command("sha512sum", ["file", "-z", "--tag"], True).data.strip("\n"),
+                      self.run_command("sha512sum", ["file", "-z"]))
+        self.assertEqual(self.run_command("sha512sum", ["file", "-z", "--tag"]),
                          f"SHA512 (file) = {sha512(message.encode()).hexdigest()}")
 
+    def test_sudo(self):
+        # Sanity check
+        sudo_result = self.run_command("id", [])
+
+        self.assertIn("uid=1000(steve) gid=1000(steve)", sudo_result)
+
+        # Add a new user to test later
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.run_command("adduser", ["testuser", "-p" "password", "-n"])
+        self.computer.sessions.pop()
+
+
+        # We do both "getpass" and "fallback_getpass" because some terminals
+        # (pycharm's one for example) uses the fallback function
+        with unittest.mock.patch("getpass.getpass", return_value="password"):
+            with unittest.mock.patch("getpass.fallback_getpass", return_value="password"):
+                sudo_root_result = self.run_command("sudo", ["id"])
+                self.assertIn("uid=0(root) gid=0(root)", sudo_root_result)
+
+                other_user_result = self.run_command("sudo", ["-u", "testuser", "id"])
+                self.assertIn("uid=1001(testuser) gid=1001(testuser)", other_user_result)
+
     def test_touch(self):
-        self.computer.run_command("touch", ["--version"], True)
-        self.computer.run_command("touch", ["--help"], True)
+        self.run_command("touch", ["--version"])
+        self.run_command("touch", ["--help"])
 
         touch_result = self.computer.run_command("touch", ["testfile"], True)
         expected_touch_result = Result(success=True)
 
-        # We should double check that the file exists in our home directory
-        self.assertIn("testfile", self.computer.run_command("ls", [], True).data)
+        # We should double-check that the file exists in our home directory
+        self.assertIn("testfile", self.run_command("ls", []))
 
         self.assertEqual(touch_result, expected_touch_result)
 
     def test_uname(self):
-        self.computer.run_command("uname", ["--version"], True)
-        self.computer.run_command("uname", ["--help"], True)
+        self.run_command("uname", ["--version"])
+        self.run_command("uname", ["--help"])
 
         # Test some misc uname configurations
-        self.assertEqual(self.computer.run_command("uname", [], True).data.strip("\n"), "Linux")
-        self.assertEqual(self.computer.run_command("uname", ["-a"], True).data.strip("\n"),
+        self.assertEqual(self.run_command("uname", [], ), "Linux")
+        self.assertEqual(self.run_command("uname", ["-a"]),
                          f"Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux")
-        self.assertEqual(self.computer.run_command("uname", ["-mns"], True).data.strip("\n"),
+        self.assertEqual(self.run_command("uname", ["-mns"]),
                          f"Linux {self.computer.hostname} x86_64 ")
-        self.assertEqual(self.computer.run_command("uname", ["-op", "-i"], True).data.strip("\n"),
+        self.assertEqual(self.run_command("uname", ["-op", "-i"]),
                          "unknown unknown Blackhat/Linux ")
 
     def test_unset(self):
-        self.computer.run_command("unset", ["--version"], True)
-        self.computer.run_command("unset", ["--help"], True)
+        self.run_command("unset", ["--version"])
+        self.run_command("unset", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
-        self.computer.run_command("export", ["BASH=/bin/bash"], True)
+        self.run_command("export", ["BASH=/bin/bash"])
 
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
-        self.computer.run_command("unset", ["BASH"], True)
-        env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
+        self.run_command("unset", ["BASH"])
+        env_result = self.run_command("printenv", [])
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_uptime(self):
-        self.computer.run_command("uptime", ["--version"], True)
-        self.computer.run_command("uptime", ["--help"], True)
+        self.run_command("uptime", ["--version"])
+        self.run_command("uptime", ["--help"])
 
         # Make sure it doesn't crash
-        uptime_result = self.computer.run_command("uptime", [], True).data.strip("\n")
+        uptime_result = self.run_command("uptime", [])
         # TODO: See if there's a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, "uptime: 0:00:00")
 
         sleep(5)
-        uptime_result = self.computer.run_command("uptime", [], True).data.strip("\n")
+        uptime_result = self.run_command("uptime", [])
         self.assertEqual(uptime_result, "uptime: 0:00:05")
 
-        uptime_result = self.computer.run_command("uptime", ["-p"], True).data.strip("\n")
+        uptime_result = self.run_command("uptime", ["-p"])
         self.assertEqual(uptime_result, "up 0 minutes")
 
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        uptime_result = self.computer.run_command("uptime", ["-s"], True).data.strip("\n")
+        uptime_result = self.run_command("uptime", ["-s"])
 
         # I'm going to strip out the seconds because different speed test runners can take different amount of times
         # to run
@@ -467,37 +492,46 @@ class TestIncludedBinaries(unittest.TestCase):
         now = ":".join(now.split(":")[:-1])
         uptime_result = ":".join(uptime_result.split(":")[:-1])
 
-        self.assertEqual(now, uptime_result)
+        # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
+        minus_one_minute = uptime_result.split(":")
+        minus_one_minute[1] = "{:02d}".format(int(minus_one_minute[1])-1)
+        minus_one_minute = ":".join(minus_one_minute)
+
+        plus_one_minute = uptime_result.split(":")
+        plus_one_minute[1] = "{:02d}".format(int(plus_one_minute[1])+1)
+        plus_one_minute = ":".join(plus_one_minute)
+
+        self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
 
     def test_users(self):
-        self.computer.run_command("users", ["--version"], True)
-        self.computer.run_command("users", ["--help"], True)
+        self.run_command("users", ["--version"])
+        self.run_command("users", ["--help"])
 
         # One session = only one user
-        users_result = self.computer.run_command("users", [], True).data.strip("\n")
+        users_result = self.run_command("users", [])
         self.assertEqual(users_result, "steve ")
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command("users", [], True).data.strip("\n")
+        users_result = self.run_command("users", [])
         self.assertEqual(users_result, "steve root ")
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.computer.run_command("users", [], True).data.strip("\n")
+        users_result = self.run_command("users", [])
         self.assertEqual(users_result, "steve root steve ")
 
     def test_wc(self):
-        self.computer.run_command("wc", ["--version"], True)
-        self.computer.run_command("wc", ["--help"], True)
+        self.run_command("wc", ["--version"])
+        self.run_command("wc", ["--help"])
 
         message = "hello!"
         message_len = len(message + "\n")
 
-        self.computer.run_command("touch", ["file"], True)
+        self.run_command("touch", ["file"])
         # We're writing with a new line to replicate what `echo hello! > file` would do
         self.computer.fs.find("/home/steve/file").data.write(message + "\n", self.computer)
 
-        wc_result = self.computer.run_command("wc", ["file"], True).data.strip("\n")
+        wc_result = self.run_command("wc", ["file"])
 
         wc_split_results = wc_result.split(" ")
         while "" in wc_split_results:
@@ -510,7 +544,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(int(total_new_line_count), 1)
         self.assertEqual(int(total_word_count), 1)
 
-        wc_result = self.computer.run_command("wc", ["file", "-c"], True).data.strip("\n")
+        wc_result = self.run_command("wc", ["file", "-c"])
 
         wc_split_results = wc_result.split(" ")
         while "" in wc_split_results:
@@ -520,7 +554,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
         self.assertEqual(int(total_byte_count), message_len)
 
-        wc_result = self.computer.run_command("wc", ["file", "-m"], True).data.strip("\n")
+        wc_result = self.run_command("wc", ["file", "-m"])
 
         wc_split_results = wc_result.split(" ")
         while "" in wc_split_results:
@@ -531,17 +565,17 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(int(total_byte_count), message_len)
 
     def test_who(self):
-        self.computer.run_command("who", ["--version"], True)
-        self.computer.run_command("who", ["--help"], True)
+        self.run_command("who", ["--version"])
+        self.run_command("who", ["--help"])
 
-        who_result = self.computer.run_command("who", [], True).data.strip("\n")
+        who_result = self.run_command("who", [])
         self.assertEqual(who_result, "steve\tpts/0")
 
     def test_whoami(self):
-        self.computer.run_command("whoami", ["--version"], True)
-        self.computer.run_command("whoami", ["--help"], True)
+        self.run_command("whoami", ["--version"])
+        self.run_command("whoami", ["--help"])
 
-        whoami_result = self.computer.run_command("whoami", [], True).data.strip("\n")
+        whoami_result = self.run_command("whoami", [])
 
         self.assertEqual(whoami_result, "steve")
 
