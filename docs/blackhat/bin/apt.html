@@ -29,9 +29,8 @@
 <pre><code class="python">__package__ = &#34;blackhat.bin&#34;
 
 import os
-from itertools import chain
 from json import loads
-from typing import Union
+from typing import List
 from colorama import Fore
 
 from ..fs import File, Directory
@@ -132,7 +131,7 @@ def generate_tree(current_directory: Directory, current_path: str = None):
     return flatten_list(output_paths)
 
 
-def install_package(package: list[tuple[str, File]]) -&gt; bool:
+def install_package(package: List[tuple[str, File]]) -&gt; bool:
     for filepath, file in package:
         parent_path = &#34;/&#34;.join(filepath.split(&#34;/&#34;)[:-1])
         # print(f&#34;Installing {file.name} to {parent_path} with mode {str(oct(file.get_perm_octal()).replace(&#39;0o&#39;, &#39;&#39;))}&#34;)
@@ -347,7 +346,7 @@ def main(args: list, pipe: bool) -&gt; Result:
 </details>
 </dd>
 <dt id="blackhat.bin.apt.install_package"><code class="name flex">
-<span>def <span class="ident">install_package</span></span>(<span>package: list[tuple[str, <a title="blackhat.fs.File" href="../fs.html#blackhat.fs.File">File</a>]]) ‑> bool</span>
+<span>def <span class="ident">install_package</span></span>(<span>package: List[tuple[str, <a title="blackhat.fs.File" href="../fs.html#blackhat.fs.File">File</a>]]) ‑> bool</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -355,7 +354,7 @@ def main(args: list, pipe: bool) -&gt; Result:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def install_package(package: list[tuple[str, File]]) -&gt; bool:
+<pre><code class="python">def install_package(package: List[tuple[str, File]]) -&gt; bool:
     for filepath, file in package:
         parent_path = &#34;/&#34;.join(filepath.split(&#34;/&#34;)[:-1])
         # print(f&#34;Installing {file.name} to {parent_path} with mode {str(oct(file.get_perm_octal()).replace(&#39;0o&#39;, &#39;&#39;))}&#34;)
