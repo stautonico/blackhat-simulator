@@ -2,6 +2,7 @@ import datetime
 import unittest
 from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
+from time import sleep
 
 from .setup_computers_universal import init
 from ..helpers import Result, ResultMessages
@@ -23,7 +24,8 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("adduser", ["--help"], True)
 
         fail_bc_not_root_result = self.computer.run_command("adduser", ["testuser", "-p" "password", "-n"], True)
-        expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED, data="adduser: Only root can add new users!\n")
+        expected_fail_bc_not_root_result = Result(success=False, message=ResultMessages.NOT_ALLOWED,
+                                                  data="adduser: Only root can add new users!\n")
 
         self.assertEqual(fail_bc_not_root_result, expected_fail_bc_not_root_result)
 
@@ -153,7 +155,8 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("env", ["--help"], True)
 
         env_result = self.computer.run_command("env", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve")
+        print(f"ENVRESULT: {env_result}")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_export(self):
         self.computer.run_command("export", ["--version"], True)
@@ -161,12 +164,12 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # Lets get a baseline for the env before-hand
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
         self.computer.run_command("export", ["BASH=/bin/bash"], True)
 
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve\nBASH=/bin/bash")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
     def test_hostname(self):
         self.computer.run_command("hostname", ["--version"], True)
@@ -175,7 +178,7 @@ class TestIncludedBinaries(unittest.TestCase):
         # We want to try to set the hostname without root permission (should fail)
         set_hostname_result = self.computer.run_command("hostname", ["localhost"], True)
         expected_set_hostname_result = Result(success=False,
-                                                     data="hostname: you must be root to change the host name")
+                                              data="hostname: you must be root to change the host name")
 
         set_hostname_result.data = set_hostname_result.data.strip("\n")
 
@@ -302,7 +305,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.run_command("printenv", ["--help"], True)
 
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_pwd(self):
         self.computer.run_command("pwd", ["--version"], True)
@@ -428,24 +431,43 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # Lets get a baseline for the env before-hand
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
         self.computer.run_command("export", ["BASH=/bin/bash"], True)
 
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve\nBASH=/bin/bash")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
         self.computer.run_command("unset", ["BASH"], True)
         env_result = self.computer.run_command("printenv", [], True).data.strip("\n")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin:\nHOME=/home/steve")
+        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_uptime(self):
         self.computer.run_command("uptime", ["--version"], True)
         self.computer.run_command("uptime", ["--help"], True)
 
-        # TODO: Add proper checking for flags
         # Make sure it doesn't crash
         uptime_result = self.computer.run_command("uptime", [], True).data.strip("\n")
+        # TODO: See if there's a better way to fix this without wasting 5 seconds
+        self.assertEqual(uptime_result, "uptime: 0:00:00")
+
+        sleep(5)
+        uptime_result = self.computer.run_command("uptime", [], True).data.strip("\n")
+        self.assertEqual(uptime_result, "uptime: 0:00:05")
+
+        uptime_result = self.computer.run_command("uptime", ["-p"], True).data.strip("\n")
+        self.assertEqual(uptime_result, "up 0 minutes")
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        uptime_result = self.computer.run_command("uptime", ["-s"], True).data.strip("\n")
+
+        # I'm going to strip out the seconds because different speed test runners can take different amount of times
+        # to run
+
+        now = ":".join(now.split(":")[:-1])
+        uptime_result = ":".join(uptime_result.split(":")[:-1])
+
+        self.assertEqual(now, uptime_result)
 
     def test_users(self):
         self.computer.run_command("users", ["--version"], True)
@@ -533,4 +555,3 @@ class TestInstallableBinaries(unittest.TestCase):
 
     def setUp(self) -> None:
         self.computer = init()
-
