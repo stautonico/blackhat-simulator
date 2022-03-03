@@ -1,9 +1,8 @@
 __package__ = "blackhat.bin"
 
 import os
-from itertools import chain
 from json import loads
-from typing import Union
+from typing import List
 from colorama import Fore
 
 from ..fs import File, Directory
@@ -104,7 +103,7 @@ def generate_tree(current_directory: Directory, current_path: str = None):
     return flatten_list(output_paths)
 
 
-def install_package(package: list[tuple[str, File]]) -> bool:
+def install_package(package: List[tuple[str, File]]) -> bool:
     for filepath, file in package:
         parent_path = "/".join(filepath.split("/")[:-1])
         # print(f"Installing {file.name} to {parent_path} with mode {str(oct(file.get_perm_octal()).replace('0o', ''))}")
