@@ -48,7 +48,9 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -782,7 +784,9 @@ class TestInstallableBinaries(unittest.TestCase):
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -822,7 +826,9 @@ not have a method with the specified name.</p></div>
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -1552,7 +1558,7 @@ not have a method with the specified name.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.run_command"><code class="name flex">
-<span>def <span class="ident">run_command</span></span>(<span>self, command, args=[])</span>
+<span>def <span class="ident">run_command</span></span>(<span>self, command, args=None)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -1560,7 +1566,9 @@ not have a method with the specified name.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def run_command(self, command, args=[]):
+<pre><code class="python">def run_command(self, command, args=None):
+    if args is None:
+        args = []
     result = self.computer.run_command(command, args, True).data
     # This avoids &#34;None type as no attribute strip&#34;
     if not result:
@@ -2704,7 +2712,9 @@ not have a method with the specified name.</p></div>
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -2718,7 +2728,7 @@ not have a method with the specified name.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="blackhat.tests.test_binaries.TestInstallableBinaries.run_command"><code class="name flex">
-<span>def <span class="ident">run_command</span></span>(<span>self, command, args=[])</span>
+<span>def <span class="ident">run_command</span></span>(<span>self, command, args=None)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -2726,7 +2736,9 @@ not have a method with the specified name.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def run_command(self, command, args=[]):
+<pre><code class="python">def run_command(self, command, args=None):
+    if args is None:
+        args = []
     result = self.computer.run_command(command, args, True).data
     # This avoids &#34;None type as no attribute strip&#34;
     if not result:

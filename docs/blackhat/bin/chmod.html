@@ -58,7 +58,7 @@ def parse_characters(chars, current_perms):
 
     owner, group, public = False, False, False
     read, write, execute = False, False, False
-    # Lets figure out who we&#39;re modifying
+    # Let&#39;s figure out whom we&#39;re modifying
     # If the user arg (split_args[0]) is empty, we can also assume we&#39;re modifying everyone
     if len(split_args[0]) == 0:
         owner, group, public = True, True, True
@@ -119,7 +119,7 @@ def parse_characters(chars, current_perms):
     return True
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
     &#34;&#34;&#34;
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -130,12 +130,17 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;umask&#34;)
     parser.add_argument(&#34;file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -147,7 +152,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
 
     for item in arg_helps:
-        # Its a positional argument
+        # it&#39;s a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == &#34;?&#34;:
@@ -168,10 +173,7 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
 
-    if doc:
-        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
-    else:
-        return args, parser
+    return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
 
 
 def main(args: list, pipe: bool) -&gt; Result:
@@ -293,7 +295,7 @@ def main(args: list, pipe: bool) -&gt; Result:
 </details>
 </dd>
 <dt id="blackhat.bin.chmod.parse_args"><code class="name flex">
-<span>def <span class="ident">parse_args</span></span>(<span>args=[], doc=False)</span>
+<span>def <span class="ident">parse_args</span></span>(<span>args=None, doc=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Handle parsing of arguments and flags. Generates docs using help from <code>ArgParser</code></p>
@@ -310,7 +312,7 @@ def main(args: list, pipe: bool) -&gt; Result:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def parse_args(args=[], doc=False):
+<pre><code class="python">def parse_args(args=None, doc=False):
     &#34;&#34;&#34;
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -321,12 +323,17 @@ def main(args: list, pipe: bool) -&gt; Result:
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     &#34;&#34;&#34;
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;umask&#34;)
     parser.add_argument(&#34;file&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -338,7 +345,7 @@ def main(args: list, pipe: bool) -&gt; Result:
     DESCRIPTION = f&#34;**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n&#34;
 
     for item in arg_helps:
-        # Its a positional argument
+        # it&#39;s a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == &#34;?&#34;:
@@ -359,10 +366,7 @@ def main(args: list, pipe: bool) -&gt; Result:
             else:
                 DESCRIPTION += f&#34;\t**{&#39; &#39;.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n&#34;
 
-    if doc:
-        return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;
-    else:
-        return args, parser</code></pre>
+    return f&#34;{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n&#34;</code></pre>
 </details>
 </dd>
 <dt id="blackhat.bin.chmod.parse_characters"><code class="name flex">
@@ -393,7 +397,7 @@ def main(args: list, pipe: bool) -&gt; Result:
 
     owner, group, public = False, False, False
     read, write, execute = False, False, False
-    # Lets figure out who we&#39;re modifying
+    # Let&#39;s figure out whom we&#39;re modifying
     # If the user arg (split_args[0]) is empty, we can also assume we&#39;re modifying everyone
     if len(split_args[0]) == 0:
         owner, group, public = True, True, True
