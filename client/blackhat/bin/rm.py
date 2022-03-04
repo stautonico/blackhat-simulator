@@ -115,7 +115,7 @@ def main(args: list, pipe: bool) -> Result:
                 if not result.data.st_isfile and not args.recursive:
                     return output(f"{__COMMAND__}: cannot remove '{file}': Is a directory", pipe, success=False)
                 else:
-                    response = unlink(args.source)
+                    response = unlink(result.data.st_path)
 
                     if not response.success:
                         if response.message == ResultMessages.NOT_ALLOWED:

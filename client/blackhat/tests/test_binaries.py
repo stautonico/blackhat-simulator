@@ -21,7 +21,7 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -> None:
         self.computer = init()
 
-    def run_command(self, command, args):
+    def run_command(self, command, args=[]):
 
         result = self.computer.run_command(command, args, True).data
         # This avoids "None type as no attribute strip"
@@ -113,13 +113,13 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("clear", ["--version"])
         self.run_command("clear", ["--help"])
 
-        self.run_command("clear", [])
+        self.run_command("clear")
 
     def test_commands(self):
         self.run_command("commands", ["--version"])
         self.run_command("commands", ["--help"])
 
-        commands_result = self.run_command("commands", [])
+        commands_result = self.run_command("commands")
         self.assertIn("ls", commands_result)
 
         # Now lets remove ls from /bin (it shouldn't show up in commands)
@@ -128,14 +128,14 @@ class TestIncludedBinaries(unittest.TestCase):
         move_result = self.computer.run_command("mv", ["/bin/ls", "/tmp"], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.run_command("commands", [])
+        commands_result = self.run_command("commands")
         self.assertNotIn("ls", commands_result)
 
     def test_date(self):
         self.run_command("date", ["--version"])
         self.run_command("date", ["--help"])
 
-        date_result = self.run_command("date", [])
+        date_result = self.run_command("date")
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime('%a %b %d %I:%M:%S %p')
@@ -164,7 +164,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("env", ["--version"])
         self.run_command("env", ["--help"])
 
-        env_result = self.run_command("env", [])
+        env_result = self.run_command("env")
         print(f"ENVRESULT: {env_result}")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
@@ -173,12 +173,12 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("export", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
         self.run_command("export", ["BASH=/bin/bash"])
 
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
     def test_hostname(self):
@@ -195,7 +195,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.run_command("hostname", [])
+        get_hostname_result = self.run_command("hostname")
 
         self.assertNotEqual(get_hostname_result, "localhost")
 
@@ -203,7 +203,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
         self.run_command("hostname", ["localhost"])
-        get_hostname_result = self.run_command("hostname", [])
+        get_hostname_result = self.run_command("hostname")
 
         self.assertEqual(get_hostname_result, "localhost")
 
@@ -211,7 +211,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("id", ["--version"])
         self.run_command("id", ["--help"])
 
-        self_id_result = self.run_command("id", [])
+        self_id_result = self.run_command("id")
         expected_self_id_result = "uid=1000(steve) gid=1000(steve) "
         self.assertEqual(self_id_result, expected_self_id_result)
 
@@ -309,16 +309,80 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("printenv", ["--version"])
         self.run_command("printenv", ["--help"])
 
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_pwd(self):
         self.run_command("pwd", ["--version"])
         self.run_command("pwd", ["--help"])
 
-        pwd_result = self.run_command("pwd", [])
+        pwd_result = self.run_command("pwd")
 
         self.assertEqual("/home/steve", pwd_result)
+
+    def test_rm(self):
+        # Make some test files to remove
+        self.run_command("touch", ["file1", "file2", "file3", "/tmp/file4"])
+        ls_result = self.run_command("ls")
+
+        # Sanity check
+        for file in ["file1", "file2", "file3"]:
+            self.assertIn(file, ls_result)
+
+        # rm a single file (relative path)
+        self.run_command("rm", ["file1"])
+        ls_result = self.run_command("ls")
+        self.assertNotIn("file1", ls_result)
+
+        # rm a file (absolute path)
+        self.run_command("rm", ["/tmp/file4"])
+        ls_result = self.run_command("ls", ["/tmp"])
+        self.assertNotIn("file4", ls_result)
+
+        # TODO: Allow multiple files to be deleted and then add test
+
+        # Delete non-existent file
+        rm_doesnt_exist = self.computer.run_command("rm", ["/tmp/badfile"], True)
+        self.assertFalse(rm_doesnt_exist.success)
+        self.assertIn("No such file or directory", rm_doesnt_exist.data)
+
+        # No rm permissions
+        rm_no_perms = self.computer.run_command("rm", ["/etc/passwd"], False)
+        self.assertFalse(rm_no_perms.success)
+        self.assertIn("Permission denied", rm_no_perms.data)
+        # Confirm it's still there
+        self.assertTrue(self.computer.run_command("stat", ["/etc/passwd"], True).success)
+
+        # Can't remove populated directory
+        self.run_command("mkdir", ["files"])
+        self.run_command("cd", ["files"])
+        self.run_command("touch", ["file1", "file2"])
+        self.run_command("cd", [".."])
+
+        rm_full_dir = self.computer.run_command("rm", ["files"], True)
+        self.assertFalse(rm_full_dir.success)
+        self.assertIn("Is a directory", rm_full_dir.data)
+        # Confirm it's still there
+        self.assertTrue(self.computer.run_command("stat", ["files"], True).success)
+
+        # Remove directory with -r
+        rm_dir_with_flag = self.computer.run_command("rm", ["-r", "files"], True)
+        self.assertTrue(rm_dir_with_flag.success)
+        # Confirm
+        self.assertFalse(self.computer.run_command("stat", ["files"], True).success)
+
+        # rm *
+        self.run_command("mkdir", ["files"])
+        self.run_command("cd", ["files"])
+        self.run_command("touch", ["file1", "file2"])
+
+        rm_star = self.computer.run_command("rm", ["*"], True)
+        self.assertTrue(rm_star.success)
+        ls_result = self.run_command("ls")
+        self.assertNotIn("file1", ls_result)
+        self.assertNotIn("file2", ls_result)
+
+
 
     def test_sha1sum(self):
         self.run_command("sha1sum", ["--version"])
@@ -405,7 +469,7 @@ class TestIncludedBinaries(unittest.TestCase):
 
     def test_sudo(self):
         # Sanity check
-        sudo_result = self.run_command("id", [])
+        sudo_result = self.run_command("id")
 
         self.assertIn("uid=1000(steve) gid=1000(steve)", sudo_result)
 
@@ -433,7 +497,7 @@ class TestIncludedBinaries(unittest.TestCase):
         expected_touch_result = Result(success=True)
 
         # We should double-check that the file exists in our home directory
-        self.assertIn("testfile", self.run_command("ls", []))
+        self.assertIn("testfile", self.run_command("ls"))
 
         self.assertEqual(touch_result, expected_touch_result)
 
@@ -442,7 +506,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("uname", ["--help"])
 
         # Test some misc uname configurations
-        self.assertEqual(self.run_command("uname", [], ), "Linux")
+        self.assertEqual(self.run_command("uname"), "Linux")
         self.assertEqual(self.run_command("uname", ["-a"]),
                          f"Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux")
         self.assertEqual(self.run_command("uname", ["-mns"]),
@@ -455,16 +519,16 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("unset", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
         self.run_command("export", ["BASH=/bin/bash"])
 
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
         self.run_command("unset", ["BASH"])
-        env_result = self.run_command("printenv", [])
+        env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
 
     def test_uptime(self):
@@ -472,12 +536,12 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("uptime", ["--help"])
 
         # Make sure it doesn't crash
-        uptime_result = self.run_command("uptime", [])
+        uptime_result = self.run_command("uptime")
         # TODO: See if there's a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, "uptime: 0:00:00")
 
         sleep(5)
-        uptime_result = self.run_command("uptime", [])
+        uptime_result = self.run_command("uptime")
         self.assertEqual(uptime_result, "uptime: 0:00:05")
 
         uptime_result = self.run_command("uptime", ["-p"])
@@ -508,16 +572,16 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("users", ["--help"])
 
         # One session = only one user
-        users_result = self.run_command("users", [])
+        users_result = self.run_command("users")
         self.assertEqual(users_result, "steve ")
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command("users", [])
+        users_result = self.run_command("users")
         self.assertEqual(users_result, "steve root ")
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command("users", [])
+        users_result = self.run_command("users")
         self.assertEqual(users_result, "steve root steve ")
 
     def test_wc(self):
@@ -568,14 +632,14 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("who", ["--version"])
         self.run_command("who", ["--help"])
 
-        who_result = self.run_command("who", [])
+        who_result = self.run_command("who")
         self.assertEqual(who_result, "steve\tpts/0")
 
     def test_whoami(self):
         self.run_command("whoami", ["--version"])
         self.run_command("whoami", ["--help"])
 
-        whoami_result = self.run_command("whoami", [])
+        whoami_result = self.run_command("whoami")
 
         self.assertEqual(whoami_result, "steve")
 
