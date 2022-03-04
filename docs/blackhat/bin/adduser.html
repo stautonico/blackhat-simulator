@@ -37,7 +37,7 @@ from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.sys.stat import stat, mkdir
-from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid, read
 
 __COMMAND__ = &#34;adduser&#34;
 __DESCRIPTION__ = &#34;&#34;
@@ -205,8 +205,26 @@ def main(args: list, pipe: bool) -&gt; Result:
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f&#34;/home/{args.username}/.shellrc&#34;)
 
+            # TODO: This is shite, refactor
             if new_shellrc_result.success:
-                write(f&#34;/home/{args.username}/.shellrc&#34;, f&#34;export PATH=/bin:\nexport HOME=/home/{args.username}\nexport USER={args.username}\n&#34;)
+                # Get the default .shellrc
+                default_shellrc_result = stat(&#34;/etc/skel/.shellrc&#34;)
+                if default_shellrc_result.success:
+                    # Read the default .shellrc
+                    default_shellrc_read = read(&#34;/etc/skel/.shellrc&#34;)
+                    if default_shellrc_read.success:
+                        default_shellrc_data = default_shellrc_read.data
+                    else:
+                        default_shellrc_data = &#34;&#34;
+                else:
+                    default_shellrc_data = &#34;&#34;
+
+                shellrc_content = f&#34;{default_shellrc_data}\n&#34; \
+                                  f&#34;export HOME=/home/{args.username}\n&#34; \
+                                  f&#34;export PATH=/bin:/usr/bin\n&#34; \
+                                  f&#34;export USER={args.username}\n&#34;
+
+                write(f&#34;/home/{args.username}/.shellrc&#34;, shellrc_content)
 
         # Check if we should ask the user for Full name, etc
         if args.noninteractive:
@@ -353,8 +371,26 @@ def main(args: list, pipe: bool) -&gt; Result:
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f&#34;/home/{args.username}/.shellrc&#34;)
 
+            # TODO: This is shite, refactor
             if new_shellrc_result.success:
-                write(f&#34;/home/{args.username}/.shellrc&#34;, f&#34;export PATH=/bin:\nexport HOME=/home/{args.username}\nexport USER={args.username}\n&#34;)
+                # Get the default .shellrc
+                default_shellrc_result = stat(&#34;/etc/skel/.shellrc&#34;)
+                if default_shellrc_result.success:
+                    # Read the default .shellrc
+                    default_shellrc_read = read(&#34;/etc/skel/.shellrc&#34;)
+                    if default_shellrc_read.success:
+                        default_shellrc_data = default_shellrc_read.data
+                    else:
+                        default_shellrc_data = &#34;&#34;
+                else:
+                    default_shellrc_data = &#34;&#34;
+
+                shellrc_content = f&#34;{default_shellrc_data}\n&#34; \
+                                  f&#34;export HOME=/home/{args.username}\n&#34; \
+                                  f&#34;export PATH=/bin:/usr/bin\n&#34; \
+                                  f&#34;export USER={args.username}\n&#34;
+
+                write(f&#34;/home/{args.username}/.shellrc&#34;, shellrc_content)
 
         # Check if we should ask the user for Full name, etc
         if args.noninteractive:

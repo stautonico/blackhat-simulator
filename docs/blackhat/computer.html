@@ -284,7 +284,6 @@ class Computer:
         #     print(f&#34;shell: permission denied: {command}&#34;)
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-
         random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
         with open(random_filename, &#34;w&#34;) as f:
@@ -318,9 +317,7 @@ class Computer:
             response = Result(success=False)
         else:
             if type(response) == int:
-                response = Result(success=response==0)
-
-
+                response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
@@ -788,8 +785,10 @@ class Computer:
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
                     if line != &#34;&#34;:
-                        line = line.split()
-                        result = self.sys_execvp(line[0], line[1:])
+                        # line = line.split()
+                        result = self.shell.handle_command(line)
+                        # result = self.shell.run_command(line[0], line[1:], False, False)
+                        # result = self.sys_execvp(line[0], line[1:])
                         # result = self.run_command(line[0], line[1:], pipe=False)
 
     def save(self, output_file: str = &#34;blackhat.save&#34;) -&gt; bool:
@@ -1932,7 +1931,6 @@ class ISPRouter(Router):
         #     print(f&#34;shell: permission denied: {command}&#34;)
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-
         random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
         with open(random_filename, &#34;w&#34;) as f:
@@ -1966,9 +1964,7 @@ class ISPRouter(Router):
             response = Result(success=False)
         else:
             if type(response) == int:
-                response = Result(success=response==0)
-
-
+                response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
@@ -2436,8 +2432,10 @@ class ISPRouter(Router):
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split(&#34;\n&#34;):
                     if line != &#34;&#34;:
-                        line = line.split()
-                        result = self.sys_execvp(line[0], line[1:])
+                        # line = line.split()
+                        result = self.shell.handle_command(line)
+                        # result = self.shell.run_command(line[0], line[1:], False, False)
+                        # result = self.sys_execvp(line[0], line[1:])
                         # result = self.run_command(line[0], line[1:], pipe=False)
 
     def save(self, output_file: str = &#34;blackhat.save&#34;) -&gt; bool:
@@ -4107,7 +4105,6 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
     #     print(f&#34;shell: permission denied: {command}&#34;)
     #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-
     random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
     with open(random_filename, &#34;w&#34;) as f:
@@ -4141,9 +4138,7 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
         response = Result(success=False)
     else:
         if type(response) == int:
-            response = Result(success=response==0)
-
-
+            response = Result(success=response == 0)
 
     # Reset the UID (to prevent binaries from getting stuck with invalid uids)
     self.sessions[-1].effective_uid = self.sessions[-1].real_uid
@@ -4190,8 +4185,10 @@ The ".shellrc" file is replicating the behavior of .bashrc/.bash_profile/.zshrc 
         if shellrc_lines.success:
             for line in shellrc_lines.data.split(&#34;\n&#34;):
                 if line != &#34;&#34;:
-                    line = line.split()
-                    result = self.sys_execvp(line[0], line[1:])
+                    # line = line.split()
+                    result = self.shell.handle_command(line)
+                    # result = self.shell.run_command(line[0], line[1:], False, False)
+                    # result = self.sys_execvp(line[0], line[1:])
                     # result = self.run_command(line[0], line[1:], pipe=False)</code></pre>
 </details>
 </dd>

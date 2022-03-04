@@ -47,6 +47,7 @@ class Shell:
         self.computers: list[Computer] = [computer]
         self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
+        self.aliases = {}
 
         # Setup tab to auto complete
         readline.parse_and_bind(&#34;tab: complete&#34;)
@@ -131,6 +132,49 @@ class Shell:
 
         return prompt
 
+    ### BUILTINS ###
+    def run_builtin(self, command, args):
+        if command == &#34;alias&#34;:
+            return self.builtin_alias(args)
+        elif command == &#34;unalias&#34;:
+            return self.builtin_unalias(args)
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    def builtin_alias(self, args):
+        args = &#34; &#34;.join(args)
+        args = args.split(&#34;=&#34;)
+
+        while &#34;&#34; in args:
+            args.remove(&#34;&#34;)
+
+        if len(args) == 0:
+            for alias, value in self.aliases.items():
+                print(f&#34;{alias}=&#39;{value}&#39;&#34;)
+            return Result(success=True)
+
+        if len(args) == 1:
+            if args[0] in self.aliases:
+                print(f&#34;{args[0]}=&#39;{self.aliases[args[0]]}&#39;&#34;)
+                return Result(success=True)
+            else:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if len(args) == 2:
+            self.aliases[args[0]] = args[1]
+            return Result(success=True)
+
+        return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)
+
+    def builtin_unalias(self, args):
+        for item in args:
+            if item in self.aliases.keys():
+                del self.aliases[item]
+
+        return Result(success=True)
+
+    ### END BUILTINS ###
+
     def run_command(self, command: str, args: list, external_binary: bool, pipe: bool):
         &#34;&#34;&#34;
         Determine how to run the given input, then, update the `Shell`&#39;s prompt accordingly
@@ -203,7 +247,7 @@ class Shell:
         # TODO: When using &gt;&gt; or &gt;, file owner is the read uid not effective uid
         # Technically, the first element in our command should be the command name
         # And we can keep going through the
-        prev_item = readline.get_history_item(readline.get_current_history_length()-1)
+        prev_item = readline.get_history_item(readline.get_current_history_length() - 1)
         if prev_item:
             command = command.replace(&#34;!!&#34;, prev_item)
 
@@ -214,6 +258,23 @@ class Shell:
         command_name = command[0]
         # Delete the command name from the command list (since we already have it)
         del command[0]
+
+        # Check if we&#39;re calling a builtin
+        if command_name in [&#34;alias&#34;, &#34;unalias&#34;]:
+            return self.run_builtin(command_name, command)
+
+        # Check if we&#39;re running an alias
+        if command_name in self.aliases.keys():
+            # We need to resplit the args to get the alias args
+            command = self.aliases[command_name]
+
+            command = command.split()
+            while &#34;&#34; in command:
+                command.remove(&#34;&#34;)
+            command_name = command[0]
+            # Delete the command name from the command list (since we already have it)
+            del command[0]
+
 
         # Easy cases if there are no special characters
         if &#34;|&#34; not in command and &#34;&gt;&#34; not in command and &#34;&gt;&gt;&#34; not in command:
@@ -357,6 +418,7 @@ This will be removed once the GUI is working</p>
         self.computers: list[Computer] = [computer]
         self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
+        self.aliases = {}
 
         # Setup tab to auto complete
         readline.parse_and_bind(&#34;tab: complete&#34;)
@@ -441,6 +503,49 @@ This will be removed once the GUI is working</p>
 
         return prompt
 
+    ### BUILTINS ###
+    def run_builtin(self, command, args):
+        if command == &#34;alias&#34;:
+            return self.builtin_alias(args)
+        elif command == &#34;unalias&#34;:
+            return self.builtin_unalias(args)
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    def builtin_alias(self, args):
+        args = &#34; &#34;.join(args)
+        args = args.split(&#34;=&#34;)
+
+        while &#34;&#34; in args:
+            args.remove(&#34;&#34;)
+
+        if len(args) == 0:
+            for alias, value in self.aliases.items():
+                print(f&#34;{alias}=&#39;{value}&#39;&#34;)
+            return Result(success=True)
+
+        if len(args) == 1:
+            if args[0] in self.aliases:
+                print(f&#34;{args[0]}=&#39;{self.aliases[args[0]]}&#39;&#34;)
+                return Result(success=True)
+            else:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if len(args) == 2:
+            self.aliases[args[0]] = args[1]
+            return Result(success=True)
+
+        return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)
+
+    def builtin_unalias(self, args):
+        for item in args:
+            if item in self.aliases.keys():
+                del self.aliases[item]
+
+        return Result(success=True)
+
+    ### END BUILTINS ###
+
     def run_command(self, command: str, args: list, external_binary: bool, pipe: bool):
         &#34;&#34;&#34;
         Determine how to run the given input, then, update the `Shell`&#39;s prompt accordingly
@@ -513,7 +618,7 @@ This will be removed once the GUI is working</p>
         # TODO: When using &gt;&gt; or &gt;, file owner is the read uid not effective uid
         # Technically, the first element in our command should be the command name
         # And we can keep going through the
-        prev_item = readline.get_history_item(readline.get_current_history_length()-1)
+        prev_item = readline.get_history_item(readline.get_current_history_length() - 1)
         if prev_item:
             command = command.replace(&#34;!!&#34;, prev_item)
 
@@ -524,6 +629,23 @@ This will be removed once the GUI is working</p>
         command_name = command[0]
         # Delete the command name from the command list (since we already have it)
         del command[0]
+
+        # Check if we&#39;re calling a builtin
+        if command_name in [&#34;alias&#34;, &#34;unalias&#34;]:
+            return self.run_builtin(command_name, command)
+
+        # Check if we&#39;re running an alias
+        if command_name in self.aliases.keys():
+            # We need to resplit the args to get the alias args
+            command = self.aliases[command_name]
+
+            command = command.split()
+            while &#34;&#34; in command:
+                command.remove(&#34;&#34;)
+            command_name = command[0]
+            # Delete the command name from the command list (since we already have it)
+            del command[0]
+
 
         # Easy cases if there are no special characters
         if &#34;|&#34; not in command and &#34;&gt;&#34; not in command and &#34;&gt;&gt;&#34; not in command:
@@ -662,6 +784,58 @@ This will be removed once the GUI is working</p>
     return results[state]</code></pre>
 </details>
 </dd>
+<dt id="blackhat.shell.Shell.builtin_alias"><code class="name flex">
+<span>def <span class="ident">builtin_alias</span></span>(<span>self, args)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def builtin_alias(self, args):
+    args = &#34; &#34;.join(args)
+    args = args.split(&#34;=&#34;)
+
+    while &#34;&#34; in args:
+        args.remove(&#34;&#34;)
+
+    if len(args) == 0:
+        for alias, value in self.aliases.items():
+            print(f&#34;{alias}=&#39;{value}&#39;&#34;)
+        return Result(success=True)
+
+    if len(args) == 1:
+        if args[0] in self.aliases:
+            print(f&#34;{args[0]}=&#39;{self.aliases[args[0]]}&#39;&#34;)
+            return Result(success=True)
+        else:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    if len(args) == 2:
+        self.aliases[args[0]] = args[1]
+        return Result(success=True)
+
+    return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.shell.Shell.builtin_unalias"><code class="name flex">
+<span>def <span class="ident">builtin_unalias</span></span>(<span>self, args)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def builtin_unalias(self, args):
+    for item in args:
+        if item in self.aliases.keys():
+            del self.aliases[item]
+
+    return Result(success=True)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.shell.Shell.generate_prompt"><code class="name flex">
 <span>def <span class="ident">generate_prompt</span></span>(<span>self) ‑> str</span>
 </code></dt>
@@ -767,7 +941,7 @@ Determine how to route input and output between commands</p>
     # TODO: When using &gt;&gt; or &gt;, file owner is the read uid not effective uid
     # Technically, the first element in our command should be the command name
     # And we can keep going through the
-    prev_item = readline.get_history_item(readline.get_current_history_length()-1)
+    prev_item = readline.get_history_item(readline.get_current_history_length() - 1)
     if prev_item:
         command = command.replace(&#34;!!&#34;, prev_item)
 
@@ -778,6 +952,23 @@ Determine how to route input and output between commands</p>
     command_name = command[0]
     # Delete the command name from the command list (since we already have it)
     del command[0]
+
+    # Check if we&#39;re calling a builtin
+    if command_name in [&#34;alias&#34;, &#34;unalias&#34;]:
+        return self.run_builtin(command_name, command)
+
+    # Check if we&#39;re running an alias
+    if command_name in self.aliases.keys():
+        # We need to resplit the args to get the alias args
+        command = self.aliases[command_name]
+
+        command = command.split()
+        while &#34;&#34; in command:
+            command.remove(&#34;&#34;)
+        command_name = command[0]
+        # Delete the command name from the command list (since we already have it)
+        del command[0]
+
 
     # Easy cases if there are no special characters
     if &#34;|&#34; not in command and &#34;&gt;&#34; not in command and &#34;&gt;&gt;&#34; not in command:
@@ -896,6 +1087,24 @@ Determine how to route input and output between commands</p>
             print()</code></pre>
 </details>
 </dd>
+<dt id="blackhat.shell.Shell.run_builtin"><code class="name flex">
+<span>def <span class="ident">run_builtin</span></span>(<span>self, command, args)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def run_builtin(self, command, args):
+    if command == &#34;alias&#34;:
+        return self.builtin_alias(args)
+    elif command == &#34;unalias&#34;:
+        return self.builtin_unalias(args)
+
+    return Result(success=False, message=ResultMessages.NOT_FOUND)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.shell.Shell.run_command"><code class="name flex">
 <span>def <span class="ident">run_command</span></span>(<span>self, command: str, args: list, external_binary: bool, pipe: bool)</span>
 </code></dt>
@@ -1007,9 +1216,12 @@ Determine how to route input and output between commands</p>
 <h4><code><a title="blackhat.shell.Shell" href="#blackhat.shell.Shell">Shell</a></code></h4>
 <ul class="two-column">
 <li><code><a title="blackhat.shell.Shell.autocomplete" href="#blackhat.shell.Shell.autocomplete">autocomplete</a></code></li>
+<li><code><a title="blackhat.shell.Shell.builtin_alias" href="#blackhat.shell.Shell.builtin_alias">builtin_alias</a></code></li>
+<li><code><a title="blackhat.shell.Shell.builtin_unalias" href="#blackhat.shell.Shell.builtin_unalias">builtin_unalias</a></code></li>
 <li><code><a title="blackhat.shell.Shell.generate_prompt" href="#blackhat.shell.Shell.generate_prompt">generate_prompt</a></code></li>
 <li><code><a title="blackhat.shell.Shell.handle_command" href="#blackhat.shell.Shell.handle_command">handle_command</a></code></li>
 <li><code><a title="blackhat.shell.Shell.main" href="#blackhat.shell.Shell.main">main</a></code></li>
+<li><code><a title="blackhat.shell.Shell.run_builtin" href="#blackhat.shell.Shell.run_builtin">run_builtin</a></code></li>
 <li><code><a title="blackhat.shell.Shell.run_command" href="#blackhat.shell.Shell.run_command">run_command</a></code></li>
 <li><code><a title="blackhat.shell.Shell.try_run_command" href="#blackhat.shell.Shell.try_run_command">try_run_command</a></code></li>
 </ul>

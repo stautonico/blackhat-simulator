@@ -119,6 +119,10 @@ def main(args: list, pipe: bool) -&gt; Result:
             path_dirs.remove(&#34;&#34;)
 
         for command in args.commands:
+            # Check for shell builtins
+            if command in [&#34;alias&#34;, &#34;unalias&#34;]:
+                output_text = f&#34;{command}: shell built-in command&#34;
+                continue
             for path in path_dirs:
                 read_result = readdir(path)
                 if read_result.success:
@@ -174,6 +178,10 @@ def main(args: list, pipe: bool) -&gt; Result:
             path_dirs.remove(&#34;&#34;)
 
         for command in args.commands:
+            # Check for shell builtins
+            if command in [&#34;alias&#34;, &#34;unalias&#34;]:
+                output_text = f&#34;{command}: shell built-in command&#34;
+                continue
             for path in path_dirs:
                 read_result = readdir(path)
                 if read_result.success:

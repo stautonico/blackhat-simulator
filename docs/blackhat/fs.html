@@ -742,7 +742,11 @@ class StandardFS:
                                        &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-        File(&#34;.shellrc&#34;, &#34;&#34;, skel_dir, 0, 0)
+        DEFAULT_SHELLRC_CONTENT = &#34;alias lsa=ls -l -a\n&#34; \
+                                  &#34;alias la=ls -a\n&#34; \
+                                  &#34;alias ll=ls -l\n&#34;
+
+        File(&#34;.shellrc&#34;, DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0)
 
         # /etc/hostname (holds system hostname)
         # Stupid windows style default hostnames (for fun, might change later)
@@ -2905,7 +2909,11 @@ Also, recursively tells it's parent to update its size.</p>
                                        &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-        File(&#34;.shellrc&#34;, &#34;&#34;, skel_dir, 0, 0)
+        DEFAULT_SHELLRC_CONTENT = &#34;alias lsa=ls -l -a\n&#34; \
+                                  &#34;alias la=ls -a\n&#34; \
+                                  &#34;alias ll=ls -l\n&#34;
+
+        File(&#34;.shellrc&#34;, DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0)
 
         # /etc/hostname (holds system hostname)
         # Stupid windows style default hostnames (for fun, might change later)
@@ -3592,7 +3600,11 @@ A "skeleton" needed to create a users home folder (located in /home/<USERNAME>)<
                                    &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
 
     # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-    File(&#34;.shellrc&#34;, &#34;&#34;, skel_dir, 0, 0)
+    DEFAULT_SHELLRC_CONTENT = &#34;alias lsa=ls -l -a\n&#34; \
+                              &#34;alias la=ls -a\n&#34; \
+                              &#34;alias ll=ls -l\n&#34;
+
+    File(&#34;.shellrc&#34;, DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0)
 
     # /etc/hostname (holds system hostname)
     # Stupid windows style default hostnames (for fun, might change later)
