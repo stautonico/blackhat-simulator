@@ -83,18 +83,18 @@ class FSBaseObject:
             Result: A `Result` object with the `success` flag set accordingly
         """
         # If we"re root (UID 0), return True because root has all permissions
-        if computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == 0:
             return Result(success=True)
         # If "public", don"t bother checking anything else
         if "public" in self.permissions[perm]:
             return Result(success=True)
 
         if "group" in self.permissions[perm]:
-            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+            if self.group_owner in computer.get_user_groups(computer.sys_geteuid()).data:
                 return Result(success=True)
 
         if "owner" in self.permissions[perm]:
-            if self.owner == computer.sys_getuid():
+            if self.owner == computer.sys_geteuid():
                 return Result(success=True)
 
         # No permission
@@ -133,7 +133,7 @@ class FSBaseObject:
         """
         caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we're root
-        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == self.owner or self.group_owner in caller_groups or computer.sys_geteuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won't work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
@@ -557,7 +557,7 @@ class StandardFS:
                 current_file.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                             "execute": ["owner", "group", "public"]}
                 # Add setuid bit to specific binaries
-                if file.replace(".py", "") in ["sudo"]:
+                if file.replace(".py", "") in ["sudo", "su", "passwd"]:
                     current_file.setuid = True
 
     def setup_etc(self) -> None:

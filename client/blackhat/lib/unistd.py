@@ -32,6 +32,15 @@ def getuid() -> int:
     return computer.sys_getuid()
 
 
+def geteuid() -> int:
+    """
+    TODO: This
+    Returns:
+
+    """
+    return computer.sys_geteuid()
+
+
 def getgid() -> int:
     """
     Returns the (primary) GID of the `Computer`'s current user
@@ -68,6 +77,17 @@ def setuid(uid: int) -> Result:
         Result: A `Result` object with the success flag set accordingly
     """
     return computer.sys_setuid(uid)
+
+
+def seteuid(uid: int) -> Result:
+    """
+    TODO: This
+    Args:
+        uid:
+
+    Returns:
+    """
+    return computer.sys_seteuid(uid)
 
 
 def gethostname() -> str:
@@ -188,7 +208,7 @@ def add_user(username: str, password: str, uid: Optional[int] = None, plaintext:
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
     """
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user(username, password, uid, plaintext)
 
@@ -228,7 +248,7 @@ def add_group(name: str, gid: Optional[int] = None) -> Result:
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
     """
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_group(name, gid)
 
@@ -259,7 +279,7 @@ def add_user_to_group(uid: int, gid: int,
     Returns:
         Result: A `Result` object with the `success` flag set accordingly
     """
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user_to_group(uid, gid, membership_type)
 
@@ -367,7 +387,7 @@ def execvp(command: str, argv: list) -> Result:
     return computer.sys_execvp(command, argv)
 
 
-def new_session(uid: int) -> None:
+def new_session(uid: int) -> bool:
     """
     Temporary function: Open a new session in the current `Computer`
 
@@ -375,14 +395,19 @@ def new_session(uid: int) -> None:
         uid (int): The real UID of the user in the new `Session`
 
     Returns:
-        None
+        bool: If the new session was created
     """
     # TODO: Make this more realistic since I have no clue how it works in real life
+    if computer.sys_geteuid() != 0:
+        return False
+
+    # Only root can create a new session
     current_session: Session = computer.sessions[-1]
     # Create a new session
     new_session = Session(uid, current_session.current_dir, current_session.id + 1)
     computer.sessions.append(new_session)
     computer.run_current_user_shellrc()
+    return True
 
 
 def unlink(pathname: str) -> Result:

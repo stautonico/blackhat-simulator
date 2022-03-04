@@ -6,12 +6,14 @@ from hashlib import md5
 from ..helpers import Result, ResultMessages
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, get_user, new_session
+from ..lib.stdlib import get_env
+from ..lib.unistd import getuid, get_user, new_session, geteuid
 
 __COMMAND__ = "su"
 __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.1"
+
 
 def parse_args(args=[], doc=False):
     """
@@ -64,6 +66,7 @@ def parse_args(args=[], doc=False):
     else:
         return args, parser
 
+
 def main(args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
@@ -74,40 +77,47 @@ def main(args: list, pipe: bool) -> Result:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"su from blackhat miscutils {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
-        if not args.user:
-            to_login_as = "root"
-        else:
-            to_login_as = args.user
+        if args.version:
+            return output(f"su from blackhat miscutils {__VERSION__}", pipe)
 
-        # Check if the user exists
-        user = None
-
-        # Check if the given user exists
-        user_lookup = get_user(username=to_login_as)
-        if user_lookup.success:
-            user = user_lookup.data
-        else:
-            return output(f"{__COMMAND__}: user {args[0]} does not exist", pipe, success=False,
-                          success_message=ResultMessages.NOT_FOUND)
-
-        input_password = None
-
-        # Authenticate
-        if getuid() != 0:
-            password = getpass()
-            input_password = md5(password.encode()).hexdigest()
-
-        if input_password == user.password or getuid() == 0:
-            new_session(user.uid)
-
+        # If we specific -h/--help, args will be empty, so exit gracefully
+        if not args:
             return output("", pipe)
         else:
-            return output(f"{__COMMAND__}: Authentication failure", pipe, success=False,
-                          success_message=ResultMessages.NOT_ALLOWED)
+            if not args.user:
+                to_login_as = "root"
+            else:
+                to_login_as = args.user
+
+            # Check if the user exists
+            user = None
+
+            # Check if the given user exists
+            user_lookup = get_user(username=to_login_as)
+            if user_lookup.success:
+                user = user_lookup.data
+            else:
+                return output(f"{__COMMAND__}: user {to_login_as} does not exist", pipe, success=False,
+                              success_message=ResultMessages.NOT_FOUND)
+
+            input_password = None
+
+            # Authenticate
+            if getuid() != 0:
+                password = getpass()
+                input_password = md5(password.encode()).hexdigest()
+
+            if input_password == user.password or getuid() == 0:
+                success = new_session(user.uid)
+                if not success:
+                    return output(f"{__COMMAND__}: Failed to create new session: Permission denied", pipe, success=False,
+                                  success_message=ResultMessages.NOT_ALLOWED)
+
+                return output("", pipe)
+            else:
+                return output(f"{__COMMAND__}: Authentication failure", pipe, success=False,
+                              success_message=ResultMessages.NOT_ALLOWED)

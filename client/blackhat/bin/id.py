@@ -3,7 +3,7 @@ __package__ = "blackhat.bin"
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, get_user, get_group, get_user_primary_group, get_user_groups
+from ..lib.unistd import get_user, get_group, get_user_primary_group, get_user_groups, geteuid
 
 __COMMAND__ = "id"
 __DESCRIPTION__ = "print real and effective user and group IDs"
@@ -94,7 +94,7 @@ def main(args: list, pipe: bool) -> Result:
                 # That means we entered a username
                 user_to_lookup_result = get_user(username=args.user)
         else:
-            user_to_lookup_result = get_user(uid=getuid())
+            user_to_lookup_result = get_user(uid=geteuid())
 
         if not user_to_lookup_result.success:
             return output(f"{__COMMAND__}: '{args.user}': no such user", pipe, success=False)

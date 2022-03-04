@@ -139,68 +139,72 @@ class Computer:
         Returns:
             None
         """
-        etc_dir: Directory = self.fs.files.find("etc")
+        # The reason we're trying here is that sometimes, this function gets called before the fs is initalized
+        try:
+            etc_dir: Directory = self.fs.files.find("etc")
 
-        if not etc_dir:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
+            if not etc_dir:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        passwd_file: File = etc_dir.find("passwd")
-        shadow_file: File = etc_dir.find("shadow")
-        group_file: File = etc_dir.find("group")
+            passwd_file: File = etc_dir.find("passwd")
+            shadow_file: File = etc_dir.find("shadow")
+            group_file: File = etc_dir.find("group")
 
-        # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
-        # shadow format: USERNAME:MD5_PASSWORD
-        # group format: GROUP_NAME:x:GID:GROUP_USERS
+            # TODO: Allow modification of home directory from here
+            # passwd format: USERNAME:MD5_PASSWORD OR "x":UID:PRIMARY_GID
+            # shadow format: USERNAME:MD5_PASSWORD
+            # group format: GROUP_NAME:x:GID:GROUP_USERS
 
-        passwd_content = ""
-        shadow_content = ""
-        group_content = ""
+            passwd_content = ""
+            shadow_content = ""
+            group_content = ""
 
-        for user in self.get_all_users().data:
-            # Find the "primary" group
-            primary_group = self.get_user_primary_group(user.uid)
-            if primary_group.success:
-                if len(primary_group.data) > 0:
-                    primary_group = primary_group.data[0]
+            for user in self.get_all_users().data:
+                # Find the "primary" group
+                primary_group = self.get_user_primary_group(user.uid)
+                if primary_group.success:
+                    if len(primary_group.data) > 0:
+                        primary_group = primary_group.data[0]
+                    else:
+                        primary_group = "?"
                 else:
                     primary_group = "?"
+
+                passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
+                shadow_content += f"{user.username}:{user.password}\n"
+
+            for group in self.get_all_groups().data:
+                uids = self.get_users_in_group(group.gid).data
+                usernames = ""
+                for uid in uids:
+                    user_lookup = self.get_user(uid=uid[0])
+                    usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
+
+                usernames = usernames[:-1]
+
+                group_content += f"{group.name}:x:{group.gid}:{usernames}\n"
+                # print(group_content, end="")
+
+            if not passwd_file:
+                # Create the /etc/passwd
+                File("passwd", passwd_content, etc_dir, 0, 0)
             else:
-                primary_group = "?"
+                passwd_file.content = passwd_content
 
-            passwd_content += f"{user.username}:x:{user.uid}:{primary_group}\n"
-            shadow_content += f"{user.username}:{user.password}\n"
+            if not shadow_file:
+                # Create the /etc/shadow file and change its perms (rw-------)
+                shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
+                shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
+            else:
+                shadow_file.content = shadow_content
 
-        for group in self.get_all_groups().data:
-            uids = self.get_users_in_group(group.gid).data
-            usernames = ""
-            for uid in uids:
-                user_lookup = self.get_user(uid=uid[0])
-                usernames += ("?" if not user_lookup.success else user_lookup.data.username) + ","
-
-            usernames = usernames[:-1]
-
-            group_content += f"{group.name}:x:{group.gid}:{usernames}\n"
-            # print(group_content, end="")
-
-        if not passwd_file:
-            # Create the /etc/passwd
-            File("passwd", passwd_content, etc_dir, 0, 0)
-        else:
-            passwd_file.content = passwd_content
-
-        if not shadow_file:
-            # Create the /etc/shadow file and change its perms (rw-------)
-            shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
-            shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
-        else:
-            shadow_file.content = shadow_content
-
-        if not group_file:
-            # Create the /etc/group
-            File("group", group_content, etc_dir, 0, 0)
-        else:
-            group_file.content = group_content
+            if not group_file:
+                # Create the /etc/group
+                File("group", group_content, etc_dir, 0, 0)
+            else:
+                group_file.content = group_content
+        except Exception as e:
+            return Result(success=False, )
 
         return Result(success=True)
 
@@ -299,7 +303,8 @@ class Computer:
                 response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
-        self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+        self.sessions[-1].effective_uid = self.sessions[-1].saved_uid
+        self.sessions[-1].real_uid = self.sessions[-1].saved_uid
 
         if os.getenv("DEBUGMODE") == "false":
             self.save()
@@ -368,6 +373,8 @@ class Computer:
                               (next_uid, username, hashed_password, self.id))
         self.connection.commit()
 
+        self.sync_user_and_group_files()
+
         return Result(success=True, data=next_uid)
 
     def delete_user(self, username: str) -> Result:
@@ -384,6 +391,8 @@ class Computer:
             self.database.execute("DELETE FROM blackhat_user WHERE computer_id=? and username=?", (self.id, username))
             self.connection.commit()
             return Result(success=True)
+
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -411,6 +420,9 @@ class Computer:
         result = self.database.execute("UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?",
                                        (password_hash, uid, self.id))
         self.connection.commit()
+
+        self.sync_user_and_group_files()
+
         return Result(success=True)
 
     def change_user_uid(self, uid: int, new_uid: int) -> Result:
@@ -450,6 +462,7 @@ class Computer:
         # We also need to update the UID in the group membership records
         self.database.execute("UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?",
                               (new_uid, uid, self.id))
+        self.sync_user_and_group_files()
 
         return Result(success=True)
 
@@ -491,6 +504,7 @@ class Computer:
         self.database.execute("INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)",
                               (next_gid, name, self.id))
         self.connection.commit()
+        self.sync_user_and_group_files()
 
         return Result(success=True, data=next_gid)
 
@@ -508,6 +522,7 @@ class Computer:
             self.database.execute("DELETE FROM blackhat_group WHERE computer_id=? and name=?", (self.id, name))
             self.connection.commit()
             return Result(success=True)
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -530,6 +545,7 @@ class Computer:
                 "INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)",
                 (self.id, uid, gid, membership_type))
             self.connection.commit()
+            self.sync_user_and_group_files()
             return Result(success=True)
         else:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -967,11 +983,11 @@ class Computer:
         if len(self.sessions) == 0:
             return 0
 
-        return self.sessions[-1].effective_uid
+        return self.sessions[-1].real_uid
 
     def sys_setuid(self, uid: int) -> Result:
         """
-        Change current `Session`'s effective UID to the given `UID`
+        Change current `Session`'s real UID to the given `UID`
 
         Notes:
             setuid() followed the current rules:
@@ -991,12 +1007,48 @@ class Computer:
         # If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
         # If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
 
-        if self.sys_getuid() == 0:
-            self.sessions[-1].effective_uid = uid
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].real_uid = uid
 
         return Result(success=True)
         # else:
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+    def sys_geteuid(self) -> int:
+        """
+        Returns the UID of the `Computer`'s effective current user
+
+        Returns:
+            int: UID of the `Computers`'s current user (from most recent session)
+        """
+        if len(self.sessions) == 0:
+            return 0
+
+        return self.sessions[-1].effective_uid
+
+    def sys_seteuid(self, uid: int) -> Result:
+        """
+        Change current `Session`'s effective UID to the given `UID`
+
+        Notes:
+            setuid() followed the current rules:
+                * If the "caller" uid is root, change the uid to whatever is given
+                * If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+                * If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes
+
+        Args:
+            uid (int): The new UID to change to
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        """
+
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].effective_uid = uid
+        else:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        return Result(success=True)
 
     def sys_getgid(self) -> int:
         """
@@ -1356,7 +1408,6 @@ class Computer:
         for file in os.listdir("/tmp"):
             if file.endswith(".py"):
                 os.remove("/tmp/" + file)
-
 
         if force:
             if len(self.shell.computers) == 1:

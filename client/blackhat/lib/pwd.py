@@ -67,7 +67,7 @@ def putpwent(entry: passwd) -> Result:
     Returns:
         Result: A `Result` object with the success flag set accordingly
     """
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
     # If no user with pw_name doesn't exist, add a new user
