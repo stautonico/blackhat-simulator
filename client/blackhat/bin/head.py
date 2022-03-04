@@ -23,7 +23,6 @@ def parse_args(args=[], doc=False):
     """
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("files", nargs="+")
-    parser.add_argument("-d", "--decode", action="store_true", help="decode data")
     parser.add_argument("-w", "--wrap", type=int,
                         help="wrap encoded lines after COLS character (default 76).  Use 0 to disable line wrapping")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")

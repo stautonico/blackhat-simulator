@@ -201,6 +201,20 @@ class TestIncludedBinaries(unittest.TestCase):
         env_result = self.run_command("printenv")
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
+    def test_head(self):
+        message = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty"
+        # Make a file with 20 lines
+        self.run_command("touch", ["bigfile"])
+        self.computer.sys_write("/home/steve/bigfile", message)
+
+        expected_result = "\n".join(message.split("\n")[:-10])
+
+        actual_result = self.run_command("head", ["bigfile"])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
+
     def test_hostname(self):
         self.run_command("hostname", ["--version"])
         self.run_command("hostname", ["--help"])
@@ -523,6 +537,20 @@ class TestIncludedBinaries(unittest.TestCase):
 
                 other_user_result = self.run_command("sudo", ["-u", "testuser", "id"])
                 self.assertIn("uid=1001(testuser) gid=1001(testuser)", other_user_result)
+    #
+
+    def test_tail(self):
+        message = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty"
+        # Make a file with 20 lines
+        self.run_command("touch", ["bigfile"])
+        self.computer.sys_write("/home/steve/bigfile", message)
+
+        expected_result = "\n".join(message.split("\n")[10:])
+        actual_result = self.run_command("tail", ["bigfile"])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
 
     def test_touch(self):
         self.run_command("touch", ["--version"])
@@ -667,16 +695,13 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("who", ["--version"])
         self.run_command("who", ["--help"])
 
-        who_result = self.run_command("who")
-        self.assertEqual(who_result, "steve\tpts/0")
+        self.assertEqual(self.run_command("who"), "steve\tpts/0")
 
     def test_whoami(self):
         self.run_command("whoami", ["--version"])
         self.run_command("whoami", ["--help"])
 
-        whoami_result = self.run_command("whoami")
-
-        self.assertEqual(whoami_result, "steve")
+        self.assertEqual(self.run_command("whoami"), "steve")
 
 
 class TestInstallableBinaries(unittest.TestCase):
@@ -688,3 +713,10 @@ class TestInstallableBinaries(unittest.TestCase):
 
     def setUp(self) -> None:
         self.computer = init()
+
+    def run_command(self, command, args=[]):
+        result = self.computer.run_command(command, args, True).data
+        # This avoids "None type as no attribute strip"
+        if not result:
+            result = ""
+        return result.strip("\n")
