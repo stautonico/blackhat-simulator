@@ -1,9 +1,9 @@
-import importlib
 import os
 import pickle
 import sqlite3
 from datetime import datetime
 from hashlib import md5
+from importlib.machinery import SourceFileLoader
 from os import system as real_syscall
 from platform import system
 from random import choice
@@ -21,8 +21,6 @@ from .services.pingserver import PingServer
 from .services.service import Service
 from .session import Session
 from .user import User, Group
-
-from importlib.machinery import SourceFileLoader
 
 
 class Computer:
@@ -62,7 +60,7 @@ class Computer:
             None
         """
         self.boot_time = datetime.now()
-        # Try to setup the user, group, and group membership tables
+        # Try to set up the user, group, and group membership tables
         init_tables_file = open("blackhat/database/init_tables.sql")
         init_tables = init_tables_file.read()
         self.database.executescript(init_tables)
@@ -71,7 +69,8 @@ class Computer:
         result = self.database.execute("SELECT * FROM computer WHERE id=?", (self.id,)).fetchall()
 
         if len(result) == 0:
-            # We're starting a new save, lets save a copy of this computers id in the database, along with create the root user
+            # We're starting a new save, lets save a copy of this computer's id in the database, along with create the
+            # root user
             self.database.execute("INSERT INTO computer VALUES (?)", (self.id,))
             self.create_root_user()
             self.connection.commit()

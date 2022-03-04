@@ -18,7 +18,7 @@ __DESCRIPTION_LONG__ = ""
 __VERSION__ = "2.0"
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
     """
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -29,6 +29,8 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("files", nargs="*", default=".")
     parser.add_argument("-a", dest="all", action="store_true")
@@ -37,6 +39,9 @@ def parse_args(args=[], doc=False):
     parser.add_argument("--version", action="store_true", help=f"print program version")
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -48,7 +53,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # it's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -69,10 +74,7 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
 
-    if doc:
-        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
-    else:
-        return args, parser
+    return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
 
 
 def calculate_permission_string(perm_octal: int) -> str:

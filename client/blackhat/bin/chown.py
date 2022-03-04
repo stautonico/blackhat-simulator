@@ -12,7 +12,7 @@ __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.1"
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
     """
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -23,12 +23,17 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("owner")
     parser.add_argument("file")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -40,7 +45,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # it's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -61,10 +66,7 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
 
-    if doc:
-        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
-    else:
-        return args, parser
+    return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
 
 
 def main(args: list, pipe: bool) -> Result:
@@ -112,7 +114,7 @@ def main(args: list, pipe: bool) -> Result:
         result = stat(args.file)
 
         if result.success:
-            # Check if the dir we're trying to change is the root dir (we cant change perm)
+            # Check if the dir we're trying to change is the root dir (we can't change perm)
             if result.data.st_path == "/":
                 return output(f"{__COMMAND__}: Can't change owner of /", pipe, success=False)
             else:

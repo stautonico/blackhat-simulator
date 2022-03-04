@@ -1,16 +1,15 @@
 __package__ = "blackhat.bin"
 
 import datetime
-from time import sleep
 from getpass import getpass
 from hashlib import md5
+from time import sleep
 
 from ..helpers import ResultMessages, Result
 from ..lib.fcntl import creat
 from ..lib.output import output
-from ..lib.stdlib import get_env
 from ..lib.sys.stat import stat
-from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp, write, seteuid, geteuid
+from ..lib.unistd import getuid, get_user, read, gethostname, execvp, write, seteuid
 
 __COMMAND__ = "sudo"
 __VERSION__ = "1.1"

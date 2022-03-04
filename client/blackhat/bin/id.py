@@ -11,7 +11,7 @@ __DESCRIPTION_LONG__ = "Print user and group information for each specified USER
 __VERSION__ = "1.2"
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
     """
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -22,6 +22,8 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("user", nargs="?")
     parser.add_argument("-g", "--group", action="store_true", help="print only the effective group ID")
@@ -34,6 +36,12 @@ def parse_args(args=[], doc=False):
 
     args = parser.parse_args(args)
 
+    if not doc:
+        return args, parser
+
+    if not doc:
+        return args, parser
+
     arg_helps_with_dups = parser._actions
 
     arg_helps = []
@@ -44,7 +52,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # it's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -65,10 +73,8 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
 
-    if doc:
-        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
-    else:
-        return args, parser
+    return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
+
 
 
 def main(args: list, pipe: bool) -> Result:

@@ -20,7 +20,9 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -> None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids "None type as no attribute strip"
         if not result:
@@ -754,7 +756,9 @@ class TestInstallableBinaries(unittest.TestCase):
     def setUp(self) -> None:
         self.computer = init()
 
-    def run_command(self, command, args=[]):
+    def run_command(self, command, args=None):
+        if args is None:
+            args = []
         result = self.computer.run_command(command, args, True).data
         # This avoids "None type as no attribute strip"
         if not result:

@@ -15,7 +15,9 @@ __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.0"
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("--version", action="store_true", help=f"print program version")
     parser.add_argument("-r", dest="reset", action="store_true", help="Reset the tutorial")
@@ -23,6 +25,9 @@ def parse_args(args=[], doc=False):
                         help="Continue the tutorial. Required for step 2 of the tutorial")
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -34,7 +39,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # it's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -55,10 +60,7 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
 
-    if doc:
-        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
-    else:
-        return args, parser
+    return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
 
 
 def main(args: list, pipe: bool) -> Result:

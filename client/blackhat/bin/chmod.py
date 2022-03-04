@@ -30,7 +30,7 @@ def parse_characters(chars, current_perms):
 
     owner, group, public = False, False, False
     read, write, execute = False, False, False
-    # Lets figure out who we're modifying
+    # Let's figure out whom we're modifying
     # If the user arg (split_args[0]) is empty, we can also assume we're modifying everyone
     if len(split_args[0]) == 0:
         owner, group, public = True, True, True
@@ -91,7 +91,7 @@ def parse_characters(chars, current_perms):
     return True
 
 
-def parse_args(args=[], doc=False):
+def parse_args(args=None, doc=False):
     """
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
 
@@ -102,12 +102,17 @@ def parse_args(args=[], doc=False):
     Returns:
         Processed args and a copy of the `ArgParser` object if not `doc` else a `string` containing the generated manpage
     """
+    if args is None:
+        args = []
     parser = ArgParser(prog=__COMMAND__, description=f"{__COMMAND__} - {__DESCRIPTION__}")
     parser.add_argument("umask")
     parser.add_argument("file")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")
 
     args = parser.parse_args(args)
+
+    if not doc:
+        return args, parser
 
     arg_helps_with_dups = parser._actions
 
@@ -119,7 +124,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION_LONG__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # it's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -140,10 +145,7 @@ def parse_args(args=[], doc=False):
             else:
                 DESCRIPTION += f"\t**{' '.join(item.option_strings)}*/={item.dest.upper()}\n\t\t{item.help}\n\n"
 
-    if doc:
-        return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
-    else:
-        return args, parser
+    return f"{NAME}\n\n{SYNOPSIS}\n\n{DESCRIPTION}\n\n"
 
 
 def main(args: list, pipe: bool) -> Result:
