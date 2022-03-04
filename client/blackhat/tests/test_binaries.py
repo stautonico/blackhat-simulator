@@ -4,7 +4,6 @@ from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 from time import sleep
 import unittest.mock
-from getpass import getpass
 
 from .setup_computers_universal import init
 from ..helpers import Result, ResultMessages
@@ -22,7 +21,6 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer = init()
 
     def run_command(self, command, args=[]):
-
         result = self.computer.run_command(command, args, True).data
         # This avoids "None type as no attribute strip"
         if not result:
@@ -382,8 +380,6 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertNotIn("file1", ls_result)
         self.assertNotIn("file2", ls_result)
 
-
-
     def test_sha1sum(self):
         self.run_command("sha1sum", ["--version"])
         self.run_command("sha1sum", ["--help"])
@@ -467,7 +463,25 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(self.run_command("sha512sum", ["file", "-z", "--tag"]),
                          f"SHA512 (file) = {sha512(message.encode()).hexdigest()}")
 
+    def test_su(self):
+        self.run_command("su", ["--version"])
+
+        # Sanity check
+        self.assertIn("uid=1000(steve) gid=1000(steve)", self.run_command("id"))
+
+        with unittest.mock.patch("getpass.getpass", return_value="password"):
+            with unittest.mock.patch("getpass.fallback_getpass", return_value="password"):
+                self.run_command("su")
+                self.assertIn("uid=0(root) gid=0(root)", self.run_command("id"))
+
+        self.assertTrue(self.computer.run_command("adduser", ["testuser", "-p" "NOTPASSWORD", "-n"], True).success)
+
+        # Now that we're root, we should be able to change user without a password
+        self.run_command("su", ["testuser"])
+        self.assertIn("uid=1001(testuser) gid=1001(testuser)", self.run_command("id"))
+
     def test_sudo(self):
+        self.run_command("sudo", ["--version"])
         # Sanity check
         sudo_result = self.run_command("id")
 
@@ -477,7 +491,6 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
         self.run_command("adduser", ["testuser", "-p" "password", "-n"])
         self.computer.sessions.pop()
-
 
         # We do both "getpass" and "fallback_getpass" because some terminals
         # (pycharm's one for example) uses the fallback function
@@ -558,11 +571,11 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
         minus_one_minute = uptime_result.split(":")
-        minus_one_minute[1] = "{:02d}".format(int(minus_one_minute[1])-1)
+        minus_one_minute[1] = "{:02d}".format(int(minus_one_minute[1]) - 1)
         minus_one_minute = ":".join(minus_one_minute)
 
         plus_one_minute = uptime_result.split(":")
-        plus_one_minute[1] = "{:02d}".format(int(plus_one_minute[1])+1)
+        plus_one_minute[1] = "{:02d}".format(int(plus_one_minute[1]) + 1)
         plus_one_minute = ":".join(plus_one_minute)
 
         self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
