@@ -57,6 +57,9 @@
         if binary not in binaries_with_tests:
             binaries_without_tests.append(binary)
 
+    # Sort for readability
+    binaries_without_tests.sort()
+
     print(&#34;These &#39;included&#39; binaries do not have tests: &#34;)
 
     for binary in binaries_without_tests:

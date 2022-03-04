@@ -37,7 +37,7 @@ from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.sys.stat import stat, mkdir
-from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid, read
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, geteuid, read
 
 __COMMAND__ = &#34;adduser&#34;
 __DESCRIPTION__ = &#34;&#34;
@@ -115,7 +115,7 @@ def main(args: list, pipe: bool) -&gt; Result:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        if getuid() != 0:
+        if geteuid() != 0:
             return output(f&#34;{__COMMAND__}: Only root can add new users!&#34;, pipe, success=False,
                           success_message=ResultMessages.NOT_ALLOWED)
 
@@ -281,7 +281,7 @@ def main(args: list, pipe: bool) -&gt; Result:
         if args.version:
             return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        if getuid() != 0:
+        if geteuid() != 0:
             return output(f&#34;{__COMMAND__}: Only root can add new users!&#34;, pipe, success=False,
                           success_message=ResultMessages.NOT_ALLOWED)
 

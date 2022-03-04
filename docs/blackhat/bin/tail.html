@@ -52,7 +52,6 @@ def parse_args(args=[], doc=False):
     &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;-d&#34;, &#34;--decode&#34;, action=&#34;store_true&#34;, help=&#34;decode data&#34;)
     parser.add_argument(&#34;-w&#34;, &#34;--wrap&#34;, type=int,
                         help=&#34;wrap encoded lines after COLS character (default 76).  Use 0 to disable line wrapping&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
@@ -225,7 +224,6 @@ def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     parser = ArgParser(prog=__COMMAND__, description=f&#34;{__COMMAND__} - {__DESCRIPTION__}&#34;)
     parser.add_argument(&#34;files&#34;, nargs=&#34;+&#34;)
-    parser.add_argument(&#34;-d&#34;, &#34;--decode&#34;, action=&#34;store_true&#34;, help=&#34;decode data&#34;)
     parser.add_argument(&#34;-w&#34;, &#34;--wrap&#34;, type=int,
                         help=&#34;wrap encoded lines after COLS character (default 76).  Use 0 to disable line wrapping&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)

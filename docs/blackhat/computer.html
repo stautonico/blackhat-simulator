@@ -167,68 +167,72 @@ class Computer:
         Returns:
             None
         &#34;&#34;&#34;
-        etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
+        # The reason we&#39;re trying here is that sometimes, this function gets called before the fs is initalized
+        try:
+            etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
 
-        if not etc_dir:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
+            if not etc_dir:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        passwd_file: File = etc_dir.find(&#34;passwd&#34;)
-        shadow_file: File = etc_dir.find(&#34;shadow&#34;)
-        group_file: File = etc_dir.find(&#34;group&#34;)
+            passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+            shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+            group_file: File = etc_dir.find(&#34;group&#34;)
 
-        # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
-        # shadow format: USERNAME:MD5_PASSWORD
-        # group format: GROUP_NAME:x:GID:GROUP_USERS
+            # TODO: Allow modification of home directory from here
+            # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
+            # shadow format: USERNAME:MD5_PASSWORD
+            # group format: GROUP_NAME:x:GID:GROUP_USERS
 
-        passwd_content = &#34;&#34;
-        shadow_content = &#34;&#34;
-        group_content = &#34;&#34;
+            passwd_content = &#34;&#34;
+            shadow_content = &#34;&#34;
+            group_content = &#34;&#34;
 
-        for user in self.get_all_users().data:
-            # Find the &#34;primary&#34; group
-            primary_group = self.get_user_primary_group(user.uid)
-            if primary_group.success:
-                if len(primary_group.data) &gt; 0:
-                    primary_group = primary_group.data[0]
+            for user in self.get_all_users().data:
+                # Find the &#34;primary&#34; group
+                primary_group = self.get_user_primary_group(user.uid)
+                if primary_group.success:
+                    if len(primary_group.data) &gt; 0:
+                        primary_group = primary_group.data[0]
+                    else:
+                        primary_group = &#34;?&#34;
                 else:
                     primary_group = &#34;?&#34;
+
+                passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+                shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+
+            for group in self.get_all_groups().data:
+                uids = self.get_users_in_group(group.gid).data
+                usernames = &#34;&#34;
+                for uid in uids:
+                    user_lookup = self.get_user(uid=uid[0])
+                    usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+                usernames = usernames[:-1]
+
+                group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+                # print(group_content, end=&#34;&#34;)
+
+            if not passwd_file:
+                # Create the /etc/passwd
+                File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
             else:
-                primary_group = &#34;?&#34;
+                passwd_file.content = passwd_content
 
-            passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
-            shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+            if not shadow_file:
+                # Create the /etc/shadow file and change its perms (rw-------)
+                shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+                shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+            else:
+                shadow_file.content = shadow_content
 
-        for group in self.get_all_groups().data:
-            uids = self.get_users_in_group(group.gid).data
-            usernames = &#34;&#34;
-            for uid in uids:
-                user_lookup = self.get_user(uid=uid[0])
-                usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
-
-            usernames = usernames[:-1]
-
-            group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
-            # print(group_content, end=&#34;&#34;)
-
-        if not passwd_file:
-            # Create the /etc/passwd
-            File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
-        else:
-            passwd_file.content = passwd_content
-
-        if not shadow_file:
-            # Create the /etc/shadow file and change its perms (rw-------)
-            shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
-            shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
-        else:
-            shadow_file.content = shadow_content
-
-        if not group_file:
-            # Create the /etc/group
-            File(&#34;group&#34;, group_content, etc_dir, 0, 0)
-        else:
-            group_file.content = group_content
+            if not group_file:
+                # Create the /etc/group
+                File(&#34;group&#34;, group_content, etc_dir, 0, 0)
+            else:
+                group_file.content = group_content
+        except Exception as e:
+            return Result(success=False, )
 
         return Result(success=True)
 
@@ -298,8 +302,11 @@ class Computer:
             module = SourceFileLoader(&#34;main&#34;,
                                       random_filename).load_module()
 
-            response = module.main(args, pipe)
+            if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
+                if command == &#34;debug&#34;:
+                    print(&#34;Debugger enabled&#34;)  # SET YOUR BREAKPOINT HERE
 
+            response = module.main(args, pipe)
         except TypeError:
             # The code we&#39;re running doesn&#39;t take a pipe argument
             response = module.main(args)
@@ -311,6 +318,10 @@ class Computer:
             else:
                 print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
+            # We should be able to remove our temp file
+            if os.path.exists(random_filename):
+                os.remove(random_filename)
+
             return Result(success=False, message=ResultMessages.GENERIC)
 
         if not response:
@@ -320,10 +331,15 @@ class Computer:
                 response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
-        self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+        self.sessions[-1].effective_uid = self.sessions[-1].saved_uid
+        self.sessions[-1].real_uid = self.sessions[-1].saved_uid
 
         if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             self.save()
+
+        # We should be able to remove our temp file
+        if os.path.exists(random_filename):
+            os.remove(random_filename)
 
         return response
 
@@ -341,15 +357,13 @@ class Computer:
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
                         plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+            plaintext (bool, optional): If true, the given `password` is in plain text and this function will hash the password
 
         Returns:
             Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
         &#34;&#34;&#34;
         if self.get_user(username=username).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
-
-        # new_user = User(username)
-        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
@@ -385,6 +399,8 @@ class Computer:
                               (next_uid, username, hashed_password, self.id))
         self.connection.commit()
 
+        self.sync_user_and_group_files()
+
         return Result(success=True, data=next_uid)
 
     def delete_user(self, username: str) -&gt; Result:
@@ -401,6 +417,8 @@ class Computer:
             self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
             self.connection.commit()
             return Result(success=True)
+
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -428,6 +446,9 @@ class Computer:
         result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                        (password_hash, uid, self.id))
         self.connection.commit()
+
+        self.sync_user_and_group_files()
+
         return Result(success=True)
 
     def change_user_uid(self, uid: int, new_uid: int) -&gt; Result:
@@ -467,6 +488,7 @@ class Computer:
         # We also need to update the UID in the group membership records
         self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
                               (new_uid, uid, self.id))
+        self.sync_user_and_group_files()
 
         return Result(success=True)
 
@@ -508,6 +530,7 @@ class Computer:
         self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
                               (next_gid, name, self.id))
         self.connection.commit()
+        self.sync_user_and_group_files()
 
         return Result(success=True, data=next_gid)
 
@@ -525,6 +548,7 @@ class Computer:
             self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
             self.connection.commit()
             return Result(success=True)
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -547,6 +571,7 @@ class Computer:
                 &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
                 (self.id, uid, gid, membership_type))
             self.connection.commit()
+            self.sync_user_and_group_files()
             return Result(success=True)
         else:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -986,11 +1011,11 @@ class Computer:
         if len(self.sessions) == 0:
             return 0
 
-        return self.sessions[-1].effective_uid
+        return self.sessions[-1].real_uid
 
     def sys_setuid(self, uid: int) -&gt; Result:
         &#34;&#34;&#34;
-        Change current `Session`&#39;s effective UID to the given `UID`
+        Change current `Session`&#39;s real UID to the given `UID`
 
         Notes:
             setuid() followed the current rules:
@@ -1010,12 +1035,48 @@ class Computer:
         # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
         # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
 
-        if self.sys_getuid() == 0:
-            self.sessions[-1].effective_uid = uid
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].real_uid = uid
 
         return Result(success=True)
         # else:
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+    def sys_geteuid(self) -&gt; int:
+        &#34;&#34;&#34;
+        Returns the UID of the `Computer`&#39;s effective current user
+
+        Returns:
+            int: UID of the `Computers`&#39;s current user (from most recent session)
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return 0
+
+        return self.sessions[-1].effective_uid
+
+    def sys_seteuid(self, uid: int) -&gt; Result:
+        &#34;&#34;&#34;
+        Change current `Session`&#39;s effective UID to the given `UID`
+
+        Notes:
+            setuid() followed the current rules:
+                * If the &#34;caller&#34; uid is root, change the uid to whatever is given
+                * If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+                * If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+        Args:
+            uid (int): The new UID to change to
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        &#34;&#34;&#34;
+
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].effective_uid = uid
+        else:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        return Result(success=True)
 
     def sys_getgid(self) -&gt; int:
         &#34;&#34;&#34;
@@ -1371,6 +1432,11 @@ class Computer:
         Returns:
             None
         &#34;&#34;&#34;
+        # Delete all .py files in /tmp (in the host system)
+        for file in os.listdir(&#34;/tmp&#34;):
+            if file.endswith(&#34;.py&#34;):
+                os.remove(&#34;/tmp/&#34; + file)
+
         if force:
             if len(self.shell.computers) == 1:
                 self.save()
@@ -1814,68 +1880,72 @@ class ISPRouter(Router):
         Returns:
             None
         &#34;&#34;&#34;
-        etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
+        # The reason we&#39;re trying here is that sometimes, this function gets called before the fs is initalized
+        try:
+            etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
 
-        if not etc_dir:
-            return Result(success=False, message=ResultMessages.NOT_FOUND)
+            if not etc_dir:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-        passwd_file: File = etc_dir.find(&#34;passwd&#34;)
-        shadow_file: File = etc_dir.find(&#34;shadow&#34;)
-        group_file: File = etc_dir.find(&#34;group&#34;)
+            passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+            shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+            group_file: File = etc_dir.find(&#34;group&#34;)
 
-        # TODO: Allow modification of home directory from here
-        # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
-        # shadow format: USERNAME:MD5_PASSWORD
-        # group format: GROUP_NAME:x:GID:GROUP_USERS
+            # TODO: Allow modification of home directory from here
+            # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
+            # shadow format: USERNAME:MD5_PASSWORD
+            # group format: GROUP_NAME:x:GID:GROUP_USERS
 
-        passwd_content = &#34;&#34;
-        shadow_content = &#34;&#34;
-        group_content = &#34;&#34;
+            passwd_content = &#34;&#34;
+            shadow_content = &#34;&#34;
+            group_content = &#34;&#34;
 
-        for user in self.get_all_users().data:
-            # Find the &#34;primary&#34; group
-            primary_group = self.get_user_primary_group(user.uid)
-            if primary_group.success:
-                if len(primary_group.data) &gt; 0:
-                    primary_group = primary_group.data[0]
+            for user in self.get_all_users().data:
+                # Find the &#34;primary&#34; group
+                primary_group = self.get_user_primary_group(user.uid)
+                if primary_group.success:
+                    if len(primary_group.data) &gt; 0:
+                        primary_group = primary_group.data[0]
+                    else:
+                        primary_group = &#34;?&#34;
                 else:
                     primary_group = &#34;?&#34;
+
+                passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+                shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+
+            for group in self.get_all_groups().data:
+                uids = self.get_users_in_group(group.gid).data
+                usernames = &#34;&#34;
+                for uid in uids:
+                    user_lookup = self.get_user(uid=uid[0])
+                    usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+                usernames = usernames[:-1]
+
+                group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+                # print(group_content, end=&#34;&#34;)
+
+            if not passwd_file:
+                # Create the /etc/passwd
+                File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
             else:
-                primary_group = &#34;?&#34;
+                passwd_file.content = passwd_content
 
-            passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
-            shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+            if not shadow_file:
+                # Create the /etc/shadow file and change its perms (rw-------)
+                shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+                shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+            else:
+                shadow_file.content = shadow_content
 
-        for group in self.get_all_groups().data:
-            uids = self.get_users_in_group(group.gid).data
-            usernames = &#34;&#34;
-            for uid in uids:
-                user_lookup = self.get_user(uid=uid[0])
-                usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
-
-            usernames = usernames[:-1]
-
-            group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
-            # print(group_content, end=&#34;&#34;)
-
-        if not passwd_file:
-            # Create the /etc/passwd
-            File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
-        else:
-            passwd_file.content = passwd_content
-
-        if not shadow_file:
-            # Create the /etc/shadow file and change its perms (rw-------)
-            shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
-            shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
-        else:
-            shadow_file.content = shadow_content
-
-        if not group_file:
-            # Create the /etc/group
-            File(&#34;group&#34;, group_content, etc_dir, 0, 0)
-        else:
-            group_file.content = group_content
+            if not group_file:
+                # Create the /etc/group
+                File(&#34;group&#34;, group_content, etc_dir, 0, 0)
+            else:
+                group_file.content = group_content
+        except Exception as e:
+            return Result(success=False, )
 
         return Result(success=True)
 
@@ -1945,8 +2015,11 @@ class ISPRouter(Router):
             module = SourceFileLoader(&#34;main&#34;,
                                       random_filename).load_module()
 
-            response = module.main(args, pipe)
+            if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
+                if command == &#34;debug&#34;:
+                    print(&#34;Debugger enabled&#34;)  # SET YOUR BREAKPOINT HERE
 
+            response = module.main(args, pipe)
         except TypeError:
             # The code we&#39;re running doesn&#39;t take a pipe argument
             response = module.main(args)
@@ -1958,6 +2031,10 @@ class ISPRouter(Router):
             else:
                 print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
+            # We should be able to remove our temp file
+            if os.path.exists(random_filename):
+                os.remove(random_filename)
+
             return Result(success=False, message=ResultMessages.GENERIC)
 
         if not response:
@@ -1967,10 +2044,15 @@ class ISPRouter(Router):
                 response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
-        self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+        self.sessions[-1].effective_uid = self.sessions[-1].saved_uid
+        self.sessions[-1].real_uid = self.sessions[-1].saved_uid
 
         if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
             self.save()
+
+        # We should be able to remove our temp file
+        if os.path.exists(random_filename):
+            os.remove(random_filename)
 
         return response
 
@@ -1988,15 +2070,13 @@ class ISPRouter(Router):
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
                         plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+            plaintext (bool, optional): If true, the given `password` is in plain text and this function will hash the password
 
         Returns:
             Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
         &#34;&#34;&#34;
         if self.get_user(username=username).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
-
-        # new_user = User(username)
-        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
@@ -2032,6 +2112,8 @@ class ISPRouter(Router):
                               (next_uid, username, hashed_password, self.id))
         self.connection.commit()
 
+        self.sync_user_and_group_files()
+
         return Result(success=True, data=next_uid)
 
     def delete_user(self, username: str) -&gt; Result:
@@ -2048,6 +2130,8 @@ class ISPRouter(Router):
             self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
             self.connection.commit()
             return Result(success=True)
+
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -2075,6 +2159,9 @@ class ISPRouter(Router):
         result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                        (password_hash, uid, self.id))
         self.connection.commit()
+
+        self.sync_user_and_group_files()
+
         return Result(success=True)
 
     def change_user_uid(self, uid: int, new_uid: int) -&gt; Result:
@@ -2114,6 +2201,7 @@ class ISPRouter(Router):
         # We also need to update the UID in the group membership records
         self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
                               (new_uid, uid, self.id))
+        self.sync_user_and_group_files()
 
         return Result(success=True)
 
@@ -2155,6 +2243,7 @@ class ISPRouter(Router):
         self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
                               (next_gid, name, self.id))
         self.connection.commit()
+        self.sync_user_and_group_files()
 
         return Result(success=True, data=next_gid)
 
@@ -2172,6 +2261,7 @@ class ISPRouter(Router):
             self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
             self.connection.commit()
             return Result(success=True)
+        self.sync_user_and_group_files()
 
         return Result(success=False, message=ResultMessages.NOT_FOUND)
 
@@ -2194,6 +2284,7 @@ class ISPRouter(Router):
                 &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
                 (self.id, uid, gid, membership_type))
             self.connection.commit()
+            self.sync_user_and_group_files()
             return Result(success=True)
         else:
             return Result(success=False, message=ResultMessages.NOT_FOUND)
@@ -2633,11 +2724,11 @@ class ISPRouter(Router):
         if len(self.sessions) == 0:
             return 0
 
-        return self.sessions[-1].effective_uid
+        return self.sessions[-1].real_uid
 
     def sys_setuid(self, uid: int) -&gt; Result:
         &#34;&#34;&#34;
-        Change current `Session`&#39;s effective UID to the given `UID`
+        Change current `Session`&#39;s real UID to the given `UID`
 
         Notes:
             setuid() followed the current rules:
@@ -2657,12 +2748,48 @@ class ISPRouter(Router):
         # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
         # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
 
-        if self.sys_getuid() == 0:
-            self.sessions[-1].effective_uid = uid
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].real_uid = uid
 
         return Result(success=True)
         # else:
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+    def sys_geteuid(self) -&gt; int:
+        &#34;&#34;&#34;
+        Returns the UID of the `Computer`&#39;s effective current user
+
+        Returns:
+            int: UID of the `Computers`&#39;s current user (from most recent session)
+        &#34;&#34;&#34;
+        if len(self.sessions) == 0:
+            return 0
+
+        return self.sessions[-1].effective_uid
+
+    def sys_seteuid(self, uid: int) -&gt; Result:
+        &#34;&#34;&#34;
+        Change current `Session`&#39;s effective UID to the given `UID`
+
+        Notes:
+            setuid() followed the current rules:
+                * If the &#34;caller&#34; uid is root, change the uid to whatever is given
+                * If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+                * If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+        Args:
+            uid (int): The new UID to change to
+
+        Returns:
+            Result: A `Result` object with the success flag set accordingly
+        &#34;&#34;&#34;
+
+        if self.sys_geteuid() == 0:
+            self.sessions[-1].effective_uid = uid
+        else:
+            return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+        return Result(success=True)
 
     def sys_getgid(self) -&gt; int:
         &#34;&#34;&#34;
@@ -3018,6 +3145,11 @@ class ISPRouter(Router):
         Returns:
             None
         &#34;&#34;&#34;
+        # Delete all .py files in /tmp (in the host system)
+        for file in os.listdir(&#34;/tmp&#34;):
+            if file.endswith(&#34;.py&#34;):
+                os.remove(&#34;/tmp/&#34; + file)
+
         if force:
             if len(self.shell.computers) == 1:
                 self.save()
@@ -3219,6 +3351,7 @@ This function also generates the GID for the new group (unless manually specifie
     self.database.execute(&#34;INSERT INTO blackhat_group (gid, name, computer_id) VALUES (?, ?, ?)&#34;,
                           (next_gid, name, self.id))
     self.connection.commit()
+    self.sync_user_and_group_files()
 
     return Result(success=True, data=next_gid)</code></pre>
 </details>
@@ -3238,6 +3371,8 @@ This function also generates the UID for the new user (unless manually specified
 <dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
 <dd>The UID of the new user
 plaintext (bool): If the given <code>new_password</code> is plain text or an MD5 hash</dd>
+<dt><strong><code>plaintext</code></strong> :&ensp;<code>bool</code>, optional</dt>
+<dd>If true, the given <code>password</code> is in plain text and this function will hash the password</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -3258,15 +3393,13 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
         password (str): The plaintext password for the new user
         uid (int, optional): The UID of the new user
                     plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+        plaintext (bool, optional): If true, the given `password` is in plain text and this function will hash the password
 
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
     &#34;&#34;&#34;
     if self.get_user(username=username).success:
         return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
-
-    # new_user = User(username)
-    # new_user.set_password(password)
 
     # Manually specific UID
     if uid:
@@ -3301,6 +3434,8 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
     self.database.execute(&#34;INSERT INTO blackhat_user (uid, username, password, computer_id) VALUES (?, ?, ?, ?)&#34;,
                           (next_uid, username, hashed_password, self.id))
     self.connection.commit()
+
+    self.sync_user_and_group_files()
 
     return Result(success=True, data=next_uid)</code></pre>
 </details>
@@ -3347,6 +3482,7 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
             &#34;INSERT INTO group_membership (computer_id, user_uid, group_gid, membership_type) VALUES (?, ?, ?, ?)&#34;,
             (self.id, uid, gid, membership_type))
         self.connection.commit()
+        self.sync_user_and_group_files()
         return Result(success=True)
     else:
         return Result(success=False, message=ResultMessages.NOT_FOUND)</code></pre>
@@ -3399,6 +3535,9 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
     result = self.database.execute(&#34;UPDATE blackhat_user SET password=? WHERE uid=? AND computer_id=?&#34;,
                                    (password_hash, uid, self.id))
     self.connection.commit()
+
+    self.sync_user_and_group_files()
+
     return Result(success=True)</code></pre>
 </details>
 </dd>
@@ -3460,6 +3599,7 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
     # We also need to update the UID in the group membership records
     self.database.execute(&#34;UPDATE group_membership SET user_uid=? WHERE user_uid=? AND computer_id=?&#34;,
                           (new_uid, uid, self.id))
+    self.sync_user_and_group_files()
 
     return Result(success=True)</code></pre>
 </details>
@@ -3527,6 +3667,7 @@ created when the <code><a title="blackhat.computer.Computer" href="#blackhat.com
         self.database.execute(&#34;DELETE FROM blackhat_group WHERE computer_id=? and name=?&#34;, (self.id, name))
         self.connection.commit()
         return Result(success=True)
+    self.sync_user_and_group_files()
 
     return Result(success=False, message=ResultMessages.NOT_FOUND)</code></pre>
 </details>
@@ -3564,6 +3705,8 @@ created when the <code><a title="blackhat.computer.Computer" href="#blackhat.com
         self.database.execute(&#34;DELETE FROM blackhat_user WHERE computer_id=? and username=?&#34;, (self.id, username))
         self.connection.commit()
         return Result(success=True)
+
+    self.sync_user_and_group_files()
 
     return Result(success=False, message=ResultMessages.NOT_FOUND)</code></pre>
 </details>
@@ -4119,8 +4262,11 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
         module = SourceFileLoader(&#34;main&#34;,
                                   random_filename).load_module()
 
-        response = module.main(args, pipe)
+        if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
+            if command == &#34;debug&#34;:
+                print(&#34;Debugger enabled&#34;)  # SET YOUR BREAKPOINT HERE
 
+        response = module.main(args, pipe)
     except TypeError:
         # The code we&#39;re running doesn&#39;t take a pipe argument
         response = module.main(args)
@@ -4132,6 +4278,10 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
         else:
             print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
+        # We should be able to remove our temp file
+        if os.path.exists(random_filename):
+            os.remove(random_filename)
+
         return Result(success=False, message=ResultMessages.GENERIC)
 
     if not response:
@@ -4141,10 +4291,15 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
             response = Result(success=response == 0)
 
     # Reset the UID (to prevent binaries from getting stuck with invalid uids)
-    self.sessions[-1].effective_uid = self.sessions[-1].real_uid
+    self.sessions[-1].effective_uid = self.sessions[-1].saved_uid
+    self.sessions[-1].real_uid = self.sessions[-1].saved_uid
 
     if os.getenv(&#34;DEBUGMODE&#34;) == &#34;false&#34;:
         self.save()
+
+    # We should be able to remove our temp file
+    if os.path.exists(random_filename):
+        os.remove(random_filename)
 
     return response</code></pre>
 </details>
@@ -4332,68 +4487,72 @@ If /etc/hostname doesn't exist, the hostname is set to "localhost"</p>
     Returns:
         None
     &#34;&#34;&#34;
-    etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
+    # The reason we&#39;re trying here is that sometimes, this function gets called before the fs is initalized
+    try:
+        etc_dir: Directory = self.fs.files.find(&#34;etc&#34;)
 
-    if not etc_dir:
-        return Result(success=False, message=ResultMessages.NOT_FOUND)
+        if not etc_dir:
+            return Result(success=False, message=ResultMessages.NOT_FOUND)
 
-    passwd_file: File = etc_dir.find(&#34;passwd&#34;)
-    shadow_file: File = etc_dir.find(&#34;shadow&#34;)
-    group_file: File = etc_dir.find(&#34;group&#34;)
+        passwd_file: File = etc_dir.find(&#34;passwd&#34;)
+        shadow_file: File = etc_dir.find(&#34;shadow&#34;)
+        group_file: File = etc_dir.find(&#34;group&#34;)
 
-    # TODO: Allow modification of home directory from here
-    # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
-    # shadow format: USERNAME:MD5_PASSWORD
-    # group format: GROUP_NAME:x:GID:GROUP_USERS
+        # TODO: Allow modification of home directory from here
+        # passwd format: USERNAME:MD5_PASSWORD OR &#34;x&#34;:UID:PRIMARY_GID
+        # shadow format: USERNAME:MD5_PASSWORD
+        # group format: GROUP_NAME:x:GID:GROUP_USERS
 
-    passwd_content = &#34;&#34;
-    shadow_content = &#34;&#34;
-    group_content = &#34;&#34;
+        passwd_content = &#34;&#34;
+        shadow_content = &#34;&#34;
+        group_content = &#34;&#34;
 
-    for user in self.get_all_users().data:
-        # Find the &#34;primary&#34; group
-        primary_group = self.get_user_primary_group(user.uid)
-        if primary_group.success:
-            if len(primary_group.data) &gt; 0:
-                primary_group = primary_group.data[0]
+        for user in self.get_all_users().data:
+            # Find the &#34;primary&#34; group
+            primary_group = self.get_user_primary_group(user.uid)
+            if primary_group.success:
+                if len(primary_group.data) &gt; 0:
+                    primary_group = primary_group.data[0]
+                else:
+                    primary_group = &#34;?&#34;
             else:
                 primary_group = &#34;?&#34;
+
+            passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
+            shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+
+        for group in self.get_all_groups().data:
+            uids = self.get_users_in_group(group.gid).data
+            usernames = &#34;&#34;
+            for uid in uids:
+                user_lookup = self.get_user(uid=uid[0])
+                usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
+
+            usernames = usernames[:-1]
+
+            group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
+            # print(group_content, end=&#34;&#34;)
+
+        if not passwd_file:
+            # Create the /etc/passwd
+            File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
         else:
-            primary_group = &#34;?&#34;
+            passwd_file.content = passwd_content
 
-        passwd_content += f&#34;{user.username}:x:{user.uid}:{primary_group}\n&#34;
-        shadow_content += f&#34;{user.username}:{user.password}\n&#34;
+        if not shadow_file:
+            # Create the /etc/shadow file and change its perms (rw-------)
+            shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
+            shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
+        else:
+            shadow_file.content = shadow_content
 
-    for group in self.get_all_groups().data:
-        uids = self.get_users_in_group(group.gid).data
-        usernames = &#34;&#34;
-        for uid in uids:
-            user_lookup = self.get_user(uid=uid[0])
-            usernames += (&#34;?&#34; if not user_lookup.success else user_lookup.data.username) + &#34;,&#34;
-
-        usernames = usernames[:-1]
-
-        group_content += f&#34;{group.name}:x:{group.gid}:{usernames}\n&#34;
-        # print(group_content, end=&#34;&#34;)
-
-    if not passwd_file:
-        # Create the /etc/passwd
-        File(&#34;passwd&#34;, passwd_content, etc_dir, 0, 0)
-    else:
-        passwd_file.content = passwd_content
-
-    if not shadow_file:
-        # Create the /etc/shadow file and change its perms (rw-------)
-        shadow_file = File(&#34;shadow&#34;, shadow_content, etc_dir, 0, 0)
-        shadow_file.permissions = {&#34;read&#34;: [&#34;owner&#34;], &#34;write&#34;: [&#34;owner&#34;], &#34;execute&#34;: []}
-    else:
-        shadow_file.content = shadow_content
-
-    if not group_file:
-        # Create the /etc/group
-        File(&#34;group&#34;, group_content, etc_dir, 0, 0)
-    else:
-        group_file.content = group_content
+        if not group_file:
+            # Create the /etc/group
+            File(&#34;group&#34;, group_content, etc_dir, 0, 0)
+        else:
+            group_file.content = group_content
+    except Exception as e:
+        return Result(success=False, )
 
     return Result(success=True)</code></pre>
 </details>
@@ -4800,6 +4959,11 @@ return to the previous computer. If no previous computer exists, exit the game.<
     Returns:
         None
     &#34;&#34;&#34;
+    # Delete all .py files in /tmp (in the host system)
+    for file in os.listdir(&#34;/tmp&#34;):
+        if file.endswith(&#34;.py&#34;):
+            os.remove(&#34;/tmp/&#34; + file)
+
     if force:
         if len(self.shell.computers) == 1:
             self.save()
@@ -4844,6 +5008,33 @@ user's current directory</dd>
         return self.fs.files
     else:
         return self.sessions[-1].current_dir</code></pre>
+</details>
+</dd>
+<dt id="blackhat.computer.Computer.sys_geteuid"><code class="name flex">
+<span>def <span class="ident">sys_geteuid</span></span>(<span>self) ‑> int</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Returns the UID of the <code><a title="blackhat.computer.Computer" href="#blackhat.computer.Computer">Computer</a></code>'s effective current user</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>int</code></dt>
+<dd>UID of the <code>Computers</code>'s current user (from most recent session)</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def sys_geteuid(self) -&gt; int:
+    &#34;&#34;&#34;
+    Returns the UID of the `Computer`&#39;s effective current user
+
+    Returns:
+        int: UID of the `Computers`&#39;s current user (from most recent session)
+    &#34;&#34;&#34;
+    if len(self.sessions) == 0:
+        return 0
+
+    return self.sessions[-1].effective_uid</code></pre>
 </details>
 </dd>
 <dt id="blackhat.computer.Computer.sys_getgid"><code class="name flex">
@@ -4957,7 +5148,7 @@ user's current directory</dd>
     if len(self.sessions) == 0:
         return 0
 
-    return self.sessions[-1].effective_uid</code></pre>
+    return self.sessions[-1].real_uid</code></pre>
 </details>
 </dd>
 <dt id="blackhat.computer.Computer.sys_mkdir"><code class="name flex">
@@ -5221,6 +5412,55 @@ user's current directory</dd>
     return Result(success=True)</code></pre>
 </details>
 </dd>
+<dt id="blackhat.computer.Computer.sys_seteuid"><code class="name flex">
+<span>def <span class="ident">sys_seteuid</span></span>(<span>self, uid: int) ‑> <a title="blackhat.helpers.Result" href="helpers.html#blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Change current <code>Session</code>'s effective UID to the given <code>UID</code></p>
+<h2 id="notes">Notes</h2>
+<p>setuid() followed the current rules:
+* If the "caller" uid is root, change the uid to whatever is given
+* If the "caller" isn't root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+* If the "caller" isn't root, and the setuid bit ISN'T set, deny all changes</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>uid</code></strong> :&ensp;<code>int</code></dt>
+<dd>The new UID to change to</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Result</code></dt>
+<dd>A <code>Result</code> object with the success flag set accordingly</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def sys_seteuid(self, uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    Change current `Session`&#39;s effective UID to the given `UID`
+
+    Notes:
+        setuid() followed the current rules:
+            * If the &#34;caller&#34; uid is root, change the uid to whatever is given
+            * If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
+            * If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
+
+    Args:
+        uid (int): The new UID to change to
+
+    Returns:
+        Result: A `Result` object with the success flag set accordingly
+    &#34;&#34;&#34;
+
+    if self.sys_geteuid() == 0:
+        self.sessions[-1].effective_uid = uid
+    else:
+        return Result(success=False, message=ResultMessages.NOT_ALLOWED)
+
+    return Result(success=True)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.computer.Computer.sys_sethostname"><code class="name flex">
 <span>def <span class="ident">sys_sethostname</span></span>(<span>self, hostname: str) ‑> <a title="blackhat.helpers.Result" href="helpers.html#blackhat.helpers.Result">Result</a></span>
 </code></dt>
@@ -5273,7 +5513,7 @@ user's current directory</dd>
 <span>def <span class="ident">sys_setuid</span></span>(<span>self, uid: int) ‑> <a title="blackhat.helpers.Result" href="helpers.html#blackhat.helpers.Result">Result</a></span>
 </code></dt>
 <dd>
-<div class="desc"><p>Change current <code>Session</code>'s effective UID to the given <code>UID</code></p>
+<div class="desc"><p>Change current <code>Session</code>'s real UID to the given <code>UID</code></p>
 <h2 id="notes">Notes</h2>
 <p>setuid() followed the current rules:
 * If the "caller" uid is root, change the uid to whatever is given
@@ -5295,7 +5535,7 @@ user's current directory</dd>
 </summary>
 <pre><code class="python">def sys_setuid(self, uid: int) -&gt; Result:
     &#34;&#34;&#34;
-    Change current `Session`&#39;s effective UID to the given `UID`
+    Change current `Session`&#39;s real UID to the given `UID`
 
     Notes:
         setuid() followed the current rules:
@@ -5315,8 +5555,8 @@ user's current directory</dd>
     # If the &#34;caller&#34; isn&#39;t root, BUT the setuid bit (not implement yet) is set, the UID can be set to the owner of the file
     # If the &#34;caller&#34; isn&#39;t root, and the setuid bit ISN&#39;T set, deny all changes
 
-    if self.sys_getuid() == 0:
-        self.sessions[-1].effective_uid = uid
+    if self.sys_geteuid() == 0:
+        self.sessions[-1].real_uid = uid
 
     return Result(success=True)
     # else:
@@ -5747,6 +5987,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Router.sys_execvp" href="#blackhat.computer.Computer.sys_execvp">sys_execvp</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_exit" href="#blackhat.computer.Computer.sys_exit">sys_exit</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_getcwd" href="#blackhat.computer.Computer.sys_getcwd">sys_getcwd</a></code></li>
+<li><code><a title="blackhat.computer.Router.sys_geteuid" href="#blackhat.computer.Computer.sys_geteuid">sys_geteuid</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_getgid" href="#blackhat.computer.Computer.sys_getgid">sys_getgid</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_gethostname" href="#blackhat.computer.Computer.sys_gethostname">sys_gethostname</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_gettimeofday" href="#blackhat.computer.Computer.sys_gettimeofday">sys_gettimeofday</a></code></li>
@@ -5756,6 +5997,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Router.sys_reboot" href="#blackhat.computer.Computer.sys_reboot">sys_reboot</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_rename" href="#blackhat.computer.Computer.sys_rename">sys_rename</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_rmdir" href="#blackhat.computer.Computer.sys_rmdir">sys_rmdir</a></code></li>
+<li><code><a title="blackhat.computer.Router.sys_seteuid" href="#blackhat.computer.Computer.sys_seteuid">sys_seteuid</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_sethostname" href="#blackhat.computer.Computer.sys_sethostname">sys_sethostname</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_setuid" href="#blackhat.computer.Computer.sys_setuid">sys_setuid</a></code></li>
 <li><code><a title="blackhat.computer.Router.sys_stat" href="#blackhat.computer.Computer.sys_stat">sys_stat</a></code></li>
@@ -6101,6 +6343,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Computer.sys_execvp" href="#blackhat.computer.Computer.sys_execvp">sys_execvp</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_exit" href="#blackhat.computer.Computer.sys_exit">sys_exit</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_getcwd" href="#blackhat.computer.Computer.sys_getcwd">sys_getcwd</a></code></li>
+<li><code><a title="blackhat.computer.Computer.sys_geteuid" href="#blackhat.computer.Computer.sys_geteuid">sys_geteuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_getgid" href="#blackhat.computer.Computer.sys_getgid">sys_getgid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_gethostname" href="#blackhat.computer.Computer.sys_gethostname">sys_gethostname</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_gettimeofday" href="#blackhat.computer.Computer.sys_gettimeofday">sys_gettimeofday</a></code></li>
@@ -6110,6 +6353,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Computer.sys_reboot" href="#blackhat.computer.Computer.sys_reboot">sys_reboot</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_rename" href="#blackhat.computer.Computer.sys_rename">sys_rename</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_rmdir" href="#blackhat.computer.Computer.sys_rmdir">sys_rmdir</a></code></li>
+<li><code><a title="blackhat.computer.Computer.sys_seteuid" href="#blackhat.computer.Computer.sys_seteuid">sys_seteuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_sethostname" href="#blackhat.computer.Computer.sys_sethostname">sys_sethostname</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_setuid" href="#blackhat.computer.Computer.sys_setuid">sys_setuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_stat" href="#blackhat.computer.Computer.sys_stat">sys_stat</a></code></li>
@@ -6174,6 +6418,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Computer.sys_execvp" href="#blackhat.computer.Computer.sys_execvp">sys_execvp</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_exit" href="#blackhat.computer.Computer.sys_exit">sys_exit</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_getcwd" href="#blackhat.computer.Computer.sys_getcwd">sys_getcwd</a></code></li>
+<li><code><a title="blackhat.computer.Computer.sys_geteuid" href="#blackhat.computer.Computer.sys_geteuid">sys_geteuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_getgid" href="#blackhat.computer.Computer.sys_getgid">sys_getgid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_gethostname" href="#blackhat.computer.Computer.sys_gethostname">sys_gethostname</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_gettimeofday" href="#blackhat.computer.Computer.sys_gettimeofday">sys_gettimeofday</a></code></li>
@@ -6183,6 +6428,7 @@ Also, assign an IP address using the <code>dhcp()</code> function.</p>
 <li><code><a title="blackhat.computer.Computer.sys_reboot" href="#blackhat.computer.Computer.sys_reboot">sys_reboot</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_rename" href="#blackhat.computer.Computer.sys_rename">sys_rename</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_rmdir" href="#blackhat.computer.Computer.sys_rmdir">sys_rmdir</a></code></li>
+<li><code><a title="blackhat.computer.Computer.sys_seteuid" href="#blackhat.computer.Computer.sys_seteuid">sys_seteuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_sethostname" href="#blackhat.computer.Computer.sys_sethostname">sys_sethostname</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_setuid" href="#blackhat.computer.Computer.sys_setuid">sys_setuid</a></code></li>
 <li><code><a title="blackhat.computer.Computer.sys_stat" href="#blackhat.computer.Computer.sys_stat">sys_stat</a></code></li>

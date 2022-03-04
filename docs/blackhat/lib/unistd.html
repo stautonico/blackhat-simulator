@@ -60,6 +60,15 @@ def getuid() -&gt; int:
     return computer.sys_getuid()
 
 
+def geteuid() -&gt; int:
+    &#34;&#34;&#34;
+    TODO: This
+    Returns:
+
+    &#34;&#34;&#34;
+    return computer.sys_geteuid()
+
+
 def getgid() -&gt; int:
     &#34;&#34;&#34;
     Returns the (primary) GID of the `Computer`&#39;s current user
@@ -96,6 +105,17 @@ def setuid(uid: int) -&gt; Result:
         Result: A `Result` object with the success flag set accordingly
     &#34;&#34;&#34;
     return computer.sys_setuid(uid)
+
+
+def seteuid(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    TODO: This
+    Args:
+        uid:
+
+    Returns:
+    &#34;&#34;&#34;
+    return computer.sys_seteuid(uid)
 
 
 def gethostname() -&gt; str:
@@ -211,12 +231,12 @@ def add_user(username: str, password: str, uid: Optional[int] = None, plaintext:
         username (str): The username for the new user
         password (str): The plaintext password for the new user
         uid (int, optional): The UID of the new user
-                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+        plaintext (bool, optional): If the given `new_password` is plain text or an MD5 hash
 
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user(username, password, uid, plaintext)
 
@@ -256,7 +276,7 @@ def add_group(name: str, gid: Optional[int] = None) -&gt; Result:
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_group(name, gid)
 
@@ -287,7 +307,7 @@ def add_user_to_group(uid: int, gid: int,
     Returns:
         Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user_to_group(uid, gid, membership_type)
 
@@ -359,7 +379,7 @@ def save(file: Optional[str]) -&gt; bool:
     &#34;&#34;&#34;
     Serialize and dump the current `Computer` (and everything that&#39;s connected to it (`StandardFS`, `File`s, etc)) to a file
     Args:
-        output_file (str, optional): The file to dump the contents to
+        file (str, optional): The file to dump the contents to
 
     Returns:
         bool: `True` if the dump/save was successful, otherwise `False`
@@ -395,7 +415,7 @@ def execvp(command: str, argv: list) -&gt; Result:
     return computer.sys_execvp(command, argv)
 
 
-def new_session(uid: int) -&gt; None:
+def new_session(uid: int) -&gt; bool:
     &#34;&#34;&#34;
     Temporary function: Open a new session in the current `Computer`
 
@@ -403,14 +423,19 @@ def new_session(uid: int) -&gt; None:
         uid (int): The real UID of the user in the new `Session`
 
     Returns:
-        None
+        bool: If the new session was created
     &#34;&#34;&#34;
     # TODO: Make this more realistic since I have no clue how it works in real life
+    if computer.sys_geteuid() != 0:
+        return False
+
+    # Only root can create a new session
     current_session: Session = computer.sessions[-1]
     # Create a new session
     new_session = Session(uid, current_session.current_dir, current_session.id + 1)
     computer.sessions.append(new_session)
     computer.run_current_user_shellrc()
+    return True
 
 
 def unlink(pathname: str) -&gt; Result:
@@ -513,7 +538,7 @@ This function also generates the GID for the new group (unless manually specifie
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the GID if successful.
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_group(name, gid)</code></pre>
 </details>
@@ -531,8 +556,9 @@ This function also generates the UID for the new user (unless manually specified
 <dt><strong><code>password</code></strong> :&ensp;<code>str</code></dt>
 <dd>The plaintext password for the new user</dd>
 <dt><strong><code>uid</code></strong> :&ensp;<code>int</code>, optional</dt>
-<dd>The UID of the new user
-plaintext (bool): If the given <code>new_password</code> is plain text or an MD5 hash</dd>
+<dd>The UID of the new user</dd>
+<dt><strong><code>plaintext</code></strong> :&ensp;<code>bool</code>, optional</dt>
+<dd>If the given <code>new_password</code> is plain text or an MD5 hash</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -552,12 +578,12 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
         username (str): The username for the new user
         password (str): The plaintext password for the new user
         uid (int, optional): The UID of the new user
-                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+        plaintext (bool, optional): If the given `new_password` is plain text or an MD5 hash
 
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user(username, password, uid, plaintext)</code></pre>
 </details>
@@ -598,7 +624,7 @@ plaintext (bool): If the given <code>new_password</code> is plain text or an MD5
     Returns:
         Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
-    if computer.sys_getuid() != 0:
+    if computer.sys_geteuid() != 0:
         return Result(success=False, message=ResultMessages.NOT_ALLOWED)
     return computer.add_user_to_group(uid, gid, membership_type)</code></pre>
 </details>
@@ -953,6 +979,25 @@ user's current directory</dd>
     return computer.sys_getcwd()</code></pre>
 </details>
 </dd>
+<dt id="blackhat.lib.unistd.geteuid"><code class="name flex">
+<span>def <span class="ident">geteuid</span></span>(<span>) ‑> int</span>
+</code></dt>
+<dd>
+<div class="desc"><p>TODO: This
+Returns:</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def geteuid() -&gt; int:
+    &#34;&#34;&#34;
+    TODO: This
+    Returns:
+
+    &#34;&#34;&#34;
+    return computer.sys_geteuid()</code></pre>
+</details>
+</dd>
 <dt id="blackhat.lib.unistd.getgid"><code class="name flex">
 <span>def <span class="ident">getgid</span></span>(<span>) ‑> int</span>
 </code></dt>
@@ -1024,7 +1069,7 @@ user's current directory</dd>
 </details>
 </dd>
 <dt id="blackhat.lib.unistd.new_session"><code class="name flex">
-<span>def <span class="ident">new_session</span></span>(<span>uid: int) ‑> None</span>
+<span>def <span class="ident">new_session</span></span>(<span>uid: int) ‑> bool</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Temporary function: Open a new session in the current <code>Computer</code></p>
@@ -1034,12 +1079,15 @@ user's current directory</dd>
 <dd>The real UID of the user in the new <code>Session</code></dd>
 </dl>
 <h2 id="returns">Returns</h2>
-<p>None</p></div>
+<dl>
+<dt><code>bool</code></dt>
+<dd>If the new session was created</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def new_session(uid: int) -&gt; None:
+<pre><code class="python">def new_session(uid: int) -&gt; bool:
     &#34;&#34;&#34;
     Temporary function: Open a new session in the current `Computer`
 
@@ -1047,14 +1095,19 @@ user's current directory</dd>
         uid (int): The real UID of the user in the new `Session`
 
     Returns:
-        None
+        bool: If the new session was created
     &#34;&#34;&#34;
     # TODO: Make this more realistic since I have no clue how it works in real life
+    if computer.sys_geteuid() != 0:
+        return False
+
+    # Only root can create a new session
     current_session: Session = computer.sessions[-1]
     # Create a new session
     new_session = Session(uid, current_session.current_dir, current_session.id + 1)
     computer.sessions.append(new_session)
-    computer.run_current_user_shellrc()</code></pre>
+    computer.run_current_user_shellrc()
+    return True</code></pre>
 </details>
 </dd>
 <dt id="blackhat.lib.unistd.read"><code class="name flex">
@@ -1159,7 +1212,7 @@ user's current directory</dd>
 <div class="desc"><p>Serialize and dump the current <code>Computer</code> (and everything that's connected to it (<code>StandardFS</code>, <code>File</code>s, etc)) to a file</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>output_file</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dt><strong><code>file</code></strong> :&ensp;<code>str</code>, optional</dt>
 <dd>The file to dump the contents to</dd>
 </dl>
 <h2 id="returns">Returns</h2>
@@ -1175,12 +1228,35 @@ user's current directory</dd>
     &#34;&#34;&#34;
     Serialize and dump the current `Computer` (and everything that&#39;s connected to it (`StandardFS`, `File`s, etc)) to a file
     Args:
-        output_file (str, optional): The file to dump the contents to
+        file (str, optional): The file to dump the contents to
 
     Returns:
         bool: `True` if the dump/save was successful, otherwise `False`
     &#34;&#34;&#34;
     return computer.save(file)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.lib.unistd.seteuid"><code class="name flex">
+<span>def <span class="ident">seteuid</span></span>(<span>uid: int) ‑> <a title="blackhat.helpers.Result" href="../helpers.html#blackhat.helpers.Result">Result</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>TODO: This</p>
+<h2 id="args">Args</h2>
+<p>uid:
+Returns:</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seteuid(uid: int) -&gt; Result:
+    &#34;&#34;&#34;
+    TODO: This
+    Args:
+        uid:
+
+    Returns:
+    &#34;&#34;&#34;
+    return computer.sys_seteuid(uid)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.lib.unistd.sethostname"><code class="name flex">
@@ -1390,6 +1466,7 @@ respective <code>Socket</code>'s connected service (if connected).</p>
 <li><code><a title="blackhat.lib.unistd.get_user_groups" href="#blackhat.lib.unistd.get_user_groups">get_user_groups</a></code></li>
 <li><code><a title="blackhat.lib.unistd.get_user_primary_group" href="#blackhat.lib.unistd.get_user_primary_group">get_user_primary_group</a></code></li>
 <li><code><a title="blackhat.lib.unistd.getcwd" href="#blackhat.lib.unistd.getcwd">getcwd</a></code></li>
+<li><code><a title="blackhat.lib.unistd.geteuid" href="#blackhat.lib.unistd.geteuid">geteuid</a></code></li>
 <li><code><a title="blackhat.lib.unistd.getgid" href="#blackhat.lib.unistd.getgid">getgid</a></code></li>
 <li><code><a title="blackhat.lib.unistd.gethostname" href="#blackhat.lib.unistd.gethostname">gethostname</a></code></li>
 <li><code><a title="blackhat.lib.unistd.getuid" href="#blackhat.lib.unistd.getuid">getuid</a></code></li>
@@ -1398,6 +1475,7 @@ respective <code>Socket</code>'s connected service (if connected).</p>
 <li><code><a title="blackhat.lib.unistd.reboot" href="#blackhat.lib.unistd.reboot">reboot</a></code></li>
 <li><code><a title="blackhat.lib.unistd.rmdir" href="#blackhat.lib.unistd.rmdir">rmdir</a></code></li>
 <li><code><a title="blackhat.lib.unistd.save" href="#blackhat.lib.unistd.save">save</a></code></li>
+<li><code><a title="blackhat.lib.unistd.seteuid" href="#blackhat.lib.unistd.seteuid">seteuid</a></code></li>
 <li><code><a title="blackhat.lib.unistd.sethostname" href="#blackhat.lib.unistd.sethostname">sethostname</a></code></li>
 <li><code><a title="blackhat.lib.unistd.setuid" href="#blackhat.lib.unistd.setuid">setuid</a></code></li>
 <li><code><a title="blackhat.lib.unistd.unlink" href="#blackhat.lib.unistd.unlink">unlink</a></code></li>

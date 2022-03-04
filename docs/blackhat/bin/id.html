@@ -31,7 +31,7 @@
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid, get_user, get_group, get_user_primary_group, get_user_groups
+from ..lib.unistd import get_user, get_group, get_user_primary_group, get_user_groups, geteuid
 
 __COMMAND__ = &#34;id&#34;
 __DESCRIPTION__ = &#34;print real and effective user and group IDs&#34;
@@ -122,7 +122,7 @@ def main(args: list, pipe: bool) -&gt; Result:
                 # That means we entered a username
                 user_to_lookup_result = get_user(username=args.user)
         else:
-            user_to_lookup_result = get_user(uid=getuid())
+            user_to_lookup_result = get_user(uid=geteuid())
 
         if not user_to_lookup_result.success:
             return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)
@@ -224,7 +224,7 @@ def main(args: list, pipe: bool) -&gt; Result:
                 # That means we entered a username
                 user_to_lookup_result = get_user(username=args.user)
         else:
-            user_to_lookup_result = get_user(uid=getuid())
+            user_to_lookup_result = get_user(uid=geteuid())
 
         if not user_to_lookup_result.success:
             return output(f&#34;{__COMMAND__}: &#39;{args.user}&#39;: no such user&#34;, pipe, success=False)

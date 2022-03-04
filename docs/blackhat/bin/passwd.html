@@ -107,88 +107,91 @@ def main(args: list, pipe: bool) -&gt; Result:
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
-
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        password = args.password if args.password else None
-
-        if not args.user:
-            # User just typed `passwd` (change current user password)
-            user_to_change = get_user(uid=getuid()).data
+        # If we specific -h/--help, args will be empty, so exit gracefully
+        if not args:
+            return output(&#34;&#34;, pipe)
         else:
-            user_to_change = get_user(username=args.user)
-            if not user_to_change.success:
-                return output(f&#34;{__COMMAND__}: user &#39;{args[0]}&#39; does not exist&#34;, pipe, success=False)
 
-            user_to_change = user_to_change.data
+            password = args.password if args.password else None
 
-        if user_to_change.password:
-            # If the given user has a password, we need to know their password before changing
-            print(f&#34;Changing password for {user_to_change.username}&#34;)
-            current_password = getpass(&#34;Current password: &#34;)
-            if md5(current_password.encode()).hexdigest() != user_to_change.password:
-                return output(
-                    f&#34;{__COMMAND__}: Authentication token manipulation error\n{__COMMAND__}: password unchanged&#34;,
-                    pipe, success=False)
+            if not args.user:
+                # User just typed `passwd` (change current user password)
+                user_to_change = get_user(uid=getuid()).data
             else:
-                for _ in range(3):
-                    if not password:
-                        new_password = getpass(&#34;New password: &#34;)
-                        if not new_password:
-                            print(&#34;No password supplied&#34;)
+                user_to_change = get_user(username=args.user)
+                if not user_to_change.success:
+                    return output(f&#34;{__COMMAND__}: user &#39;{args.user}&#39; does not exist&#34;, pipe, success=False)
+
+                user_to_change = user_to_change.data
+
+            if user_to_change.password:
+                # If the given user has a password, we need to know their password before changing
+                print(f&#34;Changing password for {user_to_change.username}&#34;)
+                current_password = getpass(&#34;Current password: &#34;)
+                if md5(current_password.encode()).hexdigest() != user_to_change.password:
+                    return output(
+                        f&#34;{__COMMAND__}: Authentication token manipulation error\n{__COMMAND__}: password unchanged&#34;,
+                        pipe, success=False)
+                else:
+                    for _ in range(3):
+                        if not password:
+                            new_password = getpass(&#34;New password: &#34;)
+                            if not new_password:
+                                print(&#34;No password supplied&#34;)
+                            else:
+                                confirm_new_password = getpass(&#34;Retype new password: &#34;)
+                                hashed_password = md5(new_password.encode()).hexdigest()
+                                if new_password != confirm_new_password:
+                                    print(&#34;Sorry, passwords do not match.&#34;)
+                                    print(f&#34;{__COMMAND__}: Authentication token manipulation error&#34;)
+                                    print(f&#34;{__COMMAND__}: password unchanged&#34;)
+                                    break
+                                elif hashed_password == user_to_change.password:
+                                    print(&#34;Password unchanged&#34;)
+                                else:
+                                    password_struct = passwd(user_to_change.username, new_password, user_to_change.uid,
+                                                             user_to_change.uid)
+                                    result = putpwent(password_struct)
+                                    if not result.success:
+                                        return output(
+                                            f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
+                                            pipe, success=False)
+                                    print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                    break
                         else:
-                            confirm_new_password = getpass(&#34;Retype new password: &#34;)
-                            hashed_password = md5(new_password.encode()).hexdigest()
-                            if new_password != confirm_new_password:
-                                print(&#34;Sorry, passwords do not match.&#34;)
-                                print(f&#34;{__COMMAND__}: Authentication token manipulation error&#34;)
-                                print(f&#34;{__COMMAND__}: password unchanged&#34;)
-                                break
-                            elif hashed_password == user_to_change.password:
+                            hashed_password = md5(password.encode()).hexdigest()
+                            if hashed_password == user_to_change.password:
                                 print(&#34;Password unchanged&#34;)
                             else:
-                                password_struct = passwd(user_to_change.username, new_password, user_to_change.uid,
+                                password_struct = passwd(user_to_change.username, hashed_password, user_to_change.uid,
                                                          user_to_change.uid)
                                 result = putpwent(password_struct)
                                 if not result.success:
                                     return output(
                                         f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
                                         pipe, success=False)
-                                print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                if result.success:
+                                    print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                else:
+                                    return output(f&#34;{__COMMAND__}: Failed to update password!&#34;, pipe, success=False)
                                 break
-                    else:
-                        hashed_password = md5(password.encode()).hexdigest()
-                        if hashed_password == user_to_change.password:
-                            print(&#34;Password unchanged&#34;)
-                        else:
-                            password_struct = passwd(user_to_change.username, password, user_to_change.uid,
-                                                     user_to_change.uid)
-                            result = putpwent(password_struct)
-                            if not result.success:
-                                return output(
-                                    f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
-                                    pipe, success=False)
-                            if result.success:
-                                print(f&#34;{__COMMAND__}: password updated successfully&#34;)
-                            else:
-                                return output(f&#34;{__COMMAND__}: Failed to update password!&#34;, pipe, success=False)
-                            break
-        else:
-            password_struct = passwd(user_to_change.username, password, user_to_change.uid,
-                                     user_to_change.uid)
-            result = putpwent(password_struct)
-            if not result.success:
-                return output(
-                    f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
-                    pipe, success=False)
+            else:
+                password_struct = passwd(user_to_change.username, password, user_to_change.uid,
+                                         user_to_change.uid)
+                result = putpwent(password_struct)
+                if not result.success:
+                    return output(
+                        f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
+                        pipe, success=False)
 
-        return output(&#34;&#34;, pipe)</code></pre>
+            return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </section>
 <section>
@@ -216,88 +219,91 @@ def main(args: list, pipe: bool) -&gt; Result:
     if parser.error_message:
         if not args.version:
             return output(f&#34;{__COMMAND__}: {parser.error_message}&#34;, pipe, success=False)
-
-    if args.version:
-        return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output(&#34;&#34;, pipe)
     else:
+        if args.version:
+            return output(f&#34;{__COMMAND__} (blackhat coreutils) {__VERSION__}&#34;, pipe)
 
-        password = args.password if args.password else None
-
-        if not args.user:
-            # User just typed `passwd` (change current user password)
-            user_to_change = get_user(uid=getuid()).data
+        # If we specific -h/--help, args will be empty, so exit gracefully
+        if not args:
+            return output(&#34;&#34;, pipe)
         else:
-            user_to_change = get_user(username=args.user)
-            if not user_to_change.success:
-                return output(f&#34;{__COMMAND__}: user &#39;{args[0]}&#39; does not exist&#34;, pipe, success=False)
 
-            user_to_change = user_to_change.data
+            password = args.password if args.password else None
 
-        if user_to_change.password:
-            # If the given user has a password, we need to know their password before changing
-            print(f&#34;Changing password for {user_to_change.username}&#34;)
-            current_password = getpass(&#34;Current password: &#34;)
-            if md5(current_password.encode()).hexdigest() != user_to_change.password:
-                return output(
-                    f&#34;{__COMMAND__}: Authentication token manipulation error\n{__COMMAND__}: password unchanged&#34;,
-                    pipe, success=False)
+            if not args.user:
+                # User just typed `passwd` (change current user password)
+                user_to_change = get_user(uid=getuid()).data
             else:
-                for _ in range(3):
-                    if not password:
-                        new_password = getpass(&#34;New password: &#34;)
-                        if not new_password:
-                            print(&#34;No password supplied&#34;)
+                user_to_change = get_user(username=args.user)
+                if not user_to_change.success:
+                    return output(f&#34;{__COMMAND__}: user &#39;{args.user}&#39; does not exist&#34;, pipe, success=False)
+
+                user_to_change = user_to_change.data
+
+            if user_to_change.password:
+                # If the given user has a password, we need to know their password before changing
+                print(f&#34;Changing password for {user_to_change.username}&#34;)
+                current_password = getpass(&#34;Current password: &#34;)
+                if md5(current_password.encode()).hexdigest() != user_to_change.password:
+                    return output(
+                        f&#34;{__COMMAND__}: Authentication token manipulation error\n{__COMMAND__}: password unchanged&#34;,
+                        pipe, success=False)
+                else:
+                    for _ in range(3):
+                        if not password:
+                            new_password = getpass(&#34;New password: &#34;)
+                            if not new_password:
+                                print(&#34;No password supplied&#34;)
+                            else:
+                                confirm_new_password = getpass(&#34;Retype new password: &#34;)
+                                hashed_password = md5(new_password.encode()).hexdigest()
+                                if new_password != confirm_new_password:
+                                    print(&#34;Sorry, passwords do not match.&#34;)
+                                    print(f&#34;{__COMMAND__}: Authentication token manipulation error&#34;)
+                                    print(f&#34;{__COMMAND__}: password unchanged&#34;)
+                                    break
+                                elif hashed_password == user_to_change.password:
+                                    print(&#34;Password unchanged&#34;)
+                                else:
+                                    password_struct = passwd(user_to_change.username, new_password, user_to_change.uid,
+                                                             user_to_change.uid)
+                                    result = putpwent(password_struct)
+                                    if not result.success:
+                                        return output(
+                                            f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
+                                            pipe, success=False)
+                                    print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                    break
                         else:
-                            confirm_new_password = getpass(&#34;Retype new password: &#34;)
-                            hashed_password = md5(new_password.encode()).hexdigest()
-                            if new_password != confirm_new_password:
-                                print(&#34;Sorry, passwords do not match.&#34;)
-                                print(f&#34;{__COMMAND__}: Authentication token manipulation error&#34;)
-                                print(f&#34;{__COMMAND__}: password unchanged&#34;)
-                                break
-                            elif hashed_password == user_to_change.password:
+                            hashed_password = md5(password.encode()).hexdigest()
+                            if hashed_password == user_to_change.password:
                                 print(&#34;Password unchanged&#34;)
                             else:
-                                password_struct = passwd(user_to_change.username, new_password, user_to_change.uid,
+                                password_struct = passwd(user_to_change.username, hashed_password, user_to_change.uid,
                                                          user_to_change.uid)
                                 result = putpwent(password_struct)
                                 if not result.success:
                                     return output(
                                         f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
                                         pipe, success=False)
-                                print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                if result.success:
+                                    print(f&#34;{__COMMAND__}: password updated successfully&#34;)
+                                else:
+                                    return output(f&#34;{__COMMAND__}: Failed to update password!&#34;, pipe, success=False)
                                 break
-                    else:
-                        hashed_password = md5(password.encode()).hexdigest()
-                        if hashed_password == user_to_change.password:
-                            print(&#34;Password unchanged&#34;)
-                        else:
-                            password_struct = passwd(user_to_change.username, password, user_to_change.uid,
-                                                     user_to_change.uid)
-                            result = putpwent(password_struct)
-                            if not result.success:
-                                return output(
-                                    f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
-                                    pipe, success=False)
-                            if result.success:
-                                print(f&#34;{__COMMAND__}: password updated successfully&#34;)
-                            else:
-                                return output(f&#34;{__COMMAND__}: Failed to update password!&#34;, pipe, success=False)
-                            break
-        else:
-            password_struct = passwd(user_to_change.username, password, user_to_change.uid,
-                                     user_to_change.uid)
-            result = putpwent(password_struct)
-            if not result.success:
-                return output(
-                    f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
-                    pipe, success=False)
+            else:
+                password_struct = passwd(user_to_change.username, password, user_to_change.uid,
+                                         user_to_change.uid)
+                result = putpwent(password_struct)
+                if not result.success:
+                    return output(
+                        f&#34;{__COMMAND__}: Failed to change password for user: &#39;{user_to_change.username}&#39;&#34;,
+                        pipe, success=False)
 
-        return output(&#34;&#34;, pipe)</code></pre>
+            return output(&#34;&#34;, pipe)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.bin.passwd.parse_args"><code class="name flex">

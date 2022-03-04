@@ -39,6 +39,8 @@
         &#34;&#34;&#34;The &#39;original&#39; user ID of the logged in user&#34;&#34;&#34;
         self.effective_uid = uid
         &#34;&#34;&#34;A &#39;fake&#39; user ID temporarily assigned to a user when running a command (while using sudo, etc)&#34;&#34;&#34;
+        self.saved_uid = uid
+        &#34;&#34;&#34;The unchangeable user ID used for reverting &#34;&#34;&#34;
         self.id = id
         &#34;&#34;&#34;An internal only id (primarily used for naming pts sessions)&#34;&#34;&#34;
 
@@ -90,6 +92,8 @@
         &#34;&#34;&#34;The &#39;original&#39; user ID of the logged in user&#34;&#34;&#34;
         self.effective_uid = uid
         &#34;&#34;&#34;A &#39;fake&#39; user ID temporarily assigned to a user when running a command (while using sudo, etc)&#34;&#34;&#34;
+        self.saved_uid = uid
+        &#34;&#34;&#34;The unchangeable user ID used for reverting &#34;&#34;&#34;
         self.id = id
         &#34;&#34;&#34;An internal only id (primarily used for naming pts sessions)&#34;&#34;&#34;
 
@@ -121,6 +125,10 @@
 <dd>
 <div class="desc"><p>The 'original' user ID of the logged in user</p></div>
 </dd>
+<dt id="blackhat.session.Session.saved_uid"><code class="name">var <span class="ident">saved_uid</span></code></dt>
+<dd>
+<div class="desc"><p>The unchangeable user ID used for reverting</p></div>
+</dd>
 </dl>
 </dd>
 </dl>
@@ -141,12 +149,13 @@
 <ul>
 <li>
 <h4><code><a title="blackhat.session.Session" href="#blackhat.session.Session">Session</a></code></h4>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="blackhat.session.Session.current_dir" href="#blackhat.session.Session.current_dir">current_dir</a></code></li>
 <li><code><a title="blackhat.session.Session.effective_uid" href="#blackhat.session.Session.effective_uid">effective_uid</a></code></li>
 <li><code><a title="blackhat.session.Session.env" href="#blackhat.session.Session.env">env</a></code></li>
 <li><code><a title="blackhat.session.Session.id" href="#blackhat.session.Session.id">id</a></code></li>
 <li><code><a title="blackhat.session.Session.real_uid" href="#blackhat.session.Session.real_uid">real_uid</a></code></li>
+<li><code><a title="blackhat.session.Session.saved_uid" href="#blackhat.session.Session.saved_uid">saved_uid</a></code></li>
 </ul>
 </li>
 </ul>

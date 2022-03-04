@@ -32,7 +32,6 @@ from base64 import b32decode, b64decode
 from hashlib import md5, sha1, sha256, sha512, sha384, sha224
 from time import sleep
 import unittest.mock
-from getpass import getpass
 
 from .setup_computers_universal import init
 from ..helpers import Result, ResultMessages
@@ -49,8 +48,7 @@ class TestIncludedBinaries(unittest.TestCase):
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args):
-
+    def run_command(self, command, args=[]):
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -110,6 +108,28 @@ class TestIncludedBinaries(unittest.TestCase):
         base64_result = self.run_command(&#34;base64&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1]
         self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)
 
+    def test_cat(self):
+        self.run_command(&#34;cat&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;cat&#34;, [&#34;--help&#34;])
+
+        message = &#34;Hello World!&#34;
+
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
+
+        self.computer.sys_write(&#34;/home/steve/file&#34;, message)
+
+        cat_result = self.run_command(&#34;cat&#34;, [&#34;file&#34;])
+
+        self.assertEqual(message, cat_result)
+
+        # cat on directory should fail
+        result = self.computer.run_command(&#34;cat&#34;, [&#34;/home/steve&#34;], True)
+        self.assertIn(&#34;Is a directory&#34;, result.data)
+
+        # cat respects permission
+        result = self.computer.run_command(&#34;cat&#34;, [&#34;/etc/shadow&#34;], True)
+        self.assertIn(&#34;Permission denied&#34;, result.data)
+
     def test_cd(self):
         self.run_command(&#34;cd&#34;, [&#34;--version&#34;])
         self.run_command(&#34;cd&#34;, [&#34;--help&#34;])
@@ -141,13 +161,13 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
         self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-        self.run_command(&#34;clear&#34;, [])
+        self.run_command(&#34;clear&#34;)
 
     def test_commands(self):
         self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
         self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-        commands_result = self.run_command(&#34;commands&#34;, [])
+        commands_result = self.run_command(&#34;commands&#34;)
         self.assertIn(&#34;ls&#34;, commands_result)
 
         # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -156,14 +176,14 @@ class TestIncludedBinaries(unittest.TestCase):
         move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.run_command(&#34;commands&#34;, [])
+        commands_result = self.run_command(&#34;commands&#34;)
         self.assertNotIn(&#34;ls&#34;, commands_result)
 
     def test_date(self):
         self.run_command(&#34;date&#34;, [&#34;--version&#34;])
         self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-        date_result = self.run_command(&#34;date&#34;, [])
+        date_result = self.run_command(&#34;date&#34;)
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -192,7 +212,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;env&#34;, [&#34;--version&#34;])
         self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;env&#34;, [])
+        env_result = self.run_command(&#34;env&#34;)
         print(f&#34;ENVRESULT: {env_result}&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
@@ -201,13 +221,30 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+
+    def test_head(self):
+        self.run_command(&#34;head&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;head&#34;, [&#34;--help&#34;])
+
+        message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+        # Make a file with 20 lines
+        self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+        self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+        expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[:-10])
+
+        actual_result = self.run_command(&#34;head&#34;, [&#34;bigfile&#34;])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
 
     def test_hostname(self):
         self.run_command(&#34;hostname&#34;, [&#34;--version&#34;])
@@ -223,7 +260,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+        get_hostname_result = self.run_command(&#34;hostname&#34;)
 
         self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
@@ -231,7 +268,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
         self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
-        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+        get_hostname_result = self.run_command(&#34;hostname&#34;)
 
         self.assertEqual(get_hostname_result, &#34;localhost&#34;)
 
@@ -239,7 +276,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;id&#34;, [&#34;--version&#34;])
         self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-        self_id_result = self.run_command(&#34;id&#34;, [])
+        self_id_result = self.run_command(&#34;id&#34;)
         expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
         self.assertEqual(self_id_result, expected_self_id_result)
 
@@ -333,20 +370,118 @@ class TestIncludedBinaries(unittest.TestCase):
         find_pwd = self.computer.fs.find(&#34;/tmp/pwd&#34;)
         self.assertTrue(find_pwd.success)
 
+    def test_passwd(self):
+        self.run_command(&#34;passwd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;passwd&#34;, [&#34;--help&#34;])
+
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;tester&#34;, &#34;-n&#34;], True)
+        self.computer.sessions.pop()
+
+        # su to sanity check password
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;tester&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;tester&#34;):
+                self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+                self.computer.sessions.pop()
+
+                # Change testuser&#39;s password
+                print(self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newpassword&#34;]))
+
+                # Confirm the old password doesn&#39;t work
+                result = self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertIn(&#34;Authentication failure&#34;, result)
+
+                # A valid password is required to reset the user&#39;s password
+                result = self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newnewpassword&#34;])
+                self.assertIn(&#34;Authentication token manipulation error&#34;, result)
+
+        # Confirm the new password works
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;newpassword&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;newpassword&#34;):
+                self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+                self.computer.sessions.pop()
+
     def test_printenv(self):
         self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
         self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_pwd(self):
         self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
         self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-        pwd_result = self.run_command(&#34;pwd&#34;, [])
+        pwd_result = self.run_command(&#34;pwd&#34;)
 
         self.assertEqual(&#34;/home/steve&#34;, pwd_result)
+
+    def test_rm(self):
+        self.run_command(&#34;rm&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;rm&#34;, [&#34;--help&#34;])
+
+        # Make some test files to remove
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;, &#34;/tmp/file4&#34;])
+        ls_result = self.run_command(&#34;ls&#34;)
+
+        # Sanity check
+        for file in [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;]:
+            self.assertIn(file, ls_result)
+
+        # rm a single file (relative path)
+        self.run_command(&#34;rm&#34;, [&#34;file1&#34;])
+        ls_result = self.run_command(&#34;ls&#34;)
+        self.assertNotIn(&#34;file1&#34;, ls_result)
+
+        # rm a file (absolute path)
+        self.run_command(&#34;rm&#34;, [&#34;/tmp/file4&#34;])
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;/tmp&#34;])
+        self.assertNotIn(&#34;file4&#34;, ls_result)
+
+        # TODO: Allow multiple files to be deleted and then add test
+
+        # Delete non-existent file
+        rm_doesnt_exist = self.computer.run_command(&#34;rm&#34;, [&#34;/tmp/badfile&#34;], True)
+        self.assertFalse(rm_doesnt_exist.success)
+        self.assertIn(&#34;No such file or directory&#34;, rm_doesnt_exist.data)
+
+        # No rm permissions
+        rm_no_perms = self.computer.run_command(&#34;rm&#34;, [&#34;/etc/passwd&#34;], False)
+        self.assertFalse(rm_no_perms.success)
+        self.assertIn(&#34;Permission denied&#34;, rm_no_perms.data)
+        # Confirm it&#39;s still there
+        self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;/etc/passwd&#34;], True).success)
+
+        # Can&#39;t remove populated directory
+        self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;..&#34;])
+
+        rm_full_dir = self.computer.run_command(&#34;rm&#34;, [&#34;files&#34;], True)
+        self.assertFalse(rm_full_dir.success)
+        self.assertIn(&#34;Is a directory&#34;, rm_full_dir.data)
+        # Confirm it&#39;s still there
+        self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+        # Remove directory with -r
+        rm_dir_with_flag = self.computer.run_command(&#34;rm&#34;, [&#34;-r&#34;, &#34;files&#34;], True)
+        self.assertTrue(rm_dir_with_flag.success)
+        # Confirm
+        self.assertFalse(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+        # rm *
+        self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+
+        rm_star = self.computer.run_command(&#34;rm&#34;, [&#34;*&#34;], True)
+        self.assertTrue(rm_star.success)
+        ls_result = self.run_command(&#34;ls&#34;)
+        self.assertNotIn(&#34;file1&#34;, ls_result)
+        self.assertNotIn(&#34;file2&#34;, ls_result)
 
     def test_sha1sum(self):
         self.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;])
@@ -431,9 +566,32 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)
 
-    def test_sudo(self):
+    def test_su(self):
+        self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;su&#34;, [&#34;--help&#34;])
+
+        self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+
         # Sanity check
-        sudo_result = self.run_command(&#34;id&#34;, [])
+        self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, self.run_command(&#34;id&#34;))
+
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+                self.run_command(&#34;su&#34;)
+                self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, self.run_command(&#34;id&#34;))
+
+        self.assertTrue(self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;NOTPASSWORD&#34;, &#34;-n&#34;], True).success)
+
+        # Now that we&#39;re root, we should be able to change user without a password
+        self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+        self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, self.run_command(&#34;id&#34;))
+
+    def test_sudo(self):
+        self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
+
+        self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
+        # Sanity check
+        sudo_result = self.run_command(&#34;id&#34;)
 
         self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
 
@@ -441,7 +599,6 @@ class TestIncludedBinaries(unittest.TestCase):
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
         self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
         self.computer.sessions.pop()
-
 
         # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
         # (pycharm&#39;s one for example) uses the fallback function
@@ -453,6 +610,22 @@ class TestIncludedBinaries(unittest.TestCase):
                 other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
                 self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)
 
+    def test_tail(self):
+        self.run_command(&#34;tail&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;tail&#34;, [&#34;--help&#34;])
+
+        message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+        # Make a file with 20 lines
+        self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+        self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+        expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[10:])
+        actual_result = self.run_command(&#34;tail&#34;, [&#34;bigfile&#34;])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
+
     def test_touch(self):
         self.run_command(&#34;touch&#34;, [&#34;--version&#34;])
         self.run_command(&#34;touch&#34;, [&#34;--help&#34;])
@@ -461,7 +634,7 @@ class TestIncludedBinaries(unittest.TestCase):
         expected_touch_result = Result(success=True)
 
         # We should double-check that the file exists in our home directory
-        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
+        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;))
 
         self.assertEqual(touch_result, expected_touch_result)
 
@@ -470,7 +643,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
         # Test some misc uname configurations
-        self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+        self.assertEqual(self.run_command(&#34;uname&#34;), &#34;Linux&#34;)
         self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                          f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
         self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
@@ -483,16 +656,16 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
         self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_uptime(self):
@@ -500,12 +673,12 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
         # Make sure it doesn&#39;t crash
-        uptime_result = self.run_command(&#34;uptime&#34;, [])
+        uptime_result = self.run_command(&#34;uptime&#34;)
         # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
         sleep(5)
-        uptime_result = self.run_command(&#34;uptime&#34;, [])
+        uptime_result = self.run_command(&#34;uptime&#34;)
         self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
         uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
@@ -522,11 +695,11 @@ class TestIncludedBinaries(unittest.TestCase):
 
         # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
         minus_one_minute = uptime_result.split(&#34;:&#34;)
-        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1]) - 1)
         minus_one_minute = &#34;:&#34;.join(minus_one_minute)
 
         plus_one_minute = uptime_result.split(&#34;:&#34;)
-        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1]) + 1)
         plus_one_minute = &#34;:&#34;.join(plus_one_minute)
 
         self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
@@ -536,16 +709,16 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
         # One session = only one user
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve &#34;)
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve root &#34;)
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve root steve &#34;)
 
     def test_wc(self):
@@ -596,16 +769,13 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;who&#34;, [&#34;--version&#34;])
         self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-        who_result = self.run_command(&#34;who&#34;, [])
-        self.assertEqual(who_result, &#34;steve\tpts/0&#34;)
+        self.assertEqual(self.run_command(&#34;who&#34;), &#34;steve\tpts/0&#34;)
 
     def test_whoami(self):
         self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
         self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-        whoami_result = self.run_command(&#34;whoami&#34;, [])
-
-        self.assertEqual(whoami_result, &#34;steve&#34;)
+        self.assertEqual(self.run_command(&#34;whoami&#34;), &#34;steve&#34;)
 
 
 class TestInstallableBinaries(unittest.TestCase):
@@ -616,7 +786,14 @@ class TestInstallableBinaries(unittest.TestCase):
     &#34;&#34;&#34;
 
     def setUp(self) -&gt; None:
-        self.computer = init()</code></pre>
+        self.computer = init()
+
+    def run_command(self, command, args=[]):
+        result = self.computer.run_command(command, args, True).data
+        # This avoids &#34;None type as no attribute strip&#34;
+        if not result:
+            result = &#34;&#34;
+        return result.strip(&#34;\n&#34;)</code></pre>
 </details>
 </section>
 <section>
@@ -651,8 +828,7 @@ not have a method with the specified name.</p></div>
     def setUp(self) -&gt; None:
         self.computer = init()
 
-    def run_command(self, command, args):
-
+    def run_command(self, command, args=[]):
         result = self.computer.run_command(command, args, True).data
         # This avoids &#34;None type as no attribute strip&#34;
         if not result:
@@ -712,6 +888,28 @@ not have a method with the specified name.</p></div>
         base64_result = self.run_command(&#34;base64&#34;, [&#34;file&#34;]).split(&#34; &#34;)[1]
         self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)
 
+    def test_cat(self):
+        self.run_command(&#34;cat&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;cat&#34;, [&#34;--help&#34;])
+
+        message = &#34;Hello World!&#34;
+
+        self.run_command(&#34;touch&#34;, [&#34;file&#34;])
+
+        self.computer.sys_write(&#34;/home/steve/file&#34;, message)
+
+        cat_result = self.run_command(&#34;cat&#34;, [&#34;file&#34;])
+
+        self.assertEqual(message, cat_result)
+
+        # cat on directory should fail
+        result = self.computer.run_command(&#34;cat&#34;, [&#34;/home/steve&#34;], True)
+        self.assertIn(&#34;Is a directory&#34;, result.data)
+
+        # cat respects permission
+        result = self.computer.run_command(&#34;cat&#34;, [&#34;/etc/shadow&#34;], True)
+        self.assertIn(&#34;Permission denied&#34;, result.data)
+
     def test_cd(self):
         self.run_command(&#34;cd&#34;, [&#34;--version&#34;])
         self.run_command(&#34;cd&#34;, [&#34;--help&#34;])
@@ -743,13 +941,13 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
         self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-        self.run_command(&#34;clear&#34;, [])
+        self.run_command(&#34;clear&#34;)
 
     def test_commands(self):
         self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
         self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-        commands_result = self.run_command(&#34;commands&#34;, [])
+        commands_result = self.run_command(&#34;commands&#34;)
         self.assertIn(&#34;ls&#34;, commands_result)
 
         # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -758,14 +956,14 @@ not have a method with the specified name.</p></div>
         move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
         self.assertTrue(move_result.success)
 
-        commands_result = self.run_command(&#34;commands&#34;, [])
+        commands_result = self.run_command(&#34;commands&#34;)
         self.assertNotIn(&#34;ls&#34;, commands_result)
 
     def test_date(self):
         self.run_command(&#34;date&#34;, [&#34;--version&#34;])
         self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-        date_result = self.run_command(&#34;date&#34;, [])
+        date_result = self.run_command(&#34;date&#34;)
 
         local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
         time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -794,7 +992,7 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;env&#34;, [&#34;--version&#34;])
         self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;env&#34;, [])
+        env_result = self.run_command(&#34;env&#34;)
         print(f&#34;ENVRESULT: {env_result}&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
@@ -803,13 +1001,30 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+
+    def test_head(self):
+        self.run_command(&#34;head&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;head&#34;, [&#34;--help&#34;])
+
+        message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+        # Make a file with 20 lines
+        self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+        self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+        expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[:-10])
+
+        actual_result = self.run_command(&#34;head&#34;, [&#34;bigfile&#34;])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
 
     def test_hostname(self):
         self.run_command(&#34;hostname&#34;, [&#34;--version&#34;])
@@ -825,7 +1040,7 @@ not have a method with the specified name.</p></div>
         self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
         # Make sure it failed
-        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+        get_hostname_result = self.run_command(&#34;hostname&#34;)
 
         self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
@@ -833,7 +1048,7 @@ not have a method with the specified name.</p></div>
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
         self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
-        get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+        get_hostname_result = self.run_command(&#34;hostname&#34;)
 
         self.assertEqual(get_hostname_result, &#34;localhost&#34;)
 
@@ -841,7 +1056,7 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;id&#34;, [&#34;--version&#34;])
         self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-        self_id_result = self.run_command(&#34;id&#34;, [])
+        self_id_result = self.run_command(&#34;id&#34;)
         expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
         self.assertEqual(self_id_result, expected_self_id_result)
 
@@ -935,20 +1150,118 @@ not have a method with the specified name.</p></div>
         find_pwd = self.computer.fs.find(&#34;/tmp/pwd&#34;)
         self.assertTrue(find_pwd.success)
 
+    def test_passwd(self):
+        self.run_command(&#34;passwd&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;passwd&#34;, [&#34;--help&#34;])
+
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;tester&#34;, &#34;-n&#34;], True)
+        self.computer.sessions.pop()
+
+        # su to sanity check password
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;tester&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;tester&#34;):
+                self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+                self.computer.sessions.pop()
+
+                # Change testuser&#39;s password
+                print(self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newpassword&#34;]))
+
+                # Confirm the old password doesn&#39;t work
+                result = self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertIn(&#34;Authentication failure&#34;, result)
+
+                # A valid password is required to reset the user&#39;s password
+                result = self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newnewpassword&#34;])
+                self.assertIn(&#34;Authentication token manipulation error&#34;, result)
+
+        # Confirm the new password works
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;newpassword&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;newpassword&#34;):
+                self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+                self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+                self.computer.sessions.pop()
+
     def test_printenv(self):
         self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
         self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_pwd(self):
         self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
         self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-        pwd_result = self.run_command(&#34;pwd&#34;, [])
+        pwd_result = self.run_command(&#34;pwd&#34;)
 
         self.assertEqual(&#34;/home/steve&#34;, pwd_result)
+
+    def test_rm(self):
+        self.run_command(&#34;rm&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;rm&#34;, [&#34;--help&#34;])
+
+        # Make some test files to remove
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;, &#34;/tmp/file4&#34;])
+        ls_result = self.run_command(&#34;ls&#34;)
+
+        # Sanity check
+        for file in [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;]:
+            self.assertIn(file, ls_result)
+
+        # rm a single file (relative path)
+        self.run_command(&#34;rm&#34;, [&#34;file1&#34;])
+        ls_result = self.run_command(&#34;ls&#34;)
+        self.assertNotIn(&#34;file1&#34;, ls_result)
+
+        # rm a file (absolute path)
+        self.run_command(&#34;rm&#34;, [&#34;/tmp/file4&#34;])
+        ls_result = self.run_command(&#34;ls&#34;, [&#34;/tmp&#34;])
+        self.assertNotIn(&#34;file4&#34;, ls_result)
+
+        # TODO: Allow multiple files to be deleted and then add test
+
+        # Delete non-existent file
+        rm_doesnt_exist = self.computer.run_command(&#34;rm&#34;, [&#34;/tmp/badfile&#34;], True)
+        self.assertFalse(rm_doesnt_exist.success)
+        self.assertIn(&#34;No such file or directory&#34;, rm_doesnt_exist.data)
+
+        # No rm permissions
+        rm_no_perms = self.computer.run_command(&#34;rm&#34;, [&#34;/etc/passwd&#34;], False)
+        self.assertFalse(rm_no_perms.success)
+        self.assertIn(&#34;Permission denied&#34;, rm_no_perms.data)
+        # Confirm it&#39;s still there
+        self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;/etc/passwd&#34;], True).success)
+
+        # Can&#39;t remove populated directory
+        self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;..&#34;])
+
+        rm_full_dir = self.computer.run_command(&#34;rm&#34;, [&#34;files&#34;], True)
+        self.assertFalse(rm_full_dir.success)
+        self.assertIn(&#34;Is a directory&#34;, rm_full_dir.data)
+        # Confirm it&#39;s still there
+        self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+        # Remove directory with -r
+        rm_dir_with_flag = self.computer.run_command(&#34;rm&#34;, [&#34;-r&#34;, &#34;files&#34;], True)
+        self.assertTrue(rm_dir_with_flag.success)
+        # Confirm
+        self.assertFalse(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+        # rm *
+        self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+        self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+        self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+
+        rm_star = self.computer.run_command(&#34;rm&#34;, [&#34;*&#34;], True)
+        self.assertTrue(rm_star.success)
+        ls_result = self.run_command(&#34;ls&#34;)
+        self.assertNotIn(&#34;file1&#34;, ls_result)
+        self.assertNotIn(&#34;file2&#34;, ls_result)
 
     def test_sha1sum(self):
         self.run_command(&#34;sha1sum&#34;, [&#34;--version&#34;])
@@ -1033,9 +1346,32 @@ not have a method with the specified name.</p></div>
         self.assertEqual(self.run_command(&#34;sha512sum&#34;, [&#34;file&#34;, &#34;-z&#34;, &#34;--tag&#34;]),
                          f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)
 
-    def test_sudo(self):
+    def test_su(self):
+        self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;su&#34;, [&#34;--help&#34;])
+
+        self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+
         # Sanity check
-        sudo_result = self.run_command(&#34;id&#34;, [])
+        self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, self.run_command(&#34;id&#34;))
+
+        with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+            with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+                self.run_command(&#34;su&#34;)
+                self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, self.run_command(&#34;id&#34;))
+
+        self.assertTrue(self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;NOTPASSWORD&#34;, &#34;-n&#34;], True).success)
+
+        # Now that we&#39;re root, we should be able to change user without a password
+        self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+        self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, self.run_command(&#34;id&#34;))
+
+    def test_sudo(self):
+        self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
+
+        self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
+        # Sanity check
+        sudo_result = self.run_command(&#34;id&#34;)
 
         self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
 
@@ -1043,7 +1379,6 @@ not have a method with the specified name.</p></div>
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
         self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
         self.computer.sessions.pop()
-
 
         # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
         # (pycharm&#39;s one for example) uses the fallback function
@@ -1055,6 +1390,22 @@ not have a method with the specified name.</p></div>
                 other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
                 self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)
 
+    def test_tail(self):
+        self.run_command(&#34;tail&#34;, [&#34;--version&#34;])
+        self.run_command(&#34;tail&#34;, [&#34;--help&#34;])
+
+        message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+        # Make a file with 20 lines
+        self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+        self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+        expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[10:])
+        actual_result = self.run_command(&#34;tail&#34;, [&#34;bigfile&#34;])
+
+        self.assertEqual(expected_result, actual_result)
+
+        # TODO: Test --wrap flag
+
     def test_touch(self):
         self.run_command(&#34;touch&#34;, [&#34;--version&#34;])
         self.run_command(&#34;touch&#34;, [&#34;--help&#34;])
@@ -1063,7 +1414,7 @@ not have a method with the specified name.</p></div>
         expected_touch_result = Result(success=True)
 
         # We should double-check that the file exists in our home directory
-        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
+        self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;))
 
         self.assertEqual(touch_result, expected_touch_result)
 
@@ -1072,7 +1423,7 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
         # Test some misc uname configurations
-        self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+        self.assertEqual(self.run_command(&#34;uname&#34;), &#34;Linux&#34;)
         self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                          f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
         self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
@@ -1085,16 +1436,16 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
         self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-        env_result = self.run_command(&#34;printenv&#34;, [])
+        env_result = self.run_command(&#34;printenv&#34;)
         self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     def test_uptime(self):
@@ -1102,12 +1453,12 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
         # Make sure it doesn&#39;t crash
-        uptime_result = self.run_command(&#34;uptime&#34;, [])
+        uptime_result = self.run_command(&#34;uptime&#34;)
         # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
         self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
         sleep(5)
-        uptime_result = self.run_command(&#34;uptime&#34;, [])
+        uptime_result = self.run_command(&#34;uptime&#34;)
         self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
         uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
@@ -1124,11 +1475,11 @@ not have a method with the specified name.</p></div>
 
         # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
         minus_one_minute = uptime_result.split(&#34;:&#34;)
-        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+        minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1]) - 1)
         minus_one_minute = &#34;:&#34;.join(minus_one_minute)
 
         plus_one_minute = uptime_result.split(&#34;:&#34;)
-        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+        plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1]) + 1)
         plus_one_minute = &#34;:&#34;.join(plus_one_minute)
 
         self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])
@@ -1138,16 +1489,16 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
         # One session = only one user
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve &#34;)
 
         # Add new sessions then test
         self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve root &#34;)
 
         self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-        users_result = self.run_command(&#34;users&#34;, [])
+        users_result = self.run_command(&#34;users&#34;)
         self.assertEqual(users_result, &#34;steve root steve &#34;)
 
     def test_wc(self):
@@ -1198,16 +1549,13 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;who&#34;, [&#34;--version&#34;])
         self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-        who_result = self.run_command(&#34;who&#34;, [])
-        self.assertEqual(who_result, &#34;steve\tpts/0&#34;)
+        self.assertEqual(self.run_command(&#34;who&#34;), &#34;steve\tpts/0&#34;)
 
     def test_whoami(self):
         self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
         self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-        whoami_result = self.run_command(&#34;whoami&#34;, [])
-
-        self.assertEqual(whoami_result, &#34;steve&#34;)</code></pre>
+        self.assertEqual(self.run_command(&#34;whoami&#34;), &#34;steve&#34;)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -1216,7 +1564,7 @@ not have a method with the specified name.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.run_command"><code class="name flex">
-<span>def <span class="ident">run_command</span></span>(<span>self, command, args)</span>
+<span>def <span class="ident">run_command</span></span>(<span>self, command, args=[])</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -1224,8 +1572,7 @@ not have a method with the specified name.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def run_command(self, command, args):
-
+<pre><code class="python">def run_command(self, command, args=[]):
     result = self.computer.run_command(command, args, True).data
     # This avoids &#34;None type as no attribute strip&#34;
     if not result:
@@ -1329,6 +1676,38 @@ not have a method with the specified name.</p></div>
     self.assertEqual(b64decode(base64_result).decode().strip(&#34;\n&#34;), message)</code></pre>
 </details>
 </dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_cat"><code class="name flex">
+<span>def <span class="ident">test_cat</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_cat(self):
+    self.run_command(&#34;cat&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;cat&#34;, [&#34;--help&#34;])
+
+    message = &#34;Hello World!&#34;
+
+    self.run_command(&#34;touch&#34;, [&#34;file&#34;])
+
+    self.computer.sys_write(&#34;/home/steve/file&#34;, message)
+
+    cat_result = self.run_command(&#34;cat&#34;, [&#34;file&#34;])
+
+    self.assertEqual(message, cat_result)
+
+    # cat on directory should fail
+    result = self.computer.run_command(&#34;cat&#34;, [&#34;/home/steve&#34;], True)
+    self.assertIn(&#34;Is a directory&#34;, result.data)
+
+    # cat respects permission
+    result = self.computer.run_command(&#34;cat&#34;, [&#34;/etc/shadow&#34;], True)
+    self.assertIn(&#34;Permission denied&#34;, result.data)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_cd"><code class="name flex">
 <span>def <span class="ident">test_cd</span></span>(<span>self)</span>
 </code></dt>
@@ -1389,7 +1768,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;clear&#34;, [&#34;--version&#34;])
     self.run_command(&#34;clear&#34;, [&#34;--help&#34;])
 
-    self.run_command(&#34;clear&#34;, [])</code></pre>
+    self.run_command(&#34;clear&#34;)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_commands"><code class="name flex">
@@ -1405,7 +1784,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;commands&#34;, [&#34;--version&#34;])
     self.run_command(&#34;commands&#34;, [&#34;--help&#34;])
 
-    commands_result = self.run_command(&#34;commands&#34;, [])
+    commands_result = self.run_command(&#34;commands&#34;)
     self.assertIn(&#34;ls&#34;, commands_result)
 
     # Now lets remove ls from /bin (it shouldn&#39;t show up in commands)
@@ -1414,7 +1793,7 @@ not have a method with the specified name.</p></div>
     move_result = self.computer.run_command(&#34;mv&#34;, [&#34;/bin/ls&#34;, &#34;/tmp&#34;], True)
     self.assertTrue(move_result.success)
 
-    commands_result = self.run_command(&#34;commands&#34;, [])
+    commands_result = self.run_command(&#34;commands&#34;)
     self.assertNotIn(&#34;ls&#34;, commands_result)</code></pre>
 </details>
 </dd>
@@ -1431,7 +1810,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;date&#34;, [&#34;--version&#34;])
     self.run_command(&#34;date&#34;, [&#34;--help&#34;])
 
-    date_result = self.run_command(&#34;date&#34;, [])
+    date_result = self.run_command(&#34;date&#34;)
 
     local_timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
     time_first = datetime.datetime.now().strftime(&#39;%a %b %d %I:%M:%S %p&#39;)
@@ -1480,7 +1859,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;env&#34;, [&#34;--version&#34;])
     self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-    env_result = self.run_command(&#34;env&#34;, [])
+    env_result = self.run_command(&#34;env&#34;)
     print(f&#34;ENVRESULT: {env_result}&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
@@ -1499,13 +1878,40 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_head"><code class="name flex">
+<span>def <span class="ident">test_head</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_head(self):
+    self.run_command(&#34;head&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;head&#34;, [&#34;--help&#34;])
+
+    message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+    # Make a file with 20 lines
+    self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+    self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+    expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[:-10])
+
+    actual_result = self.run_command(&#34;head&#34;, [&#34;bigfile&#34;])
+
+    self.assertEqual(expected_result, actual_result)
+
+    # TODO: Test --wrap flag</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_hostname"><code class="name flex">
@@ -1531,7 +1937,7 @@ not have a method with the specified name.</p></div>
     self.assertEqual(set_hostname_result, expected_set_hostname_result)
 
     # Make sure it failed
-    get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+    get_hostname_result = self.run_command(&#34;hostname&#34;)
 
     self.assertNotEqual(get_hostname_result, &#34;localhost&#34;)
 
@@ -1539,7 +1945,7 @@ not have a method with the specified name.</p></div>
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
 
     self.run_command(&#34;hostname&#34;, [&#34;localhost&#34;])
-    get_hostname_result = self.run_command(&#34;hostname&#34;, [])
+    get_hostname_result = self.run_command(&#34;hostname&#34;)
 
     self.assertEqual(get_hostname_result, &#34;localhost&#34;)</code></pre>
 </details>
@@ -1557,7 +1963,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;id&#34;, [&#34;--version&#34;])
     self.run_command(&#34;id&#34;, [&#34;--help&#34;])
 
-    self_id_result = self.run_command(&#34;id&#34;, [])
+    self_id_result = self.run_command(&#34;id&#34;)
     expected_self_id_result = &#34;uid=1000(steve) gid=1000(steve) &#34;
     self.assertEqual(self_id_result, expected_self_id_result)
 
@@ -1682,6 +2088,49 @@ not have a method with the specified name.</p></div>
     self.assertTrue(find_pwd.success)</code></pre>
 </details>
 </dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_passwd"><code class="name flex">
+<span>def <span class="ident">test_passwd</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_passwd(self):
+    self.run_command(&#34;passwd&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;passwd&#34;, [&#34;--help&#34;])
+
+    self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+    self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;tester&#34;, &#34;-n&#34;], True)
+    self.computer.sessions.pop()
+
+    # su to sanity check password
+    with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;tester&#34;):
+        with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;tester&#34;):
+            self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+            self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+            self.computer.sessions.pop()
+
+            # Change testuser&#39;s password
+            print(self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newpassword&#34;]))
+
+            # Confirm the old password doesn&#39;t work
+            result = self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+            self.assertIn(&#34;Authentication failure&#34;, result)
+
+            # A valid password is required to reset the user&#39;s password
+            result = self.run_command(&#34;passwd&#34;, [&#34;testuser&#34;, &#34;-p&#34;, &#34;newnewpassword&#34;])
+            self.assertIn(&#34;Authentication token manipulation error&#34;, result)
+
+    # Confirm the new password works
+    with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;newpassword&#34;):
+        with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;newpassword&#34;):
+            self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+            self.assertEqual(&#34;testuser&#34;, self.run_command(&#34;whoami&#34;))
+            self.computer.sessions.pop()</code></pre>
+</details>
+</dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_printenv"><code class="name flex">
 <span>def <span class="ident">test_printenv</span></span>(<span>self)</span>
 </code></dt>
@@ -1695,7 +2144,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
     self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1712,9 +2161,84 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
     self.run_command(&#34;pwd&#34;, [&#34;--help&#34;])
 
-    pwd_result = self.run_command(&#34;pwd&#34;, [])
+    pwd_result = self.run_command(&#34;pwd&#34;)
 
     self.assertEqual(&#34;/home/steve&#34;, pwd_result)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_rm"><code class="name flex">
+<span>def <span class="ident">test_rm</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_rm(self):
+    self.run_command(&#34;rm&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;rm&#34;, [&#34;--help&#34;])
+
+    # Make some test files to remove
+    self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;, &#34;/tmp/file4&#34;])
+    ls_result = self.run_command(&#34;ls&#34;)
+
+    # Sanity check
+    for file in [&#34;file1&#34;, &#34;file2&#34;, &#34;file3&#34;]:
+        self.assertIn(file, ls_result)
+
+    # rm a single file (relative path)
+    self.run_command(&#34;rm&#34;, [&#34;file1&#34;])
+    ls_result = self.run_command(&#34;ls&#34;)
+    self.assertNotIn(&#34;file1&#34;, ls_result)
+
+    # rm a file (absolute path)
+    self.run_command(&#34;rm&#34;, [&#34;/tmp/file4&#34;])
+    ls_result = self.run_command(&#34;ls&#34;, [&#34;/tmp&#34;])
+    self.assertNotIn(&#34;file4&#34;, ls_result)
+
+    # TODO: Allow multiple files to be deleted and then add test
+
+    # Delete non-existent file
+    rm_doesnt_exist = self.computer.run_command(&#34;rm&#34;, [&#34;/tmp/badfile&#34;], True)
+    self.assertFalse(rm_doesnt_exist.success)
+    self.assertIn(&#34;No such file or directory&#34;, rm_doesnt_exist.data)
+
+    # No rm permissions
+    rm_no_perms = self.computer.run_command(&#34;rm&#34;, [&#34;/etc/passwd&#34;], False)
+    self.assertFalse(rm_no_perms.success)
+    self.assertIn(&#34;Permission denied&#34;, rm_no_perms.data)
+    # Confirm it&#39;s still there
+    self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;/etc/passwd&#34;], True).success)
+
+    # Can&#39;t remove populated directory
+    self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+    self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+    self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+    self.run_command(&#34;cd&#34;, [&#34;..&#34;])
+
+    rm_full_dir = self.computer.run_command(&#34;rm&#34;, [&#34;files&#34;], True)
+    self.assertFalse(rm_full_dir.success)
+    self.assertIn(&#34;Is a directory&#34;, rm_full_dir.data)
+    # Confirm it&#39;s still there
+    self.assertTrue(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+    # Remove directory with -r
+    rm_dir_with_flag = self.computer.run_command(&#34;rm&#34;, [&#34;-r&#34;, &#34;files&#34;], True)
+    self.assertTrue(rm_dir_with_flag.success)
+    # Confirm
+    self.assertFalse(self.computer.run_command(&#34;stat&#34;, [&#34;files&#34;], True).success)
+
+    # rm *
+    self.run_command(&#34;mkdir&#34;, [&#34;files&#34;])
+    self.run_command(&#34;cd&#34;, [&#34;files&#34;])
+    self.run_command(&#34;touch&#34;, [&#34;file1&#34;, &#34;file2&#34;])
+
+    rm_star = self.computer.run_command(&#34;rm&#34;, [&#34;*&#34;], True)
+    self.assertTrue(rm_star.success)
+    ls_result = self.run_command(&#34;ls&#34;)
+    self.assertNotIn(&#34;file1&#34;, ls_result)
+    self.assertNotIn(&#34;file2&#34;, ls_result)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha1sum"><code class="name flex">
@@ -1850,6 +2374,36 @@ not have a method with the specified name.</p></div>
                      f&#34;SHA512 (file) = {sha512(message.encode()).hexdigest()}&#34;)</code></pre>
 </details>
 </dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_su"><code class="name flex">
+<span>def <span class="ident">test_su</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_su(self):
+    self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;su&#34;, [&#34;--help&#34;])
+
+    self.run_command(&#34;su&#34;, [&#34;--version&#34;])
+
+    # Sanity check
+    self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, self.run_command(&#34;id&#34;))
+
+    with unittest.mock.patch(&#34;getpass.getpass&#34;, return_value=&#34;password&#34;):
+        with unittest.mock.patch(&#34;getpass.fallback_getpass&#34;, return_value=&#34;password&#34;):
+            self.run_command(&#34;su&#34;)
+            self.assertIn(&#34;uid=0(root) gid=0(root)&#34;, self.run_command(&#34;id&#34;))
+
+    self.assertTrue(self.computer.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;NOTPASSWORD&#34;, &#34;-n&#34;], True).success)
+
+    # Now that we&#39;re root, we should be able to change user without a password
+    self.run_command(&#34;su&#34;, [&#34;testuser&#34;])
+    self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, self.run_command(&#34;id&#34;))</code></pre>
+</details>
+</dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo"><code class="name flex">
 <span>def <span class="ident">test_sudo</span></span>(<span>self)</span>
 </code></dt>
@@ -1860,8 +2414,11 @@ not have a method with the specified name.</p></div>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def test_sudo(self):
+    self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
+
+    self.run_command(&#34;sudo&#34;, [&#34;--version&#34;])
     # Sanity check
-    sudo_result = self.run_command(&#34;id&#34;, [])
+    sudo_result = self.run_command(&#34;id&#34;)
 
     self.assertIn(&#34;uid=1000(steve) gid=1000(steve)&#34;, sudo_result)
 
@@ -1869,7 +2426,6 @@ not have a method with the specified name.</p></div>
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
     self.run_command(&#34;adduser&#34;, [&#34;testuser&#34;, &#34;-p&#34; &#34;password&#34;, &#34;-n&#34;])
     self.computer.sessions.pop()
-
 
     # We do both &#34;getpass&#34; and &#34;fallback_getpass&#34; because some terminals
     # (pycharm&#39;s one for example) uses the fallback function
@@ -1880,6 +2436,32 @@ not have a method with the specified name.</p></div>
 
             other_user_result = self.run_command(&#34;sudo&#34;, [&#34;-u&#34;, &#34;testuser&#34;, &#34;id&#34;])
             self.assertIn(&#34;uid=1001(testuser) gid=1001(testuser)&#34;, other_user_result)</code></pre>
+</details>
+</dd>
+<dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_tail"><code class="name flex">
+<span>def <span class="ident">test_tail</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def test_tail(self):
+    self.run_command(&#34;tail&#34;, [&#34;--version&#34;])
+    self.run_command(&#34;tail&#34;, [&#34;--help&#34;])
+
+    message = &#34;one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty&#34;
+    # Make a file with 20 lines
+    self.run_command(&#34;touch&#34;, [&#34;bigfile&#34;])
+    self.computer.sys_write(&#34;/home/steve/bigfile&#34;, message)
+
+    expected_result = &#34;\n&#34;.join(message.split(&#34;\n&#34;)[10:])
+    actual_result = self.run_command(&#34;tail&#34;, [&#34;bigfile&#34;])
+
+    self.assertEqual(expected_result, actual_result)
+
+    # TODO: Test --wrap flag</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_touch"><code class="name flex">
@@ -1899,7 +2481,7 @@ not have a method with the specified name.</p></div>
     expected_touch_result = Result(success=True)
 
     # We should double-check that the file exists in our home directory
-    self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;, []))
+    self.assertIn(&#34;testfile&#34;, self.run_command(&#34;ls&#34;))
 
     self.assertEqual(touch_result, expected_touch_result)</code></pre>
 </details>
@@ -1918,7 +2500,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;uname&#34;, [&#34;--help&#34;])
 
     # Test some misc uname configurations
-    self.assertEqual(self.run_command(&#34;uname&#34;, [], ), &#34;Linux&#34;)
+    self.assertEqual(self.run_command(&#34;uname&#34;), &#34;Linux&#34;)
     self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-a&#34;]),
                      f&#34;Linux {self.computer.hostname} 1.1 v1 x86_64 Blackhat/Linux&#34;)
     self.assertEqual(self.run_command(&#34;uname&#34;, [&#34;-mns&#34;]),
@@ -1941,16 +2523,16 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
 
     self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
 
     self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-    env_result = self.run_command(&#34;printenv&#34;, [])
+    env_result = self.run_command(&#34;printenv&#34;)
     self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
 </details>
 </dd>
@@ -1968,12 +2550,12 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;uptime&#34;, [&#34;--help&#34;])
 
     # Make sure it doesn&#39;t crash
-    uptime_result = self.run_command(&#34;uptime&#34;, [])
+    uptime_result = self.run_command(&#34;uptime&#34;)
     # TODO: See if there&#39;s a better way to fix this without wasting 5 seconds
     self.assertEqual(uptime_result, &#34;uptime: 0:00:00&#34;)
 
     sleep(5)
-    uptime_result = self.run_command(&#34;uptime&#34;, [])
+    uptime_result = self.run_command(&#34;uptime&#34;)
     self.assertEqual(uptime_result, &#34;uptime: 0:00:05&#34;)
 
     uptime_result = self.run_command(&#34;uptime&#34;, [&#34;-p&#34;])
@@ -1990,11 +2572,11 @@ not have a method with the specified name.</p></div>
 
     # We have to check +1 or -1 minute because there is a possibility that it can be one minute behind
     minus_one_minute = uptime_result.split(&#34;:&#34;)
-    minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1])-1)
+    minus_one_minute[1] = &#34;{:02d}&#34;.format(int(minus_one_minute[1]) - 1)
     minus_one_minute = &#34;:&#34;.join(minus_one_minute)
 
     plus_one_minute = uptime_result.split(&#34;:&#34;)
-    plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1])+1)
+    plus_one_minute[1] = &#34;{:02d}&#34;.format(int(plus_one_minute[1]) + 1)
     plus_one_minute = &#34;:&#34;.join(plus_one_minute)
 
     self.assertIn(now, [minus_one_minute, uptime_result, plus_one_minute])</code></pre>
@@ -2014,16 +2596,16 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;users&#34;, [&#34;--help&#34;])
 
     # One session = only one user
-    users_result = self.run_command(&#34;users&#34;, [])
+    users_result = self.run_command(&#34;users&#34;)
     self.assertEqual(users_result, &#34;steve &#34;)
 
     # Add new sessions then test
     self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-    users_result = self.run_command(&#34;users&#34;, [])
+    users_result = self.run_command(&#34;users&#34;)
     self.assertEqual(users_result, &#34;steve root &#34;)
 
     self.computer.sessions.append(Session(1000, self.computer.fs.files, self.computer.sessions[-1].id + 1))
-    users_result = self.run_command(&#34;users&#34;, [])
+    users_result = self.run_command(&#34;users&#34;)
     self.assertEqual(users_result, &#34;steve root steve &#34;)</code></pre>
 </details>
 </dd>
@@ -2094,8 +2676,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;who&#34;, [&#34;--version&#34;])
     self.run_command(&#34;who&#34;, [&#34;--help&#34;])
 
-    who_result = self.run_command(&#34;who&#34;, [])
-    self.assertEqual(who_result, &#34;steve\tpts/0&#34;)</code></pre>
+    self.assertEqual(self.run_command(&#34;who&#34;), &#34;steve\tpts/0&#34;)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_whoami"><code class="name flex">
@@ -2111,9 +2692,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;whoami&#34;, [&#34;--version&#34;])
     self.run_command(&#34;whoami&#34;, [&#34;--help&#34;])
 
-    whoami_result = self.run_command(&#34;whoami&#34;, [])
-
-    self.assertEqual(whoami_result, &#34;steve&#34;)</code></pre>
+    self.assertEqual(self.run_command(&#34;whoami&#34;), &#34;steve&#34;)</code></pre>
 </details>
 </dd>
 </dl>
@@ -2141,7 +2720,14 @@ not have a method with the specified name.</p></div>
     &#34;&#34;&#34;
 
     def setUp(self) -&gt; None:
-        self.computer = init()</code></pre>
+        self.computer = init()
+
+    def run_command(self, command, args=[]):
+        result = self.computer.run_command(command, args, True).data
+        # This avoids &#34;None type as no attribute strip&#34;
+        if not result:
+            result = &#34;&#34;
+        return result.strip(&#34;\n&#34;)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -2149,6 +2735,23 @@ not have a method with the specified name.</p></div>
 </ul>
 <h3>Methods</h3>
 <dl>
+<dt id="blackhat.tests.test_binaries.TestInstallableBinaries.run_command"><code class="name flex">
+<span>def <span class="ident">run_command</span></span>(<span>self, command, args=[])</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def run_command(self, command, args=[]):
+    result = self.computer.run_command(command, args, True).data
+    # This avoids &#34;None type as no attribute strip&#34;
+    if not result:
+        result = &#34;&#34;
+    return result.strip(&#34;\n&#34;)</code></pre>
+</details>
+</dd>
 <dt id="blackhat.tests.test_binaries.TestInstallableBinaries.setUp"><code class="name flex">
 <span>def <span class="ident">setUp</span></span>(<span>self) ‑> None</span>
 </code></dt>
@@ -2188,6 +2791,7 @@ not have a method with the specified name.</p></div>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_add_user" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_add_user">test_add_user</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_base32" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_base32">test_base32</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_base64" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_base64">test_base64</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_cat" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_cat">test_cat</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_cd" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_cd">test_cd</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_chown" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_chown">test_chown</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_clear" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_clear">test_clear</a></code></li>
@@ -2196,19 +2800,24 @@ not have a method with the specified name.</p></div>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_echo" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_echo">test_echo</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_env" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_env">test_env</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_export" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_export">test_export</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_head" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_head">test_head</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_hostname" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_hostname">test_hostname</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_id" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_id">test_id</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_ls" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_ls">test_ls</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_md5sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_md5sum">test_md5sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_mv" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_mv">test_mv</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_passwd" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_passwd">test_passwd</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_printenv" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_printenv">test_printenv</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_pwd" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_pwd">test_pwd</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_rm" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_rm">test_rm</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha1sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha1sum">test_sha1sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha224sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha224sum">test_sha224sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha256sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha256sum">test_sha256sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha384sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha384sum">test_sha384sum</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sha512sum" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sha512sum">test_sha512sum</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_su" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_su">test_su</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_sudo">test_sudo</a></code></li>
+<li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_tail" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_tail">test_tail</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_touch" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_touch">test_touch</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_uname" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_uname">test_uname</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestIncludedBinaries.test_unset" href="#blackhat.tests.test_binaries.TestIncludedBinaries.test_unset">test_unset</a></code></li>
@@ -2222,6 +2831,7 @@ not have a method with the specified name.</p></div>
 <li>
 <h4><code><a title="blackhat.tests.test_binaries.TestInstallableBinaries" href="#blackhat.tests.test_binaries.TestInstallableBinaries">TestInstallableBinaries</a></code></h4>
 <ul class="">
+<li><code><a title="blackhat.tests.test_binaries.TestInstallableBinaries.run_command" href="#blackhat.tests.test_binaries.TestInstallableBinaries.run_command">run_command</a></code></li>
 <li><code><a title="blackhat.tests.test_binaries.TestInstallableBinaries.setUp" href="#blackhat.tests.test_binaries.TestInstallableBinaries.setUp">setUp</a></code></li>
 </ul>
 </li>

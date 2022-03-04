@@ -29,7 +29,7 @@
 <pre><code class="python">__package__ = &#34;blackhat.bin&#34;
 
 import datetime
-from asyncio import sleep
+from time import sleep
 from getpass import getpass
 from hashlib import md5
 
@@ -38,7 +38,7 @@ from ..lib.fcntl import creat
 from ..lib.output import output
 from ..lib.stdlib import get_env
 from ..lib.sys.stat import stat
-from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp, write
+from ..lib.unistd import getuid, get_user, read, gethostname, setuid, execvp, write, seteuid, geteuid
 
 __COMMAND__ = &#34;sudo&#34;
 __VERSION__ = &#34;1.1&#34;
@@ -49,12 +49,12 @@ def run_as_user(args, user, current_user):
     creat(f&#34;/run/sudo/ts/{current_user.username}&#34;, 0o600)
     write(f&#34;/run/sudo/ts/{current_user.username}&#34;, str(datetime.datetime.now().timestamp()))
 
-    setuid(user.uid)
+    seteuid(user.uid)
     # args[0] : command
     # args[1:] : arguments
     result = execvp(args[0], args[1:])
     # Reset the effective user after running command
-    setuid(current_user.uid)
+    seteuid(current_user.uid)
     return result
 
 
@@ -81,10 +81,10 @@ def main(args: list, pipe: bool) -&gt; Result:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = get_user(uid=getuid())
+    current_user = get_user(uid=getuid())
 
-    if user_lookup.success:
-        username = user_lookup.data.username
+    if current_user.success:
+        username = current_user.data.username
     else:
         return output(f&#34;{__COMMAND__}: cannot find user with UID {getuid()}&#34;, pipe, success=False)
 
@@ -111,93 +111,90 @@ def main(args: list, pipe: bool) -&gt; Result:
     else:
         user = get_user(uid=0).data
 
-    # We can&#39;t do a getuid() because this is a setuid binary and it&#39;ll always be root
-    # Instead, we&#39;ll try to get the $USER environment variable
-    # If it&#39;s not set, we&#39;ll crash
-    username = get_env(&#34;USER&#34;)
-    if not username:
-        return output(f&#34;{__COMMAND__}: cannot determine user&#34;, pipe, success=False)
-
-    current_user = get_user(username=username).data
+    ask_for_password = True
 
     # Check if we have a timeout for this user
-    timeout_file = stat(f&#34;/run/sudo/ts/{current_user.username}&#34;)
+    timeout_file = stat(f&#34;/run/sudo/ts/{username}&#34;)
 
     if timeout_file.success:
         # Check if the timeout is &lt; 5 minutes
-        timeout_data = read(f&#34;/run/sudo/ts/{current_user.username}&#34;)
+        timeout_data = read(f&#34;/run/sudo/ts/{username}&#34;)
         if timeout_data.success:
             timeout_timestamp = datetime.datetime.fromtimestamp(float(timeout_data.data))
             if timeout_timestamp + datetime.timedelta(minutes=5) &gt; datetime.datetime.now():
-                return run_as_user(args, user, current_user)
+                ask_for_password = False
 
     # We need to authenticate as that user before we can run any commands
-    for x in range(3):
-        password = getpass()
+    if ask_for_password:
+        for x in range(3):
+            password = getpass()
 
-        # Encode the password
-        password = md5(password.encode()).hexdigest()
+            # Encode the password
+            password = md5(password.encode()).hexdigest()
 
-        if password == current_user.password:
-            # Now lets isolate the record regarding this `username`
-            split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
-
-            # NOTE: Possible exploit we&#39;re going to leave on purpose
-            # Lets find the line that contains the username
-            line = None
-            for line in split_sudoers_content:
-                if line.startswith(username):
-                    break
-            else:
-                return output(f&#34;{__COMMAND__}: {username} is not in the sudoers file. This incident will be reported&#34;,
-                              pipe, success=False)
-
-            # Now lets parse the line and determine what the users allowed to do
-            # We don&#39;t care about the username because we already know who this line belongs to
-            _username, line = line.split(&#34; &#34;, 1)
-
-            # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
-            # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
-            host, line = line.split(&#34;=&#34;, 1)
-            if host.lower() != &#34;all&#34; and host != gethostname():
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            users, commands = line.split(&#34;)&#34;, 1)
-
-            # We need to remove the extra &#34;(&#34; from the beginning of the users array and remove the extra spaces
-            users = users.strip(&#34;(&#34;).split(&#34;,&#34;)
-            users = [x.strip(&#34; &#34;) for x in users]
-            commands = [x.strip(&#34; &#34;) for x in commands.split(&#34;,&#34;)]
-
-            # Lets check if we&#39;re allowed to execute as the user
-            for usr in users:
-                if usr in [&#34;ALL&#34;, user.username]:
-                    break
-            else:
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo as user {user.username}. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            # Lets check if we&#39;re allowed to execute the command
-            for cmd in commands:
-                if cmd in [&#34;ALL&#34;, args[0]]:
-                    break
-            else:
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            return run_as_user(args, user, current_user)
+            if password == current_user.data.password:
+                break
         else:
             # Simulates the password checking delay when wrong password is entered
             sleep(0.25)
             if x != 2:
                 print(&#34;Sorry, try again.&#34;)
 
-    return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
-                  success_message=ResultMessages.NOT_ALLOWED)</code></pre>
+            if x == 3:
+                return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
+                              success_message=ResultMessages.NOT_ALLOWED)
+
+    # Now lets isolate the record regarding this `username`
+    split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
+
+    # NOTE: Possible exploit we&#39;re going to leave on purpose
+    # Lets find the line that contains the username
+    line = None
+    for line in split_sudoers_content:
+        if line.startswith(username):
+            break
+    else:
+        return output(f&#34;{__COMMAND__}: {username} is not in the sudoers file. This incident will be reported&#34;,
+                      pipe, success=False)
+
+    # Now lets parse the line and determine what the users allowed to do
+    # We don&#39;t care about the username because we already know who this line belongs to
+    _username, line = line.split(&#34; &#34;, 1)
+
+    # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
+    # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
+    host, line = line.split(&#34;=&#34;, 1)
+    if host.lower() != &#34;all&#34; and host != gethostname():
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
+            pipe, success=False)
+
+    users, commands = line.split(&#34;)&#34;, 1)
+
+    # We need to remove the extra &#34;(&#34; from the beginning of the users array and remove the extra spaces
+    users = users.strip(&#34;(&#34;).split(&#34;,&#34;)
+    users = [x.strip(&#34; &#34;) for x in users]
+    commands = [x.strip(&#34; &#34;) for x in commands.split(&#34;,&#34;)]
+
+    # Lets check if we&#39;re allowed to execute as the user
+    for usr in users:
+        if usr in [&#34;ALL&#34;, user.username]:
+            break
+    else:
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo as user {user.username}. This incident will be reported&#34;,
+            pipe, success=False)
+
+    # Lets check if we&#39;re allowed to execute the command
+    for cmd in commands:
+        if cmd in [&#34;ALL&#34;, args[0]]:
+            break
+    else:
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {user.username}. This incident will be reported&#34;,
+            pipe, success=False)
+
+    return run_as_user(args, user, current_user.data)</code></pre>
 </details>
 </section>
 <section>
@@ -239,10 +236,10 @@ def main(args: list, pipe: bool) -&gt; Result:
     # Parse the sudoers index for the current user
     # First we want to get the username of the current uid
 
-    user_lookup = get_user(uid=getuid())
+    current_user = get_user(uid=getuid())
 
-    if user_lookup.success:
-        username = user_lookup.data.username
+    if current_user.success:
+        username = current_user.data.username
     else:
         return output(f&#34;{__COMMAND__}: cannot find user with UID {getuid()}&#34;, pipe, success=False)
 
@@ -269,93 +266,90 @@ def main(args: list, pipe: bool) -&gt; Result:
     else:
         user = get_user(uid=0).data
 
-    # We can&#39;t do a getuid() because this is a setuid binary and it&#39;ll always be root
-    # Instead, we&#39;ll try to get the $USER environment variable
-    # If it&#39;s not set, we&#39;ll crash
-    username = get_env(&#34;USER&#34;)
-    if not username:
-        return output(f&#34;{__COMMAND__}: cannot determine user&#34;, pipe, success=False)
-
-    current_user = get_user(username=username).data
+    ask_for_password = True
 
     # Check if we have a timeout for this user
-    timeout_file = stat(f&#34;/run/sudo/ts/{current_user.username}&#34;)
+    timeout_file = stat(f&#34;/run/sudo/ts/{username}&#34;)
 
     if timeout_file.success:
         # Check if the timeout is &lt; 5 minutes
-        timeout_data = read(f&#34;/run/sudo/ts/{current_user.username}&#34;)
+        timeout_data = read(f&#34;/run/sudo/ts/{username}&#34;)
         if timeout_data.success:
             timeout_timestamp = datetime.datetime.fromtimestamp(float(timeout_data.data))
             if timeout_timestamp + datetime.timedelta(minutes=5) &gt; datetime.datetime.now():
-                return run_as_user(args, user, current_user)
+                ask_for_password = False
 
     # We need to authenticate as that user before we can run any commands
-    for x in range(3):
-        password = getpass()
+    if ask_for_password:
+        for x in range(3):
+            password = getpass()
 
-        # Encode the password
-        password = md5(password.encode()).hexdigest()
+            # Encode the password
+            password = md5(password.encode()).hexdigest()
 
-        if password == current_user.password:
-            # Now lets isolate the record regarding this `username`
-            split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
-
-            # NOTE: Possible exploit we&#39;re going to leave on purpose
-            # Lets find the line that contains the username
-            line = None
-            for line in split_sudoers_content:
-                if line.startswith(username):
-                    break
-            else:
-                return output(f&#34;{__COMMAND__}: {username} is not in the sudoers file. This incident will be reported&#34;,
-                              pipe, success=False)
-
-            # Now lets parse the line and determine what the users allowed to do
-            # We don&#39;t care about the username because we already know who this line belongs to
-            _username, line = line.split(&#34; &#34;, 1)
-
-            # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
-            # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
-            host, line = line.split(&#34;=&#34;, 1)
-            if host.lower() != &#34;all&#34; and host != gethostname():
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            users, commands = line.split(&#34;)&#34;, 1)
-
-            # We need to remove the extra &#34;(&#34; from the beginning of the users array and remove the extra spaces
-            users = users.strip(&#34;(&#34;).split(&#34;,&#34;)
-            users = [x.strip(&#34; &#34;) for x in users]
-            commands = [x.strip(&#34; &#34;) for x in commands.split(&#34;,&#34;)]
-
-            # Lets check if we&#39;re allowed to execute as the user
-            for usr in users:
-                if usr in [&#34;ALL&#34;, user.username]:
-                    break
-            else:
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo as user {user.username}. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            # Lets check if we&#39;re allowed to execute the command
-            for cmd in commands:
-                if cmd in [&#34;ALL&#34;, args[0]]:
-                    break
-            else:
-                return output(
-                    f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {args[0]}. This incident will be reported&#34;,
-                    pipe, success=False)
-
-            return run_as_user(args, user, current_user)
+            if password == current_user.data.password:
+                break
         else:
             # Simulates the password checking delay when wrong password is entered
             sleep(0.25)
             if x != 2:
                 print(&#34;Sorry, try again.&#34;)
 
-    return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
-                  success_message=ResultMessages.NOT_ALLOWED)</code></pre>
+            if x == 3:
+                return output(f&#34;{__COMMAND__}: 3 incorrect password attempts&#34;, pipe, success=False,
+                              success_message=ResultMessages.NOT_ALLOWED)
+
+    # Now lets isolate the record regarding this `username`
+    split_sudoers_content = sudoers_file.split(&#34;\n&#34;)
+
+    # NOTE: Possible exploit we&#39;re going to leave on purpose
+    # Lets find the line that contains the username
+    line = None
+    for line in split_sudoers_content:
+        if line.startswith(username):
+            break
+    else:
+        return output(f&#34;{__COMMAND__}: {username} is not in the sudoers file. This incident will be reported&#34;,
+                      pipe, success=False)
+
+    # Now lets parse the line and determine what the users allowed to do
+    # We don&#39;t care about the username because we already know who this line belongs to
+    _username, line = line.split(&#34; &#34;, 1)
+
+    # Current line format &lt;HOST&gt; = (&lt;USERS&gt;) &lt;COMMANDS&gt;
+    # Lets extract the host and make sure it says &#34;ALL&#34; or our current hostname
+    host, line = line.split(&#34;=&#34;, 1)
+    if host.lower() != &#34;all&#34; and host != gethostname():
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo on this host. This incident will be reported&#34;,
+            pipe, success=False)
+
+    users, commands = line.split(&#34;)&#34;, 1)
+
+    # We need to remove the extra &#34;(&#34; from the beginning of the users array and remove the extra spaces
+    users = users.strip(&#34;(&#34;).split(&#34;,&#34;)
+    users = [x.strip(&#34; &#34;) for x in users]
+    commands = [x.strip(&#34; &#34;) for x in commands.split(&#34;,&#34;)]
+
+    # Lets check if we&#39;re allowed to execute as the user
+    for usr in users:
+        if usr in [&#34;ALL&#34;, user.username]:
+            break
+    else:
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo as user {user.username}. This incident will be reported&#34;,
+            pipe, success=False)
+
+    # Lets check if we&#39;re allowed to execute the command
+    for cmd in commands:
+        if cmd in [&#34;ALL&#34;, args[0]]:
+            break
+    else:
+        return output(
+            f&#34;{__COMMAND__}: user {username} is not allowed to use sudo to execute {user.username}. This incident will be reported&#34;,
+            pipe, success=False)
+
+    return run_as_user(args, user, current_user.data)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.bin.sudo.run_as_user"><code class="name flex">
@@ -372,12 +366,12 @@ def main(args: list, pipe: bool) -&gt; Result:
     creat(f&#34;/run/sudo/ts/{current_user.username}&#34;, 0o600)
     write(f&#34;/run/sudo/ts/{current_user.username}&#34;, str(datetime.datetime.now().timestamp()))
 
-    setuid(user.uid)
+    seteuid(user.uid)
     # args[0] : command
     # args[1:] : arguments
     result = execvp(args[0], args[1:])
     # Reset the effective user after running command
-    setuid(current_user.uid)
+    seteuid(current_user.uid)
     return result</code></pre>
 </details>
 </dd>

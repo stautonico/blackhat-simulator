@@ -111,18 +111,18 @@ class FSBaseObject:
             Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == 0:
             return Result(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
             return Result(success=True)
 
         if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+            if self.group_owner in computer.get_user_groups(computer.sys_geteuid()).data:
                 return Result(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == computer.sys_getuid():
+            if self.owner == computer.sys_geteuid():
                 return Result(success=True)
 
         # No permission
@@ -161,7 +161,7 @@ class FSBaseObject:
         &#34;&#34;&#34;
         caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we&#39;re root
-        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == self.owner or self.group_owner in caller_groups or computer.sys_geteuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
@@ -434,6 +434,12 @@ class Directory(FSBaseObject):
         super().__init__(name, parent, owner, group_owner)
         self.files = {}
         self.size = None
+        # The default perms for directories are different from files
+        self.permissions = {
+            &#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+            &#34;write&#34;: [&#34;owner&#34;],
+            &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+        }
 
         if parent:
             parent.add_file(self)
@@ -585,7 +591,7 @@ class StandardFS:
                 current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                             &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
                 # Add setuid bit to specific binaries
-                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;, &#34;su&#34;, &#34;passwd&#34;]:
                     current_file.setuid = True
 
     def setup_etc(self) -&gt; None:
@@ -1332,6 +1338,12 @@ def copy(computer, src_path: str, dst_path: str) -&gt; Result:
         super().__init__(name, parent, owner, group_owner)
         self.files = {}
         self.size = None
+        # The default perms for directories are different from files
+        self.permissions = {
+            &#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+            &#34;write&#34;: [&#34;owner&#34;],
+            &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;],
+        }
 
         if parent:
             parent.add_file(self)
@@ -1660,18 +1672,18 @@ Also updates its size and triggers its parent to update their size</p>
             Result: A `Result` object with the `success` flag set accordingly
         &#34;&#34;&#34;
         # If we&#34;re root (UID 0), return True because root has all permissions
-        if computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == 0:
             return Result(success=True)
         # If &#34;public&#34;, don&#34;t bother checking anything else
         if &#34;public&#34; in self.permissions[perm]:
             return Result(success=True)
 
         if &#34;group&#34; in self.permissions[perm]:
-            if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+            if self.group_owner in computer.get_user_groups(computer.sys_geteuid()).data:
                 return Result(success=True)
 
         if &#34;owner&#34; in self.permissions[perm]:
-            if self.owner == computer.sys_getuid():
+            if self.owner == computer.sys_geteuid():
                 return Result(success=True)
 
         # No permission
@@ -1710,7 +1722,7 @@ Also updates its size and triggers its parent to update their size</p>
         &#34;&#34;&#34;
         caller_groups = computer.get_user_groups(computer.sys_getuid()).data
         # Check if the owner or group owner is correct or if we&#39;re root
-        if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
+        if computer.sys_geteuid() == self.owner or self.group_owner in caller_groups or computer.sys_geteuid() == 0:
             # We need at least one of the two params (uid/gid)
             # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
             if new_user_owner is None and new_group_owner is None:
@@ -1971,7 +1983,7 @@ If a function is already bound to the given event type, it will be overwritten.<
     &#34;&#34;&#34;
     caller_groups = computer.get_user_groups(computer.sys_getuid()).data
     # Check if the owner or group owner is correct or if we&#39;re root
-    if computer.sys_getuid() == self.owner or self.group_owner in caller_groups or computer.sys_getuid() == 0:
+    if computer.sys_geteuid() == self.owner or self.group_owner in caller_groups or computer.sys_geteuid() == 0:
         # We need at least one of the two params (uid/gid)
         # Using `if not new_user_owner/not new_group_owner` won&#39;t work because `not 0` (root group) == True (???)
         if new_user_owner is None and new_group_owner is None:
@@ -2071,18 +2083,18 @@ If a function is already bound to the given event type, it will be overwritten.<
         Result: A `Result` object with the `success` flag set accordingly
     &#34;&#34;&#34;
     # If we&#34;re root (UID 0), return True because root has all permissions
-    if computer.sys_getuid() == 0:
+    if computer.sys_geteuid() == 0:
         return Result(success=True)
     # If &#34;public&#34;, don&#34;t bother checking anything else
     if &#34;public&#34; in self.permissions[perm]:
         return Result(success=True)
 
     if &#34;group&#34; in self.permissions[perm]:
-        if self.group_owner in computer.get_user_groups(computer.sys_getuid()).data:
+        if self.group_owner in computer.get_user_groups(computer.sys_geteuid()).data:
             return Result(success=True)
 
     if &#34;owner&#34; in self.permissions[perm]:
-        if self.owner == computer.sys_getuid():
+        if self.owner == computer.sys_geteuid():
             return Result(success=True)
 
     # No permission
@@ -2752,7 +2764,7 @@ Also, recursively tells it's parent to update its size.</p>
                 current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                             &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
                 # Add setuid bit to specific binaries
-                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+                if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;, &#34;su&#34;, &#34;passwd&#34;]:
                     current_file.setuid = True
 
     def setup_etc(self) -&gt; None:
@@ -3420,7 +3432,7 @@ All these files represent binaries in the system</p>
             current_file.permissions = {&#34;read&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;], &#34;write&#34;: [&#34;owner&#34;],
                                         &#34;execute&#34;: [&#34;owner&#34;, &#34;group&#34;, &#34;public&#34;]}
             # Add setuid bit to specific binaries
-            if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;]:
+            if file.replace(&#34;.py&#34;, &#34;&#34;) in [&#34;sudo&#34;, &#34;su&#34;, &#34;passwd&#34;]:
                 current_file.setuid = True</code></pre>
 </details>
 </dd>

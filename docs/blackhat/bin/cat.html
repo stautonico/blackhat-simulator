@@ -126,7 +126,7 @@ def main(args: list, pipe: bool) -&gt; Result:
                 elif try_read.message == ResultMessages.NOT_ALLOWED_READ:
                     output_text += f&#34;{__COMMAND__}: {file}: Permission denied\n&#34;
             else:
-                # Make sure they&#39;re are no extra \n at the end
+                # Make sure there are no extra \n at the end
                 if try_read.data.endswith(&#34;\n&#34;):
                     try_read.data = try_read.data[:-1]
                 output_text += try_read.data
@@ -180,7 +180,7 @@ def main(args: list, pipe: bool) -&gt; Result:
                 elif try_read.message == ResultMessages.NOT_ALLOWED_READ:
                     output_text += f&#34;{__COMMAND__}: {file}: Permission denied\n&#34;
             else:
-                # Make sure they&#39;re are no extra \n at the end
+                # Make sure there are no extra \n at the end
                 if try_read.data.endswith(&#34;\n&#34;):
                     try_read.data = try_read.data[:-1]
                 output_text += try_read.data
