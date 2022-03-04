@@ -406,6 +406,12 @@ class Directory(FSBaseObject):
         super().__init__(name, parent, owner, group_owner)
         self.files = {}
         self.size = None
+        # The default perms for directories are different from files
+        self.permissions = {
+            "read": ["owner", "group", "public"],
+            "write": ["owner"],
+            "execute": ["owner", "group", "public"],
+        }
 
         if parent:
             parent.add_file(self)

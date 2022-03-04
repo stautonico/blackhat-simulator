@@ -1,10 +1,9 @@
 import readline
 from datetime import datetime
-
 from colorama import Fore, Style, Back
-
 from .computer import Computer
 from .helpers import Result, ResultMessages
+import logging
 
 
 class Shell:
@@ -20,11 +19,80 @@ class Shell:
         self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
 
+        self.possible_completions = []
+
+        logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+
         # Setup tab to auto complete
         readline.parse_and_bind("tab: complete")
-        readline.set_completer(self.autocomplete)
+        readline.set_completer(self.complete)
+        readline.set_completer_delims("/ \t\n`~!@#$%^&*()-=+[{]}\\|;:\'\",<>?")
 
-    def autocomplete(self, text, state):
+    def complete(self, text, state):
+        # TODO: See if we can make this work a little better
+        if state == 0:
+            orig_line = readline.get_line_buffer()
+            begin = readline.get_begidx()
+            end = readline.get_endidx()
+            being_completed = orig_line[begin:end]
+            words = orig_line.split()
+
+            # TODO: See if we can allow commands to create their own completions
+
+            if not words:
+                self.possible_completions = sorted(self.list_commands_from_path())
+            else:
+                filemode = False
+                try:
+                    if begin == 0:
+                        # If we're at the first completion, complete a command
+                        possible = self.list_commands_from_path()
+                    else:
+                        # Any other ones should complete a file/dir
+                        # The first one should resolve locally
+                        if len(orig_line.split(" ")) < 2 or orig_line.split(" ")[1] == "":
+                            possible = [x for x in list(self.computers[-1].sessions[-1].current_dir.files.keys()) if
+                                        not x.startswith(".")]
+                        else:
+                            filemode = True
+                            # But if we have any other text, we want to resolve the path and then show possible
+                            # options relative to our current path
+                            possible = self.list_files_from_path(text, orig_line)
+                            if len(possible) == 0:
+                                return text
+
+                    logging.debug(f"{text} - {possible}")
+
+                    if being_completed:
+                        if filemode:
+                            self.possible_completions = [x for x in possible if x.startswith(being_completed.split("/")[-1])]
+                        else:
+                            self.possible_completions = [x for x in possible if x.startswith(being_completed)]
+                    else:
+                        self.possible_completions = possible
+                except (KeyError, IndexError):
+                    self.possible_completions = []
+
+        try:
+            response = self.possible_completions[state]
+        except IndexError:
+            response = None
+
+        return response
+
+    def list_files_from_path(self, path, current_text):
+        current_text = current_text.split(" ")[-1]
+        if current_text == "":
+            current_text = "/"
+        logging.debug(f"CURRENT TEXT: {current_text}")
+        result = self.computers[-1].fs.find(current_text)
+        if not result.success:
+            result = self.computers[-1].fs.find("/".join(current_text.split("/")[:-1]))
+            return [x for x in list(result.data.files.keys()) if not x.startswith(".")]
+        else:
+            return [x for x in list(result.data.files.keys()) if (x.startswith(path) and not x.startswith("."))]
+
+    def list_commands_from_path(self):
         try:
             bin_dirs_text = self.computers[-1].sessions[-1].env.get("PATH").split(":")
             bin_dirs = []
@@ -40,10 +108,7 @@ class Shell:
             else:
                 bin_dirs = []
 
-        commands = [x for sub in bin_dirs for x in list(sub.files.keys())]
-
-        results = [x for x in commands if x.startswith(text)] + [None]
-        return results[state]
+        return [x for sub in bin_dirs for x in list(sub.files.keys())]
 
     def generate_prompt(self) -> str:
         """
@@ -175,7 +240,7 @@ class Shell:
         # TODO: When using >> or >, file owner is the read uid not effective uid
         # Technically, the first element in our command should be the command name
         # And we can keep going through the
-        prev_item = readline.get_history_item(readline.get_current_history_length()-1)
+        prev_item = readline.get_history_item(readline.get_current_history_length() - 1)
         if prev_item:
             command = command.replace("!!", prev_item)
 
