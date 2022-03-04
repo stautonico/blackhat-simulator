@@ -178,7 +178,6 @@ if not load_save_success:
                 # TODO: Set the file's content to 'source_code'
                 new_file_object = lan2_client2.fs.find(f"/var/www/html/repo/{file}")
 
-
         lan2_client2.run_command("mkdir", ["netutils"], True)
         lan2_client2.run_command("cd", ["netutils"], True)
         lan2_client2.run_command("touch", ["ping", "curl", "dig", "ifconfig"], True)
@@ -218,6 +217,8 @@ if not load_save_success:
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
             computer.sync_user_and_group_files()
 
+        shell = Shell(comp)  # We need to setup the shell BEFORE the shellrc because aliases are shell-level things
+
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
         comp.run_command("export", ["PATH=/usr/bin:$PATH"], False)
@@ -226,5 +227,4 @@ if not load_save_success:
 # shell = NewShell(comp)
 # shell.main()
 
-shell = Shell(comp)
 shell.main()
