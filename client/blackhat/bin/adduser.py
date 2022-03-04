@@ -193,7 +193,8 @@ def main(args: list, pipe: bool) -> Result:
 
                 shellrc_content = f"{default_shellrc_data}\n" \
                                   f"export HOME=/home/{args.username}\n" \
-                                  f"export PATH=/bin:/usr/bin\n"
+                                  f"export PATH=/bin:/usr/bin\n" \
+                                  f"export USER={args.username}\n"
 
                 write(f"/home/{args.username}/.shellrc", shellrc_content)
 

@@ -11,6 +11,7 @@ from blackhat.session import Session
 from blackhat.shell import Shell
 from blackhat.services.dnsserver import DNSServer
 from blackhat.services.whoisserver import WhoIsServer
+from blackhat.fs import Directory, File
 
 load_save_success = False
 
@@ -167,26 +168,59 @@ if not load_save_success:
         # This example apt server has all the "installable" packages
         lan2_client2.run_command("mkdir", ["/var/www/html/repo"], pipe=True)
         lan2_client2.run_command("cd", ["/var/www/html/repo"], pipe=True)
-        for file in os.listdir("./blackhat/bin/installable"):
-            if file not in ["__init__.py", "__pycache__", "ping.py", "curl.py", "dig.py", "ifconfig.py", "john.py",
-                            "unshadow.py"]:
-                with open(f"./blackhat/bin/installable/{file}", "r") as f:
-                    source_code = f.read()
-                file = file.replace(".py", "")
-                lan2_client2.run_command("touch", [file], pipe=True)
-                # NOTE: WE WERE HERE
-                # TODO: Set the file's content to 'source_code'
-                new_file_object = lan2_client2.fs.find(f"/var/www/html/repo/{file}")
+        
+        # Manually setup apt repo
+        repo_dir = lan2_client2.fs.find("/var/www/html/repo")
 
-        lan2_client2.run_command("mkdir", ["netutils"], True)
-        lan2_client2.run_command("cd", ["netutils"], True)
-        lan2_client2.run_command("touch", ["ping", "curl", "dig", "ifconfig"], True)
-        lan2_client2.run_command("cd", [".."], True)
+        if repo_dir.success:
+            repo_dir = repo_dir.data
 
-        lan2_client2.run_command("mkdir", ["john"], True)
-        lan2_client2.run_command("cd", ["john"], True)
-        lan2_client2.run_command("touch", ["john", "unshadow"], True)
-        lan2_client2.run_command("cd", [".."], True)
+            for package in ["netutils", "john", "nmap", "whois"]:
+                if package == "netutils":
+                    lan2_client2.run_command("mkdir", ["-p", "/var/www/html/repo/netutils/1.0/usr/bin"], pipe=True)
+                    netutils_dir: Directory = lan2_client2.fs.find("/var/www/html/repo/netutils/1.0/usr/bin").data
+                    for file in ["ping", "curl", "dig", "ifconfig"]:
+                        with open(f"blackhat/bin/installable/{file}.py", "r") as f:
+                            File(file, f.read(), netutils_dir, 0, 0)
+                elif package == "john":
+                    lan2_client2.run_command("mkdir", ["-p", "/var/www/html/repo/john/1.0/usr/bin"], pipe=True)
+                    john_dir: Directory = lan2_client2.fs.find("/var/www/html/repo/john/1.0/usr/bin").data
+                    for file in ["john", "unshadow"]:
+                        with open(f"blackhat/bin/installable/{file}.py", "r") as f:
+                            File(file, f.read(), john_dir, 0, 0)
+                else:
+                    lan2_client2.run_command("mkdir", ["-p", f"/var/www/html/repo/{package}/1.0/usr/bin"], pipe=True)
+                    package_dir: Directory = lan2_client2.fs.find(f"/var/www/html/repo/{package}/1.0/usr/bin").data
+                    with open(f"blackhat/bin/installable/{package}.py", "r") as f:
+                        File(package, f.read(), package_dir, 0, 0)
+                        lan2_client2.run_command("mkdir", ["-p", f"/var/www/html/repo/{package}/1.0/etc/{package}/"], pipe=True)
+                        conf_directory = lan2_client2.fs.find(f"/var/www/html/repo/{package}/1.0/etc/{package}/").data
+                        File(f"{package}.conf", "0x0", conf_directory, 0, 0)
+
+        #
+        # for file in os.listdir("./blackhat/bin/installable"):
+        #     if file not in ["__init__.py", "__pycache__", "ping.py", "curl.py", "dig.py", "ifconfig.py", "john.py",
+        #                     "unshadow.py"]:
+        #         with open(f"./blackhat/bin/installable/{file}", "r") as f:
+        #             source_code = f.read()
+        #         file = file.replace(".py", "")
+        #
+        #         lan2_client2.run_command("touch", [file], pipe=True)
+        #         new_file_object = lan2_client2.fs.find(f"/var/www/html/repo/{file}")
+        #
+        #         if new_file_object.success:
+        #             new_file_object.data.content = source_code
+
+
+        # lan2_client2.run_command("mkdir", ["netutils"], True)
+        # lan2_client2.run_command("cd", ["netutils"], True)
+        # lan2_client2.run_command("touch", ["ping", "curl", "dig", "ifconfig"], True)
+        # lan2_client2.run_command("cd", [".."], True)
+        #
+        # lan2_client2.run_command("mkdir", ["john"], True)
+        # lan2_client2.run_command("cd", ["john"], True)
+        # lan2_client2.run_command("touch", ["john", "unshadow"], True)
+        # lan2_client2.run_command("cd", [".."], True)
 
         # During our temporary root session, we want to install the current "installable" tool that's being developed
         # Just so I don't have to "sudo apt install [PACKAGE]" every time I wanna test it

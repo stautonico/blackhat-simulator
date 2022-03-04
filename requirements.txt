@@ -2,3 +2,4 @@ pdoc3==0.10.0
 colorama==0.4.4
 tabulate==0.8.9
 flake8==4.0.1
+packaging==21.3

@@ -185,7 +185,7 @@ class Computer:
 
         if not passwd_file:
             # Create the /etc/passwd
-            etc_dir.add_file(File("passwd", passwd_content, etc_dir, 0, 0))
+            File("passwd", passwd_content, etc_dir, 0, 0)
         else:
             passwd_file.content = passwd_content
 
@@ -193,13 +193,12 @@ class Computer:
             # Create the /etc/shadow file and change its perms (rw-------)
             shadow_file = File("shadow", shadow_content, etc_dir, 0, 0)
             shadow_file.permissions = {"read": ["owner"], "write": ["owner"], "execute": []}
-            etc_dir.add_file(shadow_file)
         else:
             shadow_file.content = shadow_content
 
         if not group_file:
             # Create the /etc/group
-            etc_dir.add_file(File("group", group_content, etc_dir, 0, 0))
+            File("group", group_content, etc_dir, 0, 0)
         else:
             group_file.content = group_content
 
@@ -278,7 +277,9 @@ class Computer:
             response = module.main(args)
         except Exception as e:
             if os.getenv("DEBUGMODE") == "true":
+                import traceback
                 print(f"segmentation fault (core dumped) ({e})  {command}")
+                traceback.print_exc()
             else:
                 print(f"segmentation fault (core dumped)  {command}")
 
@@ -1026,7 +1027,7 @@ class Computer:
                 return Result(success=False, message=ResultMessages.NOT_FOUND)
             # Create the /etc/hostname
             find_etc_dir = self.fs.find("/etc/")
-            find_etc_dir.data.add_file(File("hostname", hostname, find_etc_dir.data, 0, 0))
+            File("hostname", hostname, find_etc_dir.data, 0, 0)
         else:
             # Even though we should never get here unless we're root, I'm gonna be a good boy and do this properly
             if not self.sys_write("/etc/hostname", hostname).success:
@@ -1208,15 +1209,10 @@ class Computer:
         new_dir = Directory(pathname.split("/")[-1], find_parent.data, owner=self.sys_getuid(),
                             group_owner=self.sys_getgid())
 
-        add_file = find_parent.data.add_file(new_dir)
-
         if not self.sys_chmod(pathname, mode).success:
             # rwxr-xr-x
             new_dir.permissions = {"read": ["owner", "group", "public"], "write": ["owner"],
                                    "execute": ["owner", "group", "public"]}
-
-        if not add_file.success:
-            return Result(success=False, message=ResultMessages.GENERIC)
 
         return Result(success=True, data=new_dir)
 
@@ -1299,9 +1295,8 @@ class Computer:
         if not find_parent.data.check_perm("write", self).success:
             return Result(success=False, message=ResultMessages.NOT_ALLOWED)
 
-        new_file = File(pathname.split("/")[-1], "", find_parent.data, self.sys_getuid(), self.sys_getgid())
+        File(pathname.split("/")[-1], "", find_parent.data, self.sys_getuid(), self.sys_getgid())
         self.sys_chmod(pathname, mode)
-        find_parent.data.add_file(new_file)
 
         return Result(success=True)
 

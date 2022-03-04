@@ -2,7 +2,10 @@ __package__ = "blackhat.bin"
 
 import os
 from json import loads
+from typing import List, Tuple
+from colorama import Fore
 
+from ..fs import File, Directory
 from ..helpers import Result
 from ..lib.fcntl import creat
 from ..lib.input import ArgParser
@@ -10,7 +13,7 @@ from ..lib.netdb import gethostbyname
 from ..lib.output import output
 from ..lib.sys import socket
 from ..lib.sys.stat import stat
-from ..lib.unistd import read, write, getuid
+from ..lib.unistd import read, write, getuid, execvp
 
 __COMMAND__ = "apt"
 __DESCRIPTION__ = ""
@@ -73,6 +76,63 @@ def parse_args(args=[], doc=False):
         return args, parser
 
 
+def flatten_list(not_flat_list):
+    flat_list = []
+    # Iterate through the outer list
+    for element in not_flat_list:
+        if type(element) is list:
+            # If the element is of type list, iterate through the sublist
+            for item in element:
+                flat_list.append(item)
+        else:
+            flat_list.append(element)
+    return flat_list
+
+
+def generate_tree(current_directory: Directory, current_path: str = None):
+    if not current_path:
+        current_path = "/" + current_directory.name
+    output_paths = []
+
+    for item_name, item in current_directory.files.items():
+        if item.is_directory():
+            output_paths.append(generate_tree(item, os.path.join(current_path, item_name)))
+        else:
+            output_paths.append((os.path.join(current_path, item_name), item))
+
+    return flatten_list(output_paths)
+
+
+def install_package(package: List[Tuple[str, File]]) -> bool:
+    for filepath, file in package:
+        parent_path = "/".join(filepath.split("/")[:-1])
+        # print(f"Installing {file.name} to {parent_path} with mode {str(oct(file.get_perm_octal()).replace('0o', ''))}")
+        execvp("mkdir", ["-p", parent_path])
+        # Make sure the folder was created
+        if not stat(parent_path).success:
+            return False
+
+        current_file = creat(filepath, file.get_perm_octal())
+        if not current_file.success:
+            return False
+
+        result = write(filepath, file.content)
+        if not result:
+            return False
+
+    return True
+
+
+def read_installed_packages():
+    # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
+    read_usr_lib_dpkg_status = read("/var/lib/dpkg/status")
+    installed_packages = read_usr_lib_dpkg_status.data.split("\n")
+    while "" in installed_packages:
+        installed_packages.remove("")
+
+    return installed_packages
+
+
 def main(args: list, pipe: bool) -> Result:
     args, parser = parse_args(args)
 
@@ -92,15 +152,16 @@ def main(args: list, pipe: bool) -> Result:
             all_packages = loads(f.read())
         if args.command == "install":
             # Make sure /usr/bin, /var/lib/dpkg and /etc/apt/sources.list exists
-            read_usr_bin = stat("/usr/bin")
             read_usr_lib_dpkg_status = read("/var/lib/dpkg/status")
             read_apt_sources = read("/etc/apt/sources.list")
-            if not read_usr_bin.success or not read_usr_lib_dpkg_status.success or not read_apt_sources.success:
+            if not read_usr_lib_dpkg_status.success or not read_apt_sources.success:
                 # In reality, a snap error will occur but we don't have snap so just throw general error
                 return output(
                     f"{__COMMAND__}: Failed to install packages, check /usr/bin, /var/lib/dpkg, and /etc/apt/*",
                     pipe,
                     success=False)
+
+            installed_packages = read_installed_packages()
 
             # Now we need to contact each server in our sources.list and ask each server if they have the package we're looking for
             servers = read_apt_sources.data.split("\n")
@@ -109,6 +170,8 @@ def main(args: list, pipe: bool) -> Result:
                 servers.remove("")
 
             outstanding_packages = args.packages.copy()
+            # Remove duplicates
+            outstanding_packages = list(dict.fromkeys(outstanding_packages))
 
             for server in servers:
                 split_server = server.split(":")
@@ -122,72 +185,46 @@ def main(args: list, pipe: bool) -> Result:
                 resolve_hostname = gethostbyname(host)
 
                 sock = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock_addr = socket.SockAddr(socket.AF_INET, 80, resolve_hostname.data.h_addr)
+                sock_addr = socket.SockAddr(socket.AF_INET, port, resolve_hostname.data.h_addr)
                 connection_result = socket.connect(sock, sock_addr)
 
                 if not connection_result.success:
-                    return output(f"{__COMMAND__}: Unable to connect to {host}", pipe, success=False)
+                    print(f"{__COMMAND__}: Unable to connect to {host}")
+                    # return output(f"{__COMMAND__}: Unable to connect to {host}", pipe, success=False)
 
                 ask_server_result = write(sock, {"packages": [x for x in outstanding_packages]})
 
                 if ask_server_result.success:
-                    if ask_server_result.data.get("have"):
-                        for package in ask_server_result.data.get("have"):
-                            if package in outstanding_packages:
-                                outstanding_packages.remove(package)
+                    for package in ask_server_result.data["obtained"]:
+                        structure = []
+                        if package["name"] in outstanding_packages:
+                            if package["name"] in installed_packages:
+                                print(f"{package['name']} is already the newest version ({package['version']}).")
+                                outstanding_packages.remove(package["name"])
+                                continue  # Skip the rest
 
-            arg_packages = {}
-
-            for pkg in args.packages:
-                if pkg in all_packages.keys():
-                    for subpkg in all_packages[pkg]:
-                        if arg_packages.get(pkg):
-                            arg_packages[pkg].append(subpkg)
+                            # Loop through the directory structure and copy the files where they belong
+                            for inode_name, inode in package["data"].files.items():
+                                structure += generate_tree(inode)
+                            outstanding_packages.remove(package["name"])
+                        # Install the package
+                        print(f"Installing {package['name']}...", end=" ")
+                        install_result = install_package(structure)
+                        if install_result:
+                            installed_packages = "\n".join(installed_packages + [package["name"]])
+                            write("/var/lib/dpkg/status", installed_packages)
+                            installed_packages = read_installed_packages()
+                            print(Fore.GREEN + "success" + Fore.RESET)
                         else:
-                            arg_packages[pkg] = [subpkg]
-                else:
-                    if arg_packages.get("other"):
-                        arg_packages["other"].append(pkg)
-                    else:
-                        arg_packages["other"] = [pkg]
+                            print(Fore.RED + "failed" + Fore.RESET)
 
-            # Check if the package we're trying to install exists
-            exists = [file.replace(".py", "") for file in os.listdir("./blackhat/bin/installable") if
-                      file not in ["__init__.py", "__pycache__"]]
+                # At the end, if we have packages left over, report them
+                for package in outstanding_packages:
+                    print(f"{Fore.RED}E:{Fore.RESET} Unable to locate package {package}")
 
-            # We want to install only the packages that we found (not outstanding)
-            for pkg_group, packages in arg_packages.items():
-                for pkg in packages:
-                    # Create a list of already installed packages to determine if we should install it again
-                    installed_packages = read_usr_lib_dpkg_status.data.split("\n")
+            return output("", pipe=pipe)
 
-                    while "" in installed_packages:
-                        installed_packages.remove("")
 
-                    if pkg not in exists or pkg in outstanding_packages:
-                        print(f"Unable to locate package {pkg}")
-                    else:
-                        to_check = pkg if pkg_group == "other" else pkg_group
-                        if to_check in installed_packages:
-                            print(f"{to_check} is already at the newest version, skipping...")
-                            if pkg_group != "other":
-                                # If we're doing a package with subpackages, it'll print our error message multiple times
-                                break
-                            else:
-                                continue
-                        # Add the file to /usr/bin
-                        current_file = creat(f"/usr/bin/{pkg}", 0o755)
-                        write(f"/usr/bin/{pkg}", "[BINARY DATA]")
-                        # We only want to store the package name if its not a subpackage
-                        if pkg_group == "other":
-                            print(f"Successfully installed package {pkg}")
-
-                else:
-                    if pkg_group != "other":
-                        print(f"Successfully installed package {pkg_group}")
-
-            return output("", pipe)
-        #
         # elif args.command == "remove":
         #     find_status_file = computer.fs.find("/var/lib/dpkg/status")
         #     if not find_status_file.success:
