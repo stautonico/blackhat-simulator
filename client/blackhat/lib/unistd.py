@@ -203,7 +203,7 @@ def add_user(username: str, password: str, uid: Optional[int] = None, plaintext:
         username (str): The username for the new user
         password (str): The plaintext password for the new user
         uid (int, optional): The UID of the new user
-                    plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+        plaintext (bool, optional): If the given `new_password` is plain text or an MD5 hash
 
     Returns:
         Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
@@ -351,7 +351,7 @@ def save(file: Optional[str]) -> bool:
     """
     Serialize and dump the current `Computer` (and everything that's connected to it (`StandardFS`, `File`s, etc)) to a file
     Args:
-        output_file (str, optional): The file to dump the contents to
+        file (str, optional): The file to dump the contents to
 
     Returns:
         bool: `True` if the dump/save was successful, otherwise `False`

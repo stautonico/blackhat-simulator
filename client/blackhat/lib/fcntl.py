@@ -39,7 +39,6 @@ def copy(src_path: str, dst_path: str) -> Result:
     A helper function to copy a file/directory from a given `src_path` to the given `dst_path`
 
     Args:
-        computer (Computer): The computer to work on
         src_path (str): The path of the `File`/`Directory` to copy
         dst_path (str): The path to copy to. If the final item in the path doesn't exist, but the item one step up does,
         the final item will be the new name of the `File`/`Directory`

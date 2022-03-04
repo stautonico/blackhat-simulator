@@ -329,15 +329,13 @@ class Computer:
             password (str): The plaintext password for the new user
             uid (int, optional): The UID of the new user
                         plaintext (bool): If the given `new_password` is plain text or an MD5 hash
+            plaintext (bool, optional): If true, the given `password` is in plain text and this function will hash the password
 
         Returns:
             Result: A `Result` instance with the `success` flag set accordingly. The `data` flag contains the new users UID if successful.
         """
         if self.get_user(username=username).success:
             return Result(success=False, message=ResultMessages.ALREADY_EXISTS)
-
-        # new_user = User(username)
-        # new_user.set_password(password)
 
         # Manually specific UID
         if uid:
