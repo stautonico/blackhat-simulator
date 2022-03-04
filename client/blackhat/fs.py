@@ -716,7 +716,8 @@ class StandardFS:
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
         DEFAULT_SHELLRC_CONTENT = "alias lsa=ls -l -a\n" \
                                   "alias la=ls -a\n" \
-                                  "alias ll=ls -l\n" \
+                                  "alias ll=ls -l\n"
+
         File(".shellrc", DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0)
 
         # /etc/hostname (holds system hostname)
