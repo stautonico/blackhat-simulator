@@ -98,7 +98,7 @@ def main(args: list, pipe: bool) -> Result:
                 elif try_read.message == ResultMessages.NOT_ALLOWED_READ:
                     output_text += f"{__COMMAND__}: {file}: Permission denied\n"
             else:
-                # Make sure they're are no extra \n at the end
+                # Make sure there are no extra \n at the end
                 if try_read.data.endswith("\n"):
                     try_read.data = try_read.data[:-1]
                 output_text += try_read.data

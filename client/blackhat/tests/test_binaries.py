@@ -80,6 +80,28 @@ class TestIncludedBinaries(unittest.TestCase):
         base64_result = self.run_command("base64", ["file"]).split(" ")[1]
         self.assertEqual(b64decode(base64_result).decode().strip("\n"), message)
 
+    def test_cat(self):
+        self.run_command("cat", ["--version"])
+        self.run_command("cat", ["--help"])
+
+        message = "Hello World!"
+
+        self.run_command("touch", ["file"])
+
+        self.computer.sys_write("/home/steve/file", message)
+
+        cat_result = self.run_command("cat", ["file"])
+
+        self.assertEqual(message, cat_result)
+
+        # cat on directory should fail
+        result = self.computer.run_command("cat", ["/home/steve"], True)
+        self.assertIn("Is a directory", result.data)
+
+        # cat respects permission
+        result = self.computer.run_command("cat", ["/etc/shadow"], True)
+        self.assertIn("Permission denied", result.data)
+
     def test_cd(self):
         self.run_command("cd", ["--version"])
         self.run_command("cd", ["--help"])
