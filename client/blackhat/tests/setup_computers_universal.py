@@ -6,7 +6,6 @@ from ..session import Session
 from ..shell import Shell
 
 
-
 def init():
     """
     Setup the vars and systems required for the tests to run properly
@@ -15,6 +14,7 @@ def init():
         None
     """
     computer = Computer()
+
     # Create a temporary root session for initializing stuff
     session = Session(0, computer.fs.files, 0)
     computer.sessions.append(session)
@@ -37,6 +37,8 @@ def init():
     computer.sessions.append(session)
 
     computer.sync_user_and_group_files()
+
+    Shell(computer)  # We need a shell for aliases
 
     computer.run_current_user_shellrc()
     computer.run_command("cd", ["~"], False)

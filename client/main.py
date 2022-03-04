@@ -168,7 +168,7 @@ if not load_save_success:
         # This example apt server has all the "installable" packages
         lan2_client2.run_command("mkdir", ["/var/www/html/repo"], pipe=True)
         lan2_client2.run_command("cd", ["/var/www/html/repo"], pipe=True)
-
+        
         # Manually setup apt repo
         repo_dir = lan2_client2.fs.find("/var/www/html/repo")
 
@@ -251,6 +251,8 @@ if not load_save_success:
         for computer in [comp, other_comp, lan2_client1, lan2_client2, lan, lan2]:
             computer.sync_user_and_group_files()
 
+        shell = Shell(comp)  # We need to setup the shell BEFORE the shellrc because aliases are shell-level things
+
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
         comp.run_command("export", ["PATH=/usr/bin:$PATH"], False)
@@ -259,5 +261,4 @@ if not load_save_success:
 # shell = NewShell(comp)
 # shell.main()
 
-shell = Shell(comp)
 shell.main()

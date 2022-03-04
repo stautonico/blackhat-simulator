@@ -256,7 +256,6 @@ class Computer:
         #     print(f"shell: permission denied: {command}")
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-
         random_filename = f"/tmp/{token_hex(6)}.py"
 
         with open(random_filename, "w") as f:
@@ -290,9 +289,7 @@ class Computer:
             response = Result(success=False)
         else:
             if type(response) == int:
-                response = Result(success=response==0)
-
-
+                response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
@@ -760,8 +757,10 @@ class Computer:
             if shellrc_lines.success:
                 for line in shellrc_lines.data.split("\n"):
                     if line != "":
-                        line = line.split()
-                        result = self.sys_execvp(line[0], line[1:])
+                        # line = line.split()
+                        result = self.shell.handle_command(line)
+                        # result = self.shell.run_command(line[0], line[1:], False, False)
+                        # result = self.sys_execvp(line[0], line[1:])
                         # result = self.run_command(line[0], line[1:], pipe=False)
 
     def save(self, output_file: str = "blackhat.save") -> bool:
