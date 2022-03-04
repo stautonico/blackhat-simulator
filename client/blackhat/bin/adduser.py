@@ -9,7 +9,7 @@ from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.sys.stat import stat, mkdir
-from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, geteuid
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, geteuid, read
 
 __COMMAND__ = "adduser"
 __DESCRIPTION__ = ""
@@ -177,8 +177,26 @@ def main(args: list, pipe: bool) -> Result:
             # Write `export HOME=/home/args.username` and `export PATH=/bin:` to the new ~/.shellrc
             new_shellrc_result = stat(f"/home/{args.username}/.shellrc")
 
+            # TODO: This is shite, refactor
             if new_shellrc_result.success:
-                write(f"/home/{args.username}/.shellrc", f"export PATH=/bin:\nexport HOME=/home/{args.username}\nexport USER={args.username}\n")
+                # Get the default .shellrc
+                default_shellrc_result = stat("/etc/skel/.shellrc")
+                if default_shellrc_result.success:
+                    # Read the default .shellrc
+                    default_shellrc_read = read("/etc/skel/.shellrc")
+                    if default_shellrc_read.success:
+                        default_shellrc_data = default_shellrc_read.data
+                    else:
+                        default_shellrc_data = ""
+                else:
+                    default_shellrc_data = ""
+
+                shellrc_content = f"{default_shellrc_data}\n" \
+                                  f"export HOME=/home/{args.username}\n" \
+                                  f"export PATH=/bin:/usr/bin\n" \
+                                  f"export USER={args.username}\n"
+
+                write(f"/home/{args.username}/.shellrc", shellrc_content)
 
         # Check if we should ask the user for Full name, etc
         if args.noninteractive:

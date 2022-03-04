@@ -18,6 +18,7 @@ class Shell:
         self.computers: list[Computer] = [computer]
         self.computers[0].shell = self
         self.prompt: str = self.generate_prompt()
+        self.aliases = {}
 
         self.possible_completions = []
 
@@ -168,6 +169,49 @@ class Shell:
 
         return prompt
 
+    ### BUILTINS ###
+    def run_builtin(self, command, args):
+        if command == "alias":
+            return self.builtin_alias(args)
+        elif command == "unalias":
+            return self.builtin_unalias(args)
+
+        return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+    def builtin_alias(self, args):
+        args = " ".join(args)
+        args = args.split("=")
+
+        while "" in args:
+            args.remove("")
+
+        if len(args) == 0:
+            for alias, value in self.aliases.items():
+                print(f"{alias}='{value}'")
+            return Result(success=True)
+
+        if len(args) == 1:
+            if args[0] in self.aliases:
+                print(f"{args[0]}='{self.aliases[args[0]]}'")
+                return Result(success=True)
+            else:
+                return Result(success=False, message=ResultMessages.NOT_FOUND)
+
+        if len(args) == 2:
+            self.aliases[args[0]] = args[1]
+            return Result(success=True)
+
+        return Result(success=False, message=ResultMessages.INVALID_ARGUMENT)
+
+    def builtin_unalias(self, args):
+        for item in args:
+            if item in self.aliases.keys():
+                del self.aliases[item]
+
+        return Result(success=True)
+
+    ### END BUILTINS ###
+
     def run_command(self, command: str, args: list, external_binary: bool, pipe: bool):
         """
         Determine how to run the given input, then, update the `Shell`'s prompt accordingly
@@ -251,6 +295,23 @@ class Shell:
         command_name = command[0]
         # Delete the command name from the command list (since we already have it)
         del command[0]
+
+        # Check if we're calling a builtin
+        if command_name in ["alias", "unalias"]:
+            return self.run_builtin(command_name, command)
+
+        # Check if we're running an alias
+        if command_name in self.aliases.keys():
+            # We need to resplit the args to get the alias args
+            command = self.aliases[command_name]
+
+            command = command.split()
+            while "" in command:
+                command.remove("")
+            command_name = command[0]
+            # Delete the command name from the command list (since we already have it)
+            del command[0]
+
 
         # Easy cases if there are no special characters
         if "|" not in command and ">" not in command and ">>" not in command:

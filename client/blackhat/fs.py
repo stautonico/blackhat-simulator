@@ -720,7 +720,11 @@ class StandardFS:
                                        "execute": ["owner", "group", "public"]}
 
         # /etc/skel/.shellrc (.bashrc/.zshrc equivalent)
-        File(".shellrc", "", skel_dir, 0, 0)
+        DEFAULT_SHELLRC_CONTENT = "alias lsa=ls -l -a\n" \
+                                  "alias la=ls -a\n" \
+                                  "alias ll=ls -l\n"
+
+        File(".shellrc", DEFAULT_SHELLRC_CONTENT, skel_dir, 0, 0)
 
         # /etc/hostname (holds system hostname)
         # Stupid windows style default hostnames (for fun, might change later)
