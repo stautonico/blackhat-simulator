@@ -212,22 +212,19 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;env&#34;, [&#34;--version&#34;])
         self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;env&#34;)
-        print(f&#34;ENVRESULT: {env_result}&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;env&#34;))
 
     def test_export(self):
         self.run_command(&#34;export&#34;, [&#34;--version&#34;])
         self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
         env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;, env_result)
 
     def test_head(self):
         self.run_command(&#34;head&#34;, [&#34;--version&#34;])
@@ -407,8 +404,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
         self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     def test_pwd(self):
         self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
@@ -656,17 +652,15 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;,
+                         self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     def test_uptime(self):
         self.run_command(&#34;uptime&#34;, [&#34;--version&#34;])
@@ -992,22 +986,19 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;env&#34;, [&#34;--version&#34;])
         self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;env&#34;)
-        print(f&#34;ENVRESULT: {env_result}&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;env&#34;))
 
     def test_export(self):
         self.run_command(&#34;export&#34;, [&#34;--version&#34;])
         self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
         env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;, env_result)
 
     def test_head(self):
         self.run_command(&#34;head&#34;, [&#34;--version&#34;])
@@ -1187,8 +1178,7 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
         self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     def test_pwd(self):
         self.run_command(&#34;pwd&#34;, [&#34;--version&#34;])
@@ -1436,17 +1426,15 @@ not have a method with the specified name.</p></div>
         self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;,
+                         self.run_command(&#34;printenv&#34;))
 
         self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-        env_result = self.run_command(&#34;printenv&#34;)
-        self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+        self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     def test_uptime(self):
         self.run_command(&#34;uptime&#34;, [&#34;--version&#34;])
@@ -1859,9 +1847,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;env&#34;, [&#34;--version&#34;])
     self.run_command(&#34;env&#34;, [&#34;--help&#34;])
 
-    env_result = self.run_command(&#34;env&#34;)
-    print(f&#34;ENVRESULT: {env_result}&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;env&#34;))</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_export"><code class="name flex">
@@ -1878,13 +1864,12 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;export&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
     env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)</code></pre>
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;, env_result)</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_head"><code class="name flex">
@@ -2144,8 +2129,7 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;printenv&#34;, [&#34;--version&#34;])
     self.run_command(&#34;printenv&#34;, [&#34;--help&#34;])
 
-    env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_pwd"><code class="name flex">
@@ -2523,17 +2507,15 @@ not have a method with the specified name.</p></div>
     self.run_command(&#34;unset&#34;, [&#34;--help&#34;])
 
     # Lets get a baseline for the env before-hand
-    env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))
 
     self.run_command(&#34;export&#34;, [&#34;BASH=/bin/bash&#34;])
 
-    env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;)
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash&#34;,
+                     self.run_command(&#34;printenv&#34;))
 
     self.run_command(&#34;unset&#34;, [&#34;BASH&#34;])
-    env_result = self.run_command(&#34;printenv&#34;)
-    self.assertEqual(env_result, &#34;PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve&#34;)</code></pre>
+    self.assertEqual(&#34;PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve&#34;, self.run_command(&#34;printenv&#34;))</code></pre>
 </details>
 </dd>
 <dt id="blackhat.tests.test_binaries.TestIncludedBinaries.test_uptime"><code class="name flex">
