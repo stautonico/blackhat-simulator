@@ -89,6 +89,7 @@ if not load_save_success:
         comp.sessions.append(session)
 
         comp.run_command("adduser", ["steve", "-p", "password", "-n"], False)
+        comp.run_command("adduser", ["mike", "-p", "password", "-n"], False)
         # comp.add_user(username, password)
 
         # Add user to /etc/sudoers file

@@ -9,7 +9,7 @@ from ..lib.fcntl import creat
 from ..lib.input import ArgParser
 from ..lib.output import output
 from ..lib.sys.stat import stat, mkdir
-from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, getuid, read
+from ..lib.unistd import get_user, get_all_users, write, add_user, add_group, add_user_to_group, chown, geteuid, read
 
 __COMMAND__ = "adduser"
 __DESCRIPTION__ = ""
@@ -87,7 +87,7 @@ def main(args: list, pipe: bool) -> Result:
         if args.version:
             return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
 
-        if getuid() != 0:
+        if geteuid() != 0:
             return output(f"{__COMMAND__}: Only root can add new users!", pipe, success=False,
                           success_message=ResultMessages.NOT_ALLOWED)
 

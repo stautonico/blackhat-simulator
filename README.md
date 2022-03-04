@@ -12,7 +12,6 @@
   </a>
 
 <h3 align="center">Blackhat Simulator</h3>
-
   <p align="center">
     A Realistic hacking/penetration testing simulator/game
     <br />
@@ -24,7 +23,7 @@
     ·
     <a href="https://discord.gg/N7rktfNDgh">Join the discord</a>
   </p>
-</p>
+
 
 
 
@@ -126,7 +125,8 @@ Python must be installed. All dependencies are listed in [`requirements.txt`](re
 <br>
 
 **To run the tests:**
-1. Make sure you have all requirements installed: `pip install -r requirements.txt` 
+
+1. Make sure you have all requirements installed: `pip install -r requirements.txt`
 2. `cd client`
 3. `python -m unittest blackhat/tests/test_binaries.py`
 

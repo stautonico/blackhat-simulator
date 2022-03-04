@@ -4,7 +4,7 @@ from ..helpers import RebootMode
 from ..helpers import Result
 from ..lib.input import ArgParser
 from ..lib.output import output
-from ..lib.unistd import getuid
+from ..lib.unistd import getuid, geteuid
 from ..lib.unistd import reboot
 
 __COMMAND__ = "poweroff"
@@ -81,7 +81,7 @@ def main(args: list, pipe: bool) -> Result:
     else:
         # TODO: Add ability to power off/reboot external machines via SSH
         # Only root can reboot/power off
-        if getuid() == 0:
+        if geteuid() == 0:
 
             if args.reboot:
                 result = reboot(RebootMode.LINUX_REBOOT_CMD_RESTART)

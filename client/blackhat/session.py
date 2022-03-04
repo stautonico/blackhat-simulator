@@ -11,6 +11,8 @@ class Session:
         """The 'original' user ID of the logged in user"""
         self.effective_uid = uid
         """A 'fake' user ID temporarily assigned to a user when running a command (while using sudo, etc)"""
+        self.saved_uid = uid
+        """The unchangeable user ID used for reverting """
         self.id = id
         """An internal only id (primarily used for naming pts sessions)"""
 

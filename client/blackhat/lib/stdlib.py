@@ -42,7 +42,7 @@ def setenv(name: str, value: str) -> Result:
     Set an environment variable to the current session
 
     Args:
-        key (str): The env var to set
+        name (str): The env var to set
         value (str): The value of the new var to set
 
     Returns:

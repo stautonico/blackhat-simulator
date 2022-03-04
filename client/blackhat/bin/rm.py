@@ -12,6 +12,7 @@ __DESCRIPTION__ = ""
 __DESCRIPTION_LONG__ = ""
 __VERSION__ = "1.2"
 
+
 def parse_args(args=[], doc=False):
     """
     Handle parsing of arguments and flags. Generates docs using help from `ArgParser`
@@ -41,7 +42,7 @@ def parse_args(args=[], doc=False):
     DESCRIPTION = f"**DESCRIPTION*/\n\t{__DESCRIPTION__}\n\n"
 
     for item in arg_helps:
-        # Its a positional argument
+        # It's a positional argument
         if len(item.option_strings) == 0:
             # If the argument is optional:
             if item.nargs == "?":
@@ -76,13 +77,13 @@ def main(args: list, pipe: bool) -> Result:
         if not args.version:
             return output(f"{__COMMAND__}: {parser.error_message}", pipe, success=False)
 
-    if args.version:
-        return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
-
     # If we specific -h/--help, args will be empty, so exit gracefully
     if not args:
         return output("", pipe)
     else:
+        if args.version:
+            return output(f"{__COMMAND__} (blackhat coreutils) {__VERSION__}", pipe)
+
         # Special case for * (all files in current dir)
         to_delete = []
 
@@ -115,7 +116,7 @@ def main(args: list, pipe: bool) -> Result:
                 if not result.data.st_isfile and not args.recursive:
                     return output(f"{__COMMAND__}: cannot remove '{file}': Is a directory", pipe, success=False)
                 else:
-                    response = unlink(args.source)
+                    response = unlink(result.data.st_path)
 
                     if not response.success:
                         if response.message == ResultMessages.NOT_ALLOWED:
