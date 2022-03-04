@@ -42,6 +42,5 @@ def init():
 
     computer.run_current_user_shellrc()
     computer.run_command("cd", ["~"], False)
-    computer.run_command("export", ["PATH=/usr/bin:$PATH"], False)
 
     return computer

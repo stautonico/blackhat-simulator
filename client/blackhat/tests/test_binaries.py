@@ -184,22 +184,19 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("env", ["--version"])
         self.run_command("env", ["--help"])
 
-        env_result = self.run_command("env")
-        print(f"ENVRESULT: {env_result}")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve", self.run_command("env"))
 
     def test_export(self):
         self.run_command("export", ["--version"])
         self.run_command("export", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve", self.run_command("printenv"))
 
         self.run_command("export", ["BASH=/bin/bash"])
 
         env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash", env_result)
 
     def test_head(self):
         self.run_command("head", ["--version"])
@@ -379,8 +376,7 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("printenv", ["--version"])
         self.run_command("printenv", ["--help"])
 
-        env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve", self.run_command("printenv"))
 
     def test_pwd(self):
         self.run_command("pwd", ["--version"])
@@ -628,17 +624,15 @@ class TestIncludedBinaries(unittest.TestCase):
         self.run_command("unset", ["--help"])
 
         # Lets get a baseline for the env before-hand
-        env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve", self.run_command("printenv"))
 
         self.run_command("export", ["BASH=/bin/bash"])
 
-        env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash",
+                         self.run_command("printenv"))
 
         self.run_command("unset", ["BASH"])
-        env_result = self.run_command("printenv")
-        self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve")
+        self.assertEqual("PATH=/bin:/usr/bin\nHOME=/home/steve\nUSER=steve", self.run_command("printenv"))
 
     def test_uptime(self):
         self.run_command("uptime", ["--version"])

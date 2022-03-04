@@ -256,7 +256,6 @@ if not load_save_success:
 
         comp.run_current_user_shellrc()
         comp.run_command("cd", ["~"], False)
-        comp.run_command("export", ["PATH=/usr/bin:$PATH"], False)
 
 # from blackhat.new_shell import NewShell
 # shell = NewShell(comp)
