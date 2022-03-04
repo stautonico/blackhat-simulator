@@ -202,6 +202,9 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual(env_result, "PATH=/usr/bin:/bin\nHOME=/home/steve\nUSER=steve\nBASH=/bin/bash")
 
     def test_head(self):
+        self.run_command("head", ["--version"])
+        self.run_command("head", ["--help"])
+
         message = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty"
         # Make a file with 20 lines
         self.run_command("touch", ["bigfile"])
@@ -339,6 +342,39 @@ class TestIncludedBinaries(unittest.TestCase):
         find_pwd = self.computer.fs.find("/tmp/pwd")
         self.assertTrue(find_pwd.success)
 
+    def test_passwd(self):
+        self.run_command("passwd", ["--version"])
+        self.run_command("passwd", ["--help"])
+
+        self.computer.sessions.append(Session(0, self.computer.fs.files, self.computer.sessions[-1].id + 1))
+        self.computer.run_command("adduser", ["testuser", "-p" "tester", "-n"], True)
+        self.computer.sessions.pop()
+
+        # su to sanity check password
+        with unittest.mock.patch("getpass.getpass", return_value="tester"):
+            with unittest.mock.patch("getpass.fallback_getpass", return_value="tester"):
+                self.run_command("su", ["testuser"])
+                self.assertEqual("testuser", self.run_command("whoami"))
+                self.computer.sessions.pop()
+
+                # Change testuser's password
+                print(self.run_command("passwd", ["testuser", "-p", "newpassword"]))
+
+                # Confirm the old password doesn't work
+                result = self.run_command("su", ["testuser"])
+                self.assertIn("Authentication failure", result)
+
+                # A valid password is required to reset the user's password
+                result = self.run_command("passwd", ["testuser", "-p", "newnewpassword"])
+                self.assertIn("Authentication token manipulation error", result)
+
+        # Confirm the new password works
+        with unittest.mock.patch("getpass.getpass", return_value="newpassword"):
+            with unittest.mock.patch("getpass.fallback_getpass", return_value="newpassword"):
+                self.run_command("su", ["testuser"])
+                self.assertEqual("testuser", self.run_command("whoami"))
+                self.computer.sessions.pop()
+
     def test_printenv(self):
         self.run_command("printenv", ["--version"])
         self.run_command("printenv", ["--help"])
@@ -355,6 +391,9 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertEqual("/home/steve", pwd_result)
 
     def test_rm(self):
+        self.run_command("rm", ["--version"])
+        self.run_command("rm", ["--help"])
+
         # Make some test files to remove
         self.run_command("touch", ["file1", "file2", "file3", "/tmp/file4"])
         ls_result = self.run_command("ls")
@@ -501,6 +540,9 @@ class TestIncludedBinaries(unittest.TestCase):
 
     def test_su(self):
         self.run_command("su", ["--version"])
+        self.run_command("su", ["--help"])
+
+        self.run_command("su", ["--version"])
 
         # Sanity check
         self.assertIn("uid=1000(steve) gid=1000(steve)", self.run_command("id"))
@@ -517,6 +559,8 @@ class TestIncludedBinaries(unittest.TestCase):
         self.assertIn("uid=1001(testuser) gid=1001(testuser)", self.run_command("id"))
 
     def test_sudo(self):
+        self.run_command("sudo", ["--version"])
+
         self.run_command("sudo", ["--version"])
         # Sanity check
         sudo_result = self.run_command("id")
@@ -537,9 +581,11 @@ class TestIncludedBinaries(unittest.TestCase):
 
                 other_user_result = self.run_command("sudo", ["-u", "testuser", "id"])
                 self.assertIn("uid=1001(testuser) gid=1001(testuser)", other_user_result)
-    #
 
     def test_tail(self):
+        self.run_command("tail", ["--version"])
+        self.run_command("tail", ["--help"])
+
         message = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\nfourteen\nfifteen\nsixteen\nseventeen\neighteen\nninteen\ntwenty"
         # Make a file with 20 lines
         self.run_command("touch", ["bigfile"])
