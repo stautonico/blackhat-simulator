@@ -256,7 +256,6 @@ class Computer:
         #     print(f"shell: permission denied: {command}")
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-
         random_filename = f"/tmp/{token_hex(6)}.py"
 
         with open(random_filename, "w") as f:
@@ -271,8 +270,11 @@ class Computer:
             module = SourceFileLoader("main",
                                       random_filename).load_module()
 
-            response = module.main(args, pipe)
+            if os.getenv("DEBUGMODE") == "true":
+                if command == "debug":
+                    print("Debugger enabled")  # SET YOUR BREAKPOINT HERE
 
+            response = module.main(args, pipe)
         except TypeError:
             # The code we're running doesn't take a pipe argument
             response = module.main(args)
@@ -284,21 +286,27 @@ class Computer:
             else:
                 print(f"segmentation fault (core dumped)  {command}")
 
+            # We should be able to remove our temp file
+            if os.path.exists(random_filename):
+                os.remove(random_filename)
+
             return Result(success=False, message=ResultMessages.GENERIC)
 
         if not response:
             response = Result(success=False)
         else:
             if type(response) == int:
-                response = Result(success=response==0)
-
-
+                response = Result(success=response == 0)
 
         # Reset the UID (to prevent binaries from getting stuck with invalid uids)
         self.sessions[-1].effective_uid = self.sessions[-1].real_uid
 
         if os.getenv("DEBUGMODE") == "false":
             self.save()
+
+        # We should be able to remove our temp file
+        if os.path.exists(random_filename):
+            os.remove(random_filename)
 
         return response
 
@@ -1344,6 +1352,12 @@ class Computer:
         Returns:
             None
         """
+        # Delete all .py files in /tmp (in the host system)
+        for file in os.listdir("/tmp"):
+            if file.endswith(".py"):
+                os.remove("/tmp/" + file)
+
+
         if force:
             if len(self.shell.computers) == 1:
                 self.save()
