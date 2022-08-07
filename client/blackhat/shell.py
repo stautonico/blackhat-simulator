@@ -1,3 +1,10 @@
+import platform
+
+if platform.system() in ["Linux", "Darwin"]:
+    import readline
+else:
+    import pyreadline as readline
+
 import readline
 from datetime import datetime
 from colorama import Fore, Style, Back

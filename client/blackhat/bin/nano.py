@@ -2,6 +2,7 @@ __package__ = "blackhat.bin"
 
 from os import system, remove
 from secrets import token_hex
+import platform
 
 from ..helpers import Result
 from ..lib.input import ArgParser
@@ -78,6 +79,9 @@ def main(args: list, pipe: bool) -> Result:
     """
     # TODO: Add docstring for manpage
     """
+    # Just exit if we're on Windows bc I don't have the effort to support it (atm)
+    if platform.system() == "Windows":
+        return output("nano is not supported on Windows", pipe=pipe)
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument("source")
     parser.add_argument("--version", action="store_true", help=f"output version information and exit")

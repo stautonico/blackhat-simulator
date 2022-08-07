@@ -1,6 +1,9 @@
 from enum import Enum
 from enum import IntFlag
-from typing import Union
+from typing import Union, Tuple, Optional, TextIO
+import os
+import uuid
+import tempfile
 
 
 class ResultMessages(Enum):
@@ -176,3 +179,28 @@ class passwd:
         output += f"    pw_dir: {self.pw_dir}\n"
         output += "}"
         return output
+
+
+def make_temp_file(filename=None, mode="w") -> Optional[Tuple[TextIO, str]]:
+    """
+    Creates a temporary file and returns the file object and the path to it
+
+    Args:
+        filename (str): The name of the file to create
+        mode (str): The mode to open the file in (default: "w")
+    Returns:
+        str: The path to the temporary file
+    """
+    if filename is None:
+        filename = f"{os.getpid()}-{uuid.uuid4()}.tmp"
+
+    temp_folder = tempfile.gettempdir()
+
+    temp_file = os.path.join(temp_folder, filename)
+
+    if os.path.exists(temp_file):
+        return None
+
+    # Create the file
+    f = open(temp_file, mode)
+    return f, temp_file

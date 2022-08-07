@@ -1,6 +1,7 @@
 import os
 import pickle
 import sqlite3
+import tempfile
 from datetime import datetime
 from hashlib import md5
 from importlib.machinery import SourceFileLoader
@@ -10,6 +11,7 @@ from random import choice
 from secrets import token_hex
 from time import time, sleep
 from typing import Optional, Dict, Union, List, Literal
+from .helpers import make_temp_file
 
 from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
@@ -259,10 +261,15 @@ class Computer:
         #     print(f"shell: permission denied: {command}")
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-        random_filename = f"/tmp/{token_hex(6)}.py"
 
-        with open(random_filename, "w") as f:
-            f.write(binary_object.content)
+        temp_file, temp_file_path = make_temp_file()
+        temp_file.write(binary_object.content)
+        temp_file.close()
+
+        # random_filename = f"/tmp/{token_hex(6)}.py"
+
+        # with open(random_filename, "w") as f:
+        #     f.write(binary_object.content)
 
         # If the binary is a setuid, we will change the uid
         if binary_object.setuid:
@@ -271,7 +278,7 @@ class Computer:
 
         try:
             module = SourceFileLoader("main",
-                                      random_filename).load_module()
+                                      temp_file.name).load_module()
 
             if os.getenv("DEBUGMODE") == "true":
                 if command == "debug":
@@ -290,8 +297,8 @@ class Computer:
                 print(f"segmentation fault (core dumped)  {command}")
 
             # We should be able to remove our temp file
-            if os.path.exists(random_filename):
-                os.remove(random_filename)
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
             return Result(success=False, message=ResultMessages.GENERIC)
 
@@ -309,8 +316,8 @@ class Computer:
             self.save()
 
         # We should be able to remove our temp file
-        if os.path.exists(random_filename):
-            os.remove(random_filename)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
         return response
 
@@ -1404,9 +1411,9 @@ class Computer:
             None
         """
         # Delete all .py files in /tmp (in the host system)
-        for file in os.listdir("/tmp"):
+        for file in os.listdir(tempfile.gettempdir()):
             if file.endswith(".py"):
-                os.remove("/tmp/" + file)
+                os.remove(os.path.join(tempfile.gettempdir(), file))
 
         if force:
             if len(self.shell.computers) == 1:

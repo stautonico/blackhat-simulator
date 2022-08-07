@@ -879,6 +879,9 @@ class StandardFS:
         if get_home_env_var:
             pathname = pathname.replace("~", get_home_env_var)
 
+        # Replace all instances of "\" with "/" (because windows)
+        pathname = pathname.replace("\\", "/")
+
         if pathname == "/":
             return Result(success=True, data=self.files)
 
