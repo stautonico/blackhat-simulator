@@ -907,6 +907,9 @@ class StandardFS:
         if get_home_env_var:
             pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
 
+        # Replace all instances of &#34;\&#34; with &#34;/&#34; (because windows)
+        pathname = pathname.replace(&#34;\\&#34;, &#34;/&#34;)
+
         if pathname == &#34;/&#34;:
             return Result(success=True, data=self.files)
 
@@ -3080,6 +3083,9 @@ Also, recursively tells it's parent to update its size.</p>
         if get_home_env_var:
             pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
 
+        # Replace all instances of &#34;\&#34; with &#34;/&#34; (because windows)
+        pathname = pathname.replace(&#34;\\&#34;, &#34;/&#34;)
+
         if pathname == &#34;/&#34;:
             return Result(success=True, data=self.files)
 
@@ -3226,6 +3232,9 @@ Also, recursively tells it's parent to update its size.</p>
     get_home_env_var = self.computer.get_env(&#34;HOME&#34;)
     if get_home_env_var:
         pathname = pathname.replace(&#34;~&#34;, get_home_env_var)
+
+    # Replace all instances of &#34;\&#34; with &#34;/&#34; (because windows)
+    pathname = pathname.replace(&#34;\\&#34;, &#34;/&#34;)
 
     if pathname == &#34;/&#34;:
         return Result(success=True, data=self.files)

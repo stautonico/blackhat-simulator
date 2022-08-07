@@ -28,7 +28,10 @@
 </summary>
 <pre><code class="python">from enum import Enum
 from enum import IntFlag
-from typing import Union
+from typing import Union, Tuple, Optional, TextIO
+import os
+import uuid
+import tempfile
 
 
 class ResultMessages(Enum):
@@ -203,7 +206,32 @@ class passwd:
         output += f&#34;    pw_gecos: {self.pw_gecos}\n&#34;
         output += f&#34;    pw_dir: {self.pw_dir}\n&#34;
         output += &#34;}&#34;
-        return output</code></pre>
+        return output
+
+
+def make_temp_file(filename=None, mode=&#34;w&#34;) -&gt; Optional[Tuple[TextIO, str]]:
+    &#34;&#34;&#34;
+    Creates a temporary file and returns the file object and the path to it
+
+    Args:
+        filename (str): The name of the file to create
+        mode (str): The mode to open the file in (default: &#34;w&#34;)
+    Returns:
+        str: The path to the temporary file
+    &#34;&#34;&#34;
+    if filename is None:
+        filename = f&#34;{os.getpid()}-{uuid.uuid4()}.tmp&#34;
+
+    temp_folder = tempfile.gettempdir()
+
+    temp_file = os.path.join(temp_folder, filename)
+
+    if os.path.exists(temp_file):
+        return None
+
+    # Create the file
+    f = open(temp_file, mode)
+    return f, temp_file</code></pre>
 </details>
 </section>
 <section>
@@ -211,6 +239,55 @@ class passwd:
 <section>
 </section>
 <section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="blackhat.helpers.make_temp_file"><code class="name flex">
+<span>def <span class="ident">make_temp_file</span></span>(<span>filename=None, mode='w') ‑> Optional[Tuple[TextIO, str]]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Creates a temporary file and returns the file object and the path to it</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>filename</code></strong> :&ensp;<code>str</code></dt>
+<dd>The name of the file to create</dd>
+<dt><strong><code>mode</code></strong> :&ensp;<code>str</code></dt>
+<dd>The mode to open the file in (default: "w")</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>The path to the temporary file</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def make_temp_file(filename=None, mode=&#34;w&#34;) -&gt; Optional[Tuple[TextIO, str]]:
+    &#34;&#34;&#34;
+    Creates a temporary file and returns the file object and the path to it
+
+    Args:
+        filename (str): The name of the file to create
+        mode (str): The mode to open the file in (default: &#34;w&#34;)
+    Returns:
+        str: The path to the temporary file
+    &#34;&#34;&#34;
+    if filename is None:
+        filename = f&#34;{os.getpid()}-{uuid.uuid4()}.tmp&#34;
+
+    temp_folder = tempfile.gettempdir()
+
+    temp_file = os.path.join(temp_folder, filename)
+
+    if os.path.exists(temp_file):
+        return None
+
+    # Create the file
+    f = open(temp_file, mode)
+    return f, temp_file</code></pre>
+</details>
+</dd>
+</dl>
 </section>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
@@ -640,6 +717,11 @@ class passwd:
 <li><h3>Super-module</h3>
 <ul>
 <li><code><a title="blackhat" href="index.html">blackhat</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="blackhat.helpers.make_temp_file" href="#blackhat.helpers.make_temp_file">make_temp_file</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>

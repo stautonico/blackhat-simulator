@@ -30,6 +30,7 @@
 
 from os import system, remove
 from secrets import token_hex
+import platform
 
 from ..helpers import Result
 from ..lib.input import ArgParser
@@ -106,6 +107,9 @@ def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
+    # Just exit if we&#39;re on Windows bc I don&#39;t have the effort to support it (atm)
+    if platform.system() == &#34;Windows&#34;:
+        return output(&#34;nano is not supported on Windows&#34;, pipe=pipe)
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;source&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)
@@ -201,6 +205,9 @@ def main(args: list, pipe: bool) -&gt; Result:
     &#34;&#34;&#34;
     # TODO: Add docstring for manpage
     &#34;&#34;&#34;
+    # Just exit if we&#39;re on Windows bc I don&#39;t have the effort to support it (atm)
+    if platform.system() == &#34;Windows&#34;:
+        return output(&#34;nano is not supported on Windows&#34;, pipe=pipe)
     parser = ArgParser(prog=__COMMAND__)
     parser.add_argument(&#34;source&#34;)
     parser.add_argument(&#34;--version&#34;, action=&#34;store_true&#34;, help=f&#34;output version information and exit&#34;)

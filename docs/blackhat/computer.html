@@ -29,6 +29,7 @@
 <pre><code class="python">import os
 import pickle
 import sqlite3
+import tempfile
 from datetime import datetime
 from hashlib import md5
 from importlib.machinery import SourceFileLoader
@@ -38,6 +39,7 @@ from random import choice
 from secrets import token_hex
 from time import time, sleep
 from typing import Optional, Dict, Union, List, Literal
+from .helpers import make_temp_file
 
 from .fs import Directory, File, StandardFS, FSBaseObject, copy
 from .helpers import Result, ResultMessages, AccessMode, timeval, stat_struct, RebootMode
@@ -287,10 +289,15 @@ class Computer:
         #     print(f&#34;shell: permission denied: {command}&#34;)
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-        random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
-        with open(random_filename, &#34;w&#34;) as f:
-            f.write(binary_object.content)
+        temp_file, temp_file_path = make_temp_file()
+        temp_file.write(binary_object.content)
+        temp_file.close()
+
+        # random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
+
+        # with open(random_filename, &#34;w&#34;) as f:
+        #     f.write(binary_object.content)
 
         # If the binary is a setuid, we will change the uid
         if binary_object.setuid:
@@ -299,7 +306,7 @@ class Computer:
 
         try:
             module = SourceFileLoader(&#34;main&#34;,
-                                      random_filename).load_module()
+                                      temp_file.name).load_module()
 
             if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
                 if command == &#34;debug&#34;:
@@ -318,8 +325,8 @@ class Computer:
                 print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
             # We should be able to remove our temp file
-            if os.path.exists(random_filename):
-                os.remove(random_filename)
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
             return Result(success=False, message=ResultMessages.GENERIC)
 
@@ -337,8 +344,8 @@ class Computer:
             self.save()
 
         # We should be able to remove our temp file
-        if os.path.exists(random_filename):
-            os.remove(random_filename)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
         return response
 
@@ -1432,9 +1439,9 @@ class Computer:
             None
         &#34;&#34;&#34;
         # Delete all .py files in /tmp (in the host system)
-        for file in os.listdir(&#34;/tmp&#34;):
+        for file in os.listdir(tempfile.gettempdir()):
             if file.endswith(&#34;.py&#34;):
-                os.remove(&#34;/tmp/&#34; + file)
+                os.remove(os.path.join(tempfile.gettempdir(), file))
 
         if force:
             if len(self.shell.computers) == 1:
@@ -2001,10 +2008,15 @@ class ISPRouter(Router):
         #     print(f&#34;shell: permission denied: {command}&#34;)
         #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-        random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
-        with open(random_filename, &#34;w&#34;) as f:
-            f.write(binary_object.content)
+        temp_file, temp_file_path = make_temp_file()
+        temp_file.write(binary_object.content)
+        temp_file.close()
+
+        # random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
+
+        # with open(random_filename, &#34;w&#34;) as f:
+        #     f.write(binary_object.content)
 
         # If the binary is a setuid, we will change the uid
         if binary_object.setuid:
@@ -2013,7 +2025,7 @@ class ISPRouter(Router):
 
         try:
             module = SourceFileLoader(&#34;main&#34;,
-                                      random_filename).load_module()
+                                      temp_file.name).load_module()
 
             if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
                 if command == &#34;debug&#34;:
@@ -2032,8 +2044,8 @@ class ISPRouter(Router):
                 print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
             # We should be able to remove our temp file
-            if os.path.exists(random_filename):
-                os.remove(random_filename)
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
             return Result(success=False, message=ResultMessages.GENERIC)
 
@@ -2051,8 +2063,8 @@ class ISPRouter(Router):
             self.save()
 
         # We should be able to remove our temp file
-        if os.path.exists(random_filename):
-            os.remove(random_filename)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
         return response
 
@@ -3146,9 +3158,9 @@ class ISPRouter(Router):
             None
         &#34;&#34;&#34;
         # Delete all .py files in /tmp (in the host system)
-        for file in os.listdir(&#34;/tmp&#34;):
+        for file in os.listdir(tempfile.gettempdir()):
             if file.endswith(&#34;.py&#34;):
-                os.remove(&#34;/tmp/&#34; + file)
+                os.remove(os.path.join(tempfile.gettempdir(), file))
 
         if force:
             if len(self.shell.computers) == 1:
@@ -4249,10 +4261,15 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
     #     print(f&#34;shell: permission denied: {command}&#34;)
     #     return Result(success=False, message=ResultMessages.NOT_ALLOWED_EXECUTE)
 
-    random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
 
-    with open(random_filename, &#34;w&#34;) as f:
-        f.write(binary_object.content)
+    temp_file, temp_file_path = make_temp_file()
+    temp_file.write(binary_object.content)
+    temp_file.close()
+
+    # random_filename = f&#34;/tmp/{token_hex(6)}.py&#34;
+
+    # with open(random_filename, &#34;w&#34;) as f:
+    #     f.write(binary_object.content)
 
     # If the binary is a setuid, we will change the uid
     if binary_object.setuid:
@@ -4261,7 +4278,7 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
 
     try:
         module = SourceFileLoader(&#34;main&#34;,
-                                  random_filename).load_module()
+                                  temp_file.name).load_module()
 
         if os.getenv(&#34;DEBUGMODE&#34;) == &#34;true&#34;:
             if command == &#34;debug&#34;:
@@ -4280,8 +4297,8 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
             print(f&#34;segmentation fault (core dumped)  {command}&#34;)
 
         # We should be able to remove our temp file
-        if os.path.exists(random_filename):
-            os.remove(random_filename)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
 
         return Result(success=False, message=ResultMessages.GENERIC)
 
@@ -4299,8 +4316,8 @@ dns_server (str, optional) The DNS server to use to lookup the domain</p>
         self.save()
 
     # We should be able to remove our temp file
-    if os.path.exists(random_filename):
-        os.remove(random_filename)
+    if os.path.exists(temp_file_path):
+        os.remove(temp_file_path)
 
     return response</code></pre>
 </details>
@@ -4961,9 +4978,9 @@ return to the previous computer. If no previous computer exists, exit the game.<
         None
     &#34;&#34;&#34;
     # Delete all .py files in /tmp (in the host system)
-    for file in os.listdir(&#34;/tmp&#34;):
+    for file in os.listdir(tempfile.gettempdir()):
         if file.endswith(&#34;.py&#34;):
-            os.remove(&#34;/tmp/&#34; + file)
+            os.remove(os.path.join(tempfile.gettempdir(), file))
 
     if force:
         if len(self.shell.computers) == 1:
