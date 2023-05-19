@@ -1,6 +1,3 @@
-pdoc3==0.10.0
-colorama==0.4.4
-tabulate==0.8.9
-flake8==4.0.1
-packaging==21.3
-pyreadline==2.1
+aenum==3.1.12
+Js2Py==0.74
+rpyc==5.3.1
