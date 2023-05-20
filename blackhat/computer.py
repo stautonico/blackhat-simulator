@@ -1,8 +1,13 @@
 import os
 import pickle
+from multiprocessing import Pipe
+from typing import Union, Dict
 
-from blackhat.fs.filesystems.ext4 import Ext4
+from blackhat.fs import Filesystem
+from blackhat.fs.filesystems.ext4 import Ext4, File, Directory
 from blackhat.fs.mapping import FSMapping
+from blackhat.process import Process
+from blackhat.util.result import Result, ResultMessage
 from blackhat.util.time import Timestamp
 
 
@@ -30,11 +35,12 @@ class Computer:
         # but for the sake of simplicity, we'll just treat it as a service (on port 0, since port 0 is technically
         # an "invalid" port)
         # self._services: Dict[int, Service] = {}  # port -> Service
-        # self._fs_mappings: Dict[str, FSMapping] = {}  # path -> FSMapping (map a filesytem to a path)
+        self._fs_mappings: Dict[str, FSMapping] = {}  # path -> FSMapping (map a filesytem to a path)
 
-        # self._processes: Dict[int, Process] = {}  # pid -> Process
+        self._processes: Dict[int, Process] = {}  # pid -> Process
+        self._process_pipes: Dict[int, Pipe] = {}  # pid -> Pipe
 
-        self.pid_counter = 0
+        self._pid_counter = 0
 
         # Set up our signal handler (for USR1 for syscall from process)
         # self.setup_signal_handler()
@@ -73,7 +79,7 @@ class Computer:
         self._post_fs_init()
 
         # Spawn the root process (init)
-        # TODO:
+        self.sys_execve("/sbin/init", [], {})
 
         # We should never reach this point, but if we did, init exited
         # so we should "kernel panic" and exit
@@ -121,8 +127,33 @@ class Computer:
     def flush_hostname(self):
         pass
 
-    def _add_fs_mapping(self, path: str, mapping: FSMapping):
-        pass
+    def _add_fs_mapping(self, path: str, filesystem: Filesystem):
+        if path in self._fs_mappings:
+            raise Exception(f"Mapping for path '{path}' already exists")
+
+        self._fs_mappings[path] = FSMapping(path, filesystem)
+
+    def _fs_find(self, path: str) -> Result[Union[File, Directory]]:
+        """
+        Find a mapping that matches the given path.
+        :param path: The path to find a mapping for
+        :return:
+        """
+
+        path = os.path.normpath(path)
+
+        # Start from the longest path, and keep popping off the last chunk until we find a match in our mappings
+        chunks = path.split("/")
+
+        while len(chunks) > 0:
+            subpath = "/".join(chunks)
+            if subpath == "":
+                subpath = "/"
+            if subpath in self._fs_mappings:
+                return self._fs_mappings[subpath].find(path)
+            chunks.pop()
+
+        return Result(False, message=ResultMessage.FS.PATH_NOT_FOUND)
 
     # Property functions (getters)
     @property
@@ -134,3 +165,39 @@ class Computer:
         if Computer._instance is None:
             Computer()
         return Computer._instance
+
+
+    # Syscalls
+    def sys_execve(self, path: str, args: list, env: dict, ppid=None):
+        # Find the file to execute
+        find_file = self._fs_find(path)
+
+        if find_file.success:
+            # TODO: Pass the proper uid/gid
+            # TODO: Pass env to process
+
+            if ppid is None:
+                cwd = self._fs_find("/").data
+                parent = None
+            else:
+                cwd = self._processes[ppid].cwd
+                parent = self._processes[ppid]
+
+
+            process = Process.build_process(self._pid_counter, parent, 0, 0, path + " " + " ".join(args), cwd, find_file.data)
+
+            # Make the two-way pipes for the process
+            one, two = Pipe(True)
+            self._process_pipes[process.pid] = one
+
+            self._pid_counter += 1
+
+            self._processes[process.pid] = process
+            process.start(args, two, os.getpid())
+
+            process.join()
+
+            return process.exit_code
+        else:
+            print(f"Failed to find path: {path}")
+            return 1

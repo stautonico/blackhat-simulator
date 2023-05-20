@@ -3,12 +3,13 @@ import os
 import signal
 from threading import Thread
 import multiprocessing
-from typing import List
+from typing import List, Optional
 
 import rpyc
 
 from blackhat.fs.filesystems.ext4 import File
 import blackhat
+from blackhat.util.JSInterpreter import JSInterpreter
 
 
 class ProcessState(enum.Enum):
@@ -52,7 +53,7 @@ class Process:
         self._name: str = None
 
         # TODO: Maybe implement threads
-        # self._threads: List[Thread] = []
+        self._threads: List[Process] = []
 
         self._cmdline: str = None  # <command> <args> used to start the process
 
@@ -63,10 +64,12 @@ class Process:
         self._running = False
 
         # TODO: Setup js interpreter
-        # self._interpreter = Interpreter(self)
+        self._interpreter = JSInterpreter(self)
         self._code = None  # The executable code (contained in the "exe" file)
 
         self._pipe = None  # Duplex pipe to communicate with the "root" process (the main game process)
+
+        self._root_pid = None # The pid of the "root" process (the main game process)
 
         # TODO: Setup some file descriptors (stdin, stdout, stderr, ...)
 
@@ -78,11 +81,14 @@ class Process:
         self._exit_code = exit_code
 
     @staticmethod
-    def build_process(pid: int, parent: "Process", uid: int, gid: int, cmdline: str, cwd, exe: File, pipe):
+    def build_process(pid: int, parent: Optional["Process"], uid: int, gid: int, cmdline: str, cwd, exe: File):
         # TODO: Typehint cwd
         process = Process()
         process._pid = pid
-        process._ppid = parent._pid
+        if parent is not None:
+            process._ppid = parent._pid
+        else:
+            process._ppid = -1
         process._parent = parent
 
         process._uid = uid
@@ -102,10 +108,40 @@ class Process:
         # Force read because we don't need read permissions to execute a file (only execute permissions)
         process._code = exe._data
 
-        process._pipe = pipe
-
         return process
+
+    def _run(self, args: List[str]):
+        # TODO: Setup signal handler
+
+        self._running = True
+
+        self._exit_code = self._interpreter.execute_main(self._code, args) or 139
+
+    def start(self, args: List[str], pipe, root_pid):
+        self._pipe = pipe
+
+        self._root_pid = root_pid
+
+        process = multiprocessing.Process(target=self._run, args=(args,))
+
+        self._threads.append(process)
+
+        process.start()
+
+    def join(self):
+        for thread in self._threads:
+            thread.join()
+
+        return self._exit_code
 
     @property
     def pid(self):
         return self._pid
+
+    @property
+    def cwd(self):
+        return self._cwd
+
+    @property
+    def exit_code(self):
+        return self._exit_code
