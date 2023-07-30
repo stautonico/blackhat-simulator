@@ -1,4 +1,6 @@
+#include <blackhat/computer.h>
 #include <blackhat/interpreter.h>
+#include <blackhat/global_computer.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -29,8 +31,10 @@ void Blackhat::Interpreter::_init_builtins() {
   duk_put_global_string(m_ctx, "print");
   duk_push_c_function(m_ctx, _input, 1);
   duk_put_global_string(m_ctx, "input");
+  duk_push_c_function(m_ctx, _tmp_exec, DUK_VARARGS);
+  duk_put_global_string(m_ctx, "exec");
 }
-void Blackhat::Interpreter::run(const std::vector<std::string> &args) {
+int Blackhat::Interpreter::run(const std::vector<std::string> &args) {
   _init_builtins();
 
   // Evaluate the code
@@ -49,7 +53,12 @@ void Blackhat::Interpreter::run(const std::vector<std::string> &args) {
   // Call the main function with the arguments (1 argument, the array)
   duk_call(m_ctx, 1);
 
+  // Pop the return code from main
+  int ret_code = duk_get_int(m_ctx, -1);
+
   duk_destroy_heap(m_ctx);
+
+  return ret_code;
 }
 
 // Built-in functions
@@ -64,4 +73,22 @@ duk_ret_t Blackhat::Interpreter::_input(duk_context *ctx) {
   std::getline(std::cin, input);
   duk_push_string(ctx, input.c_str());
   return 1;
+}
+
+duk_ret_t Blackhat::Interpreter::_tmp_exec(duk_context *ctx) {
+  // Count the number of args
+  int nargs = duk_get_top(ctx);
+
+  // First args should be the path to the file
+  std::string path = duk_to_string(ctx, 0);
+
+  std::vector<std::string> args;
+  for (int i = 1; i < nargs; i++) {
+    args.emplace_back(duk_to_string(ctx, i));
+  }
+
+
+  g_computer.temporary_exec(path, args);
+
+  return 0;
 }

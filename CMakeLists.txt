@@ -15,6 +15,8 @@ set(SOURCES
         # blackhat/
         src/blackhat/computer.cpp
         src/blackhat/user.cpp
+        src/blackhat/process.cpp
+
         src/blackhat/fs/ext4.cpp
 
         # util/

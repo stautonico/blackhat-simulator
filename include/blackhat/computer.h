@@ -4,12 +4,21 @@
 #include <util/time.h>
 
 #include <map>
+#include <mutex>
 #include <string>
+#include <vector>
+
+#include <iostream>
+#include <memory>
 
 namespace Blackhat {
 class Computer {
 public:
   Computer();
+
+  void call_init();
+  int temporary_exec(std::string path, std::vector<std::string> args);
+
 
 private:
   Timestamp m_boottime;
@@ -27,4 +36,5 @@ private:
 
   void _kernel_panic(std::string message);
 };
+
 } // namespace Blackhat

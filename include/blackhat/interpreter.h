@@ -11,7 +11,7 @@ class Interpreter {
 public:
   Interpreter(std::string code);
 
-  void run(const std::vector<std::string> &args);
+  int run(const std::vector<std::string> &args);
 
 private:
   duk_context *m_ctx;
@@ -25,6 +25,7 @@ private:
   // Built-in functions
   static duk_ret_t _print(duk_context *ctx);
   static duk_ret_t _input(duk_context *ctx);
+  static duk_ret_t _tmp_exec(duk_context *ctx);
 };
 
 } // namespace Blackhat
