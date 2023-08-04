@@ -1,0 +1,16 @@
+require("stdlib");
+
+function main() {
+    while (true) {
+        var result = input(getenv("PS1") || "> ");
+        // Split the result
+        var args = result.split(" ");
+        if (result == "exit") break;
+        else if (args[0] == "export") {
+            var env = args[1].split("=");
+            setenv(env[0], env[1]);
+        } else {
+            exec(result);
+        }
+    }
+}

@@ -3,13 +3,13 @@
 #include <blackhat/fs/filesystem.h>
 #include <util/time.h>
 
+#include <filesystem>
+#include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
-
-#include <iostream>
-#include <memory>
 
 namespace Blackhat {
 class Computer {
@@ -19,6 +19,7 @@ public:
   void call_init();
   int temporary_exec(std::string path, std::vector<std::string> args);
 
+  std::string temporary_read(std::string path);
 
 private:
   Timestamp m_boottime;
@@ -32,6 +33,8 @@ private:
 
   void _kinit();
   void _new_computer_kinit();
+  void _create_fs_from_base(const std::filesystem::path &dir,
+                            std::string basepath);
   void _post_fs_kinit();
 
   void _kernel_panic(std::string message);

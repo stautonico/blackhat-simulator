@@ -216,3 +216,6 @@ tags
 [._]*.un~
 
 # End of https://www.toptal.com/developers/gitignore/api/c++,cmake,jetbrains+all,ninja,vim,emacs
+
+# We want EVERYTHING in the base directory
+!base/**/**

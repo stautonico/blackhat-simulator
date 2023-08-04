@@ -4,7 +4,7 @@
 #include <thread>
 #include <utility>
 
-Blackhat::Process::Process(std::string code) : m_interpreter(std::move(code)) {
+Blackhat::Process::Process(std::string code) : m_interpreter(code, this) {
   m_state = ProcessState::TASK_STOPPED;
   m_exit_code = 0;
 }
@@ -44,4 +44,25 @@ void Blackhat::Process::start(std::vector<std::string> args) {
 
 void Blackhat::Process::start_sync(std::vector<std::string> args) {
   _run(args);
+}
+std::string Blackhat::Process::get_env(std::string key) {
+  // Try to find the key in the map
+  auto it = m_environ.find(key);
+
+  if (it == m_environ.end())
+    return "";
+
+  return it->second;
+}
+void Blackhat::Process::set_env(std::string key, std::string value) {
+  // Try to find the key in the map
+  auto it = m_environ.find(key);
+
+  if (it == m_environ.end()) {
+    // If the key is not found, insert it
+    m_environ.insert(std::make_pair(key, value));
+  } else {
+    // If the key is found, update the value
+    it->second = value;
+  }
 }

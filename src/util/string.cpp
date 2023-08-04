@@ -26,3 +26,16 @@ std::string join(std::vector<std::string> components, char delim, int start,
   }
   return result;
 }
+
+std::string erase(std::string str, std::string substr) {
+  // Remove all instances of substr from str
+  std::string result;
+  for (int i = 0; i < str.size(); i++) {
+    if (str.substr(i, substr.size()) == substr) {
+      i += substr.size() - 1;
+    } else {
+      result += str[i];
+    }
+  }
+  return result;
+}

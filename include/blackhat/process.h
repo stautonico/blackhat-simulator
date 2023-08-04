@@ -1,11 +1,16 @@
 #pragma once
 
+// Forward declaration
+//namespace Blackhat{class Interpreter;}
+//namespace Blackhat{class Process;}
 #include <blackhat/interpreter.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
 namespace Blackhat {
+
 enum class ProcessState {
   TASK_RUNNING,
   TASK_INTERRUPTIBLE,
@@ -25,13 +30,16 @@ enum class ProcessState {
 
 class Process {
 public:
-  Process(std::string code);
+  explicit Process(std::string code);
 
   // TODO: Maybe not public?
   int set_exit_code(int exit_code);
 
   void start(std::vector<std::string> args);
   void start_sync(std::vector<std::string> args);
+
+  std::string get_env(std::string key);
+  void set_env(std::string key, std::string value);
 
 private:
   int m_pid;
@@ -65,6 +73,8 @@ private:
   std::string m_cwd; // Current working directory
   std::string m_exe; // Path to executable (isn't this supposed to be a link? or
                      // does procfs do that for us?)
+
+  std::map<std::string, std::string> m_environ; // Environment variables
 
   Interpreter m_interpreter;
 

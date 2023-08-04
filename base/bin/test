@@ -1,0 +1,6 @@
+require("mylib");
+
+function main() {
+    hello();
+    print("Hello world! (from the test program)");
+}
