@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <utility>
+#include <thread>
 
 static void my_fatal_handler(void *udata, const char *msg) {
   // TODO: Improve this
@@ -116,7 +117,10 @@ duk_ret_t Blackhat::Interpreter::_require(duk_context *ctx) {
   // TODO: Don't hardcode the .so extension
   auto file = g_computer.temporary_read("/lib/" + module + ".so");
   if (file.empty()) {
-    file = g_computer.temporary_read("/lib/" + module + "/" + module + ".so");
+    // If the module has a slash in the name, grab the last element
+    auto components = split(module, '/');
+    file = g_computer.temporary_read("/lib/" + module + ".so");
+    std::cout << "/lib/" + module + ".so" << std::endl;
     if (file.empty()) {
       duk_error(ctx, DUK_ERR_ERROR, "Module '%s' not found", module.c_str());
     }

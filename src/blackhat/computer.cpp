@@ -2,12 +2,16 @@
 #include <blackhat/fs/ext4.h>
 #include <blackhat/process.h>
 
+#include <nlohmann/json.hpp>
+
 #include <util/string.h>
 #include <util/time.h>
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+
+using json = nlohmann::json;
 
 Blackhat::Computer g_computer;
 
@@ -57,17 +61,24 @@ void Blackhat::Computer::_create_fs_from_base(const std::filesystem::path &dir,
   for (const auto &entry : std::filesystem::directory_iterator(dir)) {
     if (entry.is_directory()) {
       _create_fs_from_base(entry.path(), basepath);
+      // Try and create the directory if it doesn't exist
+      std::cout << "Making directory: " << erase(entry.path().string(), basepath) << std::endl;
+      this->m_fs_mappings["/"]->create(erase(entry.path().string(), basepath),
+                                       0, 0, 0644);
     } else {
       // This code is gross but it'll do for now
       // TODO: Set the correct metadata and ACLs
       this->m_fs_mappings["/"]->create(erase(entry.path().string(), basepath),
                                        0, 0, 0755);
-      this->m_fs_mappings["/"]->write(
+      std::cout << "Making file: " << erase(entry.path().string(), basepath)
+                << std::endl;
+      auto result = this->m_fs_mappings["/"]->write(
           erase(entry.path().string(), basepath),
           std::string(std::istreambuf_iterator<char>(
                           std::ifstream(entry.path().string(), std::ios::binary)
                               .rdbuf()),
                       std::istreambuf_iterator<char>()));
+      std::cout << result << std::endl;
     }
   }
 }
@@ -115,6 +126,7 @@ void Blackhat::Computer::call_init() {
     _kernel_panic("/sbin/init: No such file or directory");
   }
 
+  // TODO: Default env?
   Blackhat::Process process(file);
   process.start_sync({});
 }
@@ -131,11 +143,29 @@ int Blackhat::Computer::temporary_exec(std::string path,
     return 1;
   } else {
     Blackhat::Process process(file);
+
     process.start_sync(args);
     return 0;
   }
 }
 
 std::string Blackhat::Computer::temporary_read(std::string path) {
+  std::cout << "Trying to read: " << path << std::endl;
   return this->m_fs_mappings["/"]->read(path);
+}
+
+json Blackhat::Computer::serialize() {
+  // Serialize  the computer object using json (maybe switch to cereal later)
+
+  // Boot time doesn't need to be serialized because it's reset on boot
+  // Hostname also doesn't need to be serialized because it's reset on boot
+  json j;
+
+  j["fs_mappings"] = json::object();
+
+  for (auto const &[key, val] : this->m_fs_mappings) {
+    j["fs_mappings"][key] = val->serialize();
+  }
+
+  return j;
 }

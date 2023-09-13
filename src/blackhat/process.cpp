@@ -1,5 +1,6 @@
 #include <blackhat/process.h>
 
+#include <iostream>
 #include <string>
 #include <thread>
 #include <utility>
@@ -7,6 +8,7 @@
 Blackhat::Process::Process(std::string code) : m_interpreter(code, this) {
   m_state = ProcessState::TASK_STOPPED;
   m_exit_code = 0;
+  // TODO: Set the environ here?
 }
 
 int Blackhat::Process::set_exit_code(int exit_code) {
@@ -46,6 +48,11 @@ void Blackhat::Process::start_sync(std::vector<std::string> args) {
   _run(args);
 }
 std::string Blackhat::Process::get_env(std::string key) {
+  // TODO: MAJOR MAJOR MAJOR BUG: Environment doesn't work AT ALL. It just
+  // crashes For the time being, we'll just skip all this, and continue working
+  // on everything else, otherwise we'll spend all day here
+
+  return "";
   // Try to find the key in the map
   auto it = m_environ.find(key);
 

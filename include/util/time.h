@@ -2,6 +2,9 @@
 
 #include <optional>
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 enum class Precision {
   ns, // Nanoseconds
   us, // Microseconds
@@ -24,6 +27,8 @@ public:
   long get_milliseconds();
   long get_microseconds();
   long get_nanoseconds();
+
+  json serialize();
 
 private:
   long m_ns_timestamp;

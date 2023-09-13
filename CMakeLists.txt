@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 
 include_directories(include)
+include_directories(vendor/nlohmann_json/include)
 
 # Recursively include all the headers
 # (just for IDEs, not actually used by CMake)
@@ -27,4 +28,9 @@ set(SOURCES
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} src/main.cpp)
 
-target_link_libraries(${PROJECT_NAME} duktape)
+# Build and link nlohmann/json
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+
+add_subdirectory(vendor/nlohmann_json)
+
+target_link_libraries(${PROJECT_NAME} duktape nlohmann_json::nlohmann_json)

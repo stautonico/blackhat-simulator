@@ -11,8 +11,8 @@ Blackhat::Ext4::Ext4() {
   m_root->m_name = "/";
   m_root->m_mode = 0755;
   m_root->m_inode_number = 2;
-  m_inodes.push_back(m_root);
-  m_directory_entries[m_root] = std::vector<Inode *>();
+  m_inodes[2] = m_root;
+  m_directory_entries[2] = std::vector<int>();
 }
 
 Blackhat::Ext4 *Blackhat::Ext4::make_standard_fs() {
@@ -47,15 +47,19 @@ bool Blackhat::Ext4::_create_inode(std::string path, int uid, int gid,
   auto inode = new Inode();
   inode->m_name = components[components.size() - 1];
   inode->m_mode = mode;
-  m_inodes.push_back(inode);
+  m_inodes[m_inode_accumulator] = inode;
+  inode->m_inode_number = m_inode_accumulator;
+  m_inode_accumulator++;
   // Add the inode to the parent's directory entries
-  m_directory_entries[parent].push_back(inode);
+  m_directory_entries[parent->m_inode_number].push_back(inode->m_inode_number);
   return true;
 }
 
+#include <iostream>
+
 Blackhat::Inode *Blackhat::Ext4::_find_inode(std::string path) {
   auto components = split(path, '/');
-  auto current = m_root;
+  auto current = m_root->m_inode_number;
   for (const auto &component : components) {
     if (component.empty())
       continue;
@@ -63,8 +67,9 @@ Blackhat::Inode *Blackhat::Ext4::_find_inode(std::string path) {
     auto children = m_directory_entries[current];
     // Find the child with the same name as the component
     auto child = std::find_if(
-        children.begin(), children.end(),
-        [component](Inode *inode) { return inode->m_name == component; });
+        children.begin(), children.end(), [&component, this](int inode_number) {
+          return m_inodes[inode_number]->m_name == component;
+        });
 
     // If the child exists, set the current inode to the child
     if (child != children.end()) {
@@ -73,7 +78,7 @@ Blackhat::Inode *Blackhat::Ext4::_find_inode(std::string path) {
       return nullptr;
     }
   }
-  return current;
+  return m_inodes[current];
 }
 
 int Blackhat::Ext4::create(std::string path, int uid, int gid, int mode) {
@@ -101,3 +106,39 @@ int Blackhat::Ext4::chown(std::string path, int uid, int gid) { return 0; }
 int Blackhat::Ext4::rm(std::string path) { return 0; }
 
 std::string Blackhat::Inode::get_name() { return m_name; }
+int Blackhat::Inode::get_inode_number() { return m_inode_number; }
+
+json Blackhat::Inode::serialize() {
+  json j = {
+      {"name", m_name},
+      {"mode", m_mode},
+      {"inode_number", m_inode_number},
+      {"data", m_data},
+  };
+
+  return j;
+}
+
+json Blackhat::Ext4::serialize() {
+  json j;
+
+  j["inodes"] = json::object();
+
+  // Serialize the inodes
+  for (auto const &[ino_num, inode] : m_inodes) {
+    j["inodes"][std::to_string(ino_num)] = inode->serialize();
+  }
+
+  // Serialize the directory entries
+  j["directory_entries"] = json::object();
+  for (auto const &[inode, entries] : m_directory_entries) {
+    j["directory_entries"][std::to_string(inode)] = json::array();
+    for (auto const &entry : entries) {
+      j["directory_entries"][std::to_string(inode)].push_back(entry);
+    }
+  }
+
+  j["root"] = m_root->serialize();
+
+  return j;
+}

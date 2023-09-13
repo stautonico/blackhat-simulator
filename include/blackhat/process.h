@@ -1,13 +1,11 @@
 #pragma once
 
-// Forward declaration
-//namespace Blackhat{class Interpreter;}
-//namespace Blackhat{class Process;}
 #include <blackhat/interpreter.h>
 
 #include <map>
 #include <string>
 #include <vector>
+#include <mutex>
 
 namespace Blackhat {
 
@@ -30,6 +28,8 @@ enum class ProcessState {
 
 class Process {
 public:
+  friend class Blackhat::Interpreter;
+
   explicit Process(std::string code);
 
   // TODO: Maybe not public?

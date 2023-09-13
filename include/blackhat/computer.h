@@ -3,6 +3,10 @@
 #include <blackhat/fs/filesystem.h>
 #include <util/time.h>
 
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -20,6 +24,8 @@ public:
   int temporary_exec(std::string path, std::vector<std::string> args);
 
   std::string temporary_read(std::string path);
+
+  json serialize();
 
 private:
   Timestamp m_boottime;

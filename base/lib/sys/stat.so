@@ -1,0 +1,25 @@
+let S_IFMT = 0o170000;
+let S_IFSOCK = 0o140000;
+let S_IFLNK = 0o120000;
+let S_IFREG = 0o100000;
+let S_IFBLK = 0o060000;
+let S_IFDIR = 0o040000;
+let S_IFCHR = 0o020000;
+let S_IFIFO = 0o010000;
+let S_ISUID = 0o004000;
+let S_ISGID = 0o002000;
+let S_ISVTX = 0o001000;
+let S_IRWXU = 0o0700;
+let S_IRUSR = 0o0400;
+let S_IWUSR = 0o0200;
+let S_IXUSR = 0o0100;
+let S_IRWXG = 0o0070;
+let S_IRGRP = 0o0040;
+let S_IWGRP = 0o0020;
+let S_IXGRP = 0o0010;
+let S_IRWXO = 0o0007;
+let S_IROTH = 0o0004;
+let S_IWOTH = 0o0002;
+let S_IXOTH = 0o0001;
+
+console.log((S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH).toString(8));

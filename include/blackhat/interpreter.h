@@ -13,6 +13,7 @@ class Process;
 
 namespace Blackhat {
 
+
 class Interpreter {
 public:
   static thread_local Interpreter *current; // So that the builtins can access

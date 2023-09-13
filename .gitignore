@@ -219,3 +219,5 @@ tags
 
 # We want EVERYTHING in the base directory
 !base/**/**
+
+build

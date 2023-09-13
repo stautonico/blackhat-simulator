@@ -2,6 +2,9 @@
 
 #include <string>
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 namespace Blackhat{
 // Template class that all filesystems should inherit from
 
@@ -50,6 +53,8 @@ public:
   virtual int chown(std::string path, int uid, int gid) = 0;
 
   virtual int rm(std::string path) = 0;
+
+  virtual json serialize() = 0;
 
 private:
 };
