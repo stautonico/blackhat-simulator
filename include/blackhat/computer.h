@@ -39,8 +39,8 @@ private:
 
   void _kinit();
   void _new_computer_kinit();
-  void _create_fs_from_base(const std::filesystem::path &dir,
-                            std::string basepath);
+  void _create_fs_from_base(const std::string &basepath,
+                            const std::string current_path);
   void _post_fs_kinit();
 
   void _kernel_panic(std::string message);

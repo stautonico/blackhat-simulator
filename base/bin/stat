@@ -1,5 +1,5 @@
 require("sys/stat");
 
 function main() {
-    console.log("Hello from stat!");
+    print("Hello from stat!");
 }

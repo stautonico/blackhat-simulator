@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stack>
 
 using json = nlohmann::json;
 
@@ -54,31 +55,32 @@ void Blackhat::Computer::_kinit() {
   this->_kernel_panic("Init exited");
 }
 
-void Blackhat::Computer::_create_fs_from_base(const std::filesystem::path &dir,
-                                              std::string basepath) {
-  // Loop through each directory/file in the base directory and create it
-  // in the game's filesystem
-  for (const auto &entry : std::filesystem::directory_iterator(dir)) {
-    if (entry.is_directory()) {
-      _create_fs_from_base(entry.path(), basepath);
-      // Try and create the directory if it doesn't exist
-      std::cout << "Making directory: " << erase(entry.path().string(), basepath) << std::endl;
-      this->m_fs_mappings["/"]->create(erase(entry.path().string(), basepath),
-                                       0, 0, 0644);
-    } else {
-      // This code is gross but it'll do for now
-      // TODO: Set the correct metadata and ACLs
-      this->m_fs_mappings["/"]->create(erase(entry.path().string(), basepath),
-                                       0, 0, 0755);
-      std::cout << "Making file: " << erase(entry.path().string(), basepath)
-                << std::endl;
-      auto result = this->m_fs_mappings["/"]->write(
-          erase(entry.path().string(), basepath),
-          std::string(std::istreambuf_iterator<char>(
-                          std::ifstream(entry.path().string(), std::ios::binary)
-                              .rdbuf()),
-                      std::istreambuf_iterator<char>()));
-      std::cout << result << std::endl;
+void Blackhat::Computer::_create_fs_from_base(const std::string &basepath,
+                                              const std::string current_path) {
+  std::stack<std::string> dirs;
+  dirs.push(current_path);
+
+  while (!dirs.empty()) {
+    const std::string dir_path = dirs.top();
+    dirs.pop();
+
+    for (const auto &entry : std::filesystem::directory_iterator(dir_path)) {
+      std::string relative_path =
+          entry.path().string().substr(basepath.length());
+      if (std::filesystem::is_directory(entry.status())) {
+        this->m_fs_mappings["/"]->create(relative_path, 0, 0, 0644);
+        dirs.push(entry.path());
+      } else {
+        this->m_fs_mappings["/"]->create(relative_path, 0, 0, 0755);
+
+        this->m_fs_mappings["/"]->write(
+            erase(entry.path().string(), basepath),
+            std::string(
+                std::istreambuf_iterator<char>(
+                    std::ifstream(entry.path().string(), std::ios::binary)
+                        .rdbuf()),
+                std::istreambuf_iterator<char>()));
+      }
     }
   }
 }
@@ -136,8 +138,6 @@ int Blackhat::Computer::temporary_exec(std::string path,
   // Try to find the file in the filesystem
   auto file = this->m_fs_mappings["/"]->read(path);
 
-  // Open /tmp/log
-
   if (file.empty()) {
     std::cout << "Command not found: " << path << std::endl;
     return 1;
@@ -150,7 +150,6 @@ int Blackhat::Computer::temporary_exec(std::string path,
 }
 
 std::string Blackhat::Computer::temporary_read(std::string path) {
-  std::cout << "Trying to read: " << path << std::endl;
   return this->m_fs_mappings["/"]->read(path);
 }
 
