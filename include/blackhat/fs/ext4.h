@@ -45,6 +45,7 @@ public:
   json serialize() override;
 
 private:
+
   std::map<int, Inode *> m_inodes; // Inode number -> Inode *
   std::map<int, std::vector<int>> m_directory_entries; // Inode number -> Vector
                                                        // of inode numbers

@@ -42,6 +42,7 @@ private:
   static duk_ret_t _read_file(duk_context *ctx);
   static duk_ret_t _internal_get_env(duk_context *ctx);
   static duk_ret_t _internal_set_env(duk_context *ctx);
+  static duk_ret_t _internal_readdir(duk_context *ctx);
 };
 
 } // namespace Blackhat

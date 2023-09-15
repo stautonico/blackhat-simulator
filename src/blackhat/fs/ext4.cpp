@@ -97,6 +97,10 @@ std::string Blackhat::Ext4::read(std::string path) {
   auto inode = _find_inode(path);
   if (inode == nullptr)
     return ""; // TODO: Find a way to return an error code and not an empty str
+
+  // HACK: This is just a temporary hack to read a directory
+  // Find if we're a directory
+
   return inode->m_data;
 }
 

@@ -52,6 +52,13 @@ std::string Blackhat::Process::get_env(std::string key) {
   // crashes For the time being, we'll just skip all this, and continue working
   // on everything else, otherwise we'll spend all day here
 
+  // Temporary stuff: hard code some environ vars temporarily until we get it fixed
+  if (key == "PS1") {
+    return "> ";
+  } else if (key == "PATH") {
+    return "/bin";
+  }
+
   return "";
   // Try to find the key in the map
   auto it = m_environ.find(key);

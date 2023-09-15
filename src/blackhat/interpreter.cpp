@@ -153,3 +153,9 @@ duk_ret_t Blackhat::Interpreter::_internal_set_env(duk_context *ctx) {
   Interpreter::current->m_process->set_env(key, value);
   return 0;
 }
+
+duk_ret_t Blackhat::Interpreter::_internal_readdir(duk_context *ctx) {
+  std::string path = duk_to_string(ctx, 0);
+
+  g_computer.temporary_readdir(path);
+}
