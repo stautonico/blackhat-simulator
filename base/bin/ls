@@ -1,0 +1,19 @@
+require("dirent");
+
+function main(args) {
+    if (args.length < 1) {
+        print("usage: ls <path>");
+        return 1;
+    }
+
+    // TODO: Support errno for directory not found
+    var entries = readdir(args[0]);
+
+    for (var i = 0; i < entries.length; i++) {
+        print(entries[i] + " ", false);
+    }
+
+    print(""); // Newline
+    
+    return 0;
+}

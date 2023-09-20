@@ -4,6 +4,7 @@ require("dirent");
 function main() {
     while (true) {
         var result = input(getenv("PS1") || "> ");
+        if (result == "") continue;
         // Split the result
         var args = result.split(" ");
         if (result == "exit") break;
@@ -11,17 +12,41 @@ function main() {
             var env = args[1].split("=");
             setenv(env[0], env[1]);
         } else {
-            var path = getenv("PATH");
+            if (result[0] == "/") {
+                // If we provided the path to the executable, just call it
+                // NOT THE MOST ROBUST, BUT WORKS FOR NOW
+                exec(result);
+            } else {
 
-            var pieces = path.split(":");
+                var path = getenv("PATH");
 
-            for (var x = 0; x < pieces.length; x++) {
-                var entries = readdir(pieces[x]);
-                for (var y = 0; y < entries.length; y++) {
-                    print(entries[y]);
+                var pieces = path.split(":");
+
+                // Ignore the args passed to the command
+                var split_command = result.split(" ");
+                var command = split_command[0];
+                split_command.shift();
+                var args = split_command.join(" ");
+
+                var found_command = false;
+
+                for (var x = 0; x < pieces.length; x++) {
+                    var entries = readdir(pieces[x]);
+                    for (var y = 0; y < entries.length; y++) {
+                        if (entries[y] == command) {
+                            if (split_command.length == 0) {
+                                exec(pieces[x] + "/" + entries[y]);
+                            } else {
+                                exec(pieces[x] + "/" + entries[y] + " " + args);
+                            }
+                            found_command = true;
+                        }
+                    }
+                }
+                if (!found_command) {
+                    print("shell: command not found: " + command);
                 }
             }
-            exec(result);
         }
     }
 }

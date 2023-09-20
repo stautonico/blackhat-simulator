@@ -96,12 +96,37 @@ int Blackhat::Ext4::write(std::string path, std::string data) {
 std::string Blackhat::Ext4::read(std::string path) {
   auto inode = _find_inode(path);
   if (inode == nullptr)
+
     return ""; // TODO: Find a way to return an error code and not an empty str
+              //        Use errno?
 
   // HACK: This is just a temporary hack to read a directory
   // Find if we're a directory
 
   return inode->m_data;
+}
+
+std::vector<std::string> Blackhat::Ext4::readdir(std::string path) {
+    auto inode = _find_inode(path);
+    if (inode == nullptr) {
+        return {};
+    }
+
+    auto entries = m_directory_entries[inode->m_inode_number];
+
+    std::vector<std::string> names;
+
+    for (auto entry : entries) {
+        auto inode = m_inodes[entry];
+        if (inode == nullptr) {
+            // idk what to do here, so we'll just throw for now
+            throw std::runtime_error("Invalid inode number: " + entry);
+        }
+
+        names.push_back(inode->m_name);
+    }
+
+    return names;
 }
 
 int Blackhat::Ext4::mv(std::string path, std::string new_path) { return 0; }

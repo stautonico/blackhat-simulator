@@ -8,6 +8,16 @@ class Process;
 
 #include <vendor/duktape/duktape.h>
 
+/*
+ * TODO: Use something like this so set the errno value
+ * duk_push_string(ctx, "2+3");
+ * duk_push_string(ctx, "eval");
+ * duk_compile(ctx, DUK_COMPILE_EVAL);
+ * duk_call(ctx, 0);      /* [ func ] -> [ result ]
+ *
+ * Basically the same thing as calling `eval("errno=somevalue");`
+ */
+
 #include <string>
 #include <vector>
 

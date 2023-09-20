@@ -153,8 +153,8 @@ std::string Blackhat::Computer::temporary_read(std::string path) {
   return this->m_fs_mappings["/"]->read(path);
 }
 
-std::vector<Blackhat::Inode*> Blackhat::Computer::temporary_readdir(std::string path) {
-  return this->m_fs_mappings["/"]->read(path);
+std::vector<std::string> Blackhat::Computer::temporary_readdir(std::string path) {
+  return this->m_fs_mappings["/"]->readdir(path);
 }
 
 json Blackhat::Computer::serialize() {

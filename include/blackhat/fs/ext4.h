@@ -36,6 +36,8 @@ public:
   int write(std::string path, std::string data) override;
   std::string read(std::string path) override;
 
+  std::vector<std::string> readdir(std::string path) override;
+
   // TODO:
   int mv(std::string path, std::string new_path) override;
   int chmod(std::string path, int mode) override;

@@ -24,7 +24,7 @@ public:
   void call_init();
   int temporary_exec(std::string path, std::vector<std::string> args);
 
-  std::vector<Blackhat::Inode*> temporary_readdir(std::string path);
+  std::vector<std::string> temporary_readdir(std::string path);
 
   std::string temporary_read(std::string path);
 

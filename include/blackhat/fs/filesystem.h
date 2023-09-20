@@ -54,6 +54,9 @@ public:
 
   virtual int rm(std::string path) = 0;
 
+  // Only filename for now, more data should be provided later
+  virtual std::vector<std::string> readdir(std::string path) = 0;
+
   virtual json serialize() = 0;
 
 private:
