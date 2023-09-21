@@ -15,20 +15,20 @@ file(GLOB_RECURSE HEADERS include/*.h)
 # I really don't like putting all the sources all here, but it'll do for now ig
 set(SOURCES
         # blackhat/
-        src/blackhat/computer.cpp
-        src/blackhat/user.cpp
-        src/blackhat/process.cpp
-
-        src/blackhat/fs/ext4.cpp
-
-        # util/
-        src/util/crypto.cpp
-        src/util/string.cpp
-        src/util/time.cpp
-        src/blackhat/interpreter.cpp
-
-        # Vendor stuff
-        vendor/duktape/duktape.c
+#        src/blackhat/computer.cpp
+#        src/blackhat/user.cpp
+#        src/blackhat/process.cpp
+#
+#        src/blackhat/fs/ext4.cpp
+#
+#        # util/
+#        src/util/crypto.cpp
+#        src/util/string.cpp
+#        src/util/time.cpp
+#        src/blackhat/interpreter.cpp
+#
+#        # Vendor stuff
+#        vendor/duktape/duktape.c
         )
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} src/main.cpp)
@@ -38,4 +38,4 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 
 add_subdirectory(vendor/nlohmann_json)
 
-target_link_libraries(${PROJECT_NAME} nlohmann_json::nlohmann_json)
+#target_link_libraries(${PROJECT_NAME} nlohmann_json::nlohmann_json)
