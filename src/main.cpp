@@ -1,16 +1,14 @@
-// #include <blackhat/computer.h>
-// #include <blackhat/interpreter.h>
-// #include <blackhat/process.h>
-//
-// #include <mutex>
-//
-// thread_local Blackhat::Interpreter* Blackhat::Interpreter::current = nullptr;
-//
-// int main() {
-//
-//   return 0;
-// }
+#include <blackhat/computer.h>
+#include <blackhat/interpreter.h>
+#include <blackhat/process.h>
 
+// #include <mutex>
+
+// thread_local Blackhat::Interpreter* Blackhat::Interpreter::current = nullptr;
+
+int main() { return 0; }
+
+/*
 #include <pocketpy.h>
 
 using namespace pkpy;
@@ -21,12 +19,28 @@ int main() {
   // Create a virtual machine
   VM *vm = new VM(false); // Disable OS access
 
+  // Set "errno"
+  vm->exec("errno = 0");
+
   // Hello world!
  vm->exec("def main():\n\tprint('hello world!')\n\treturn 0");
 
+ vm->exec("print(f'Your errno value is: {errno}')");
+
  auto obj = vm->eval("main()");
 
- std::cout << CAST(i64, obj) << std::endl;
+ std::cout << "Result from main: " << CAST(i64, obj) << std::endl;
+
+
+
+ // Set errno after the fact
+ vm->exec("errno = 127");
+
+ vm->exec("print(f'our errno value after setting it is: {errno}')");
+
+ obj = vm->eval("errno");
+
+ std::cout << "Errno from within c++: " << CAST(i64, obj) << std::endl;
 
 //  PyObject* tp = vm->builtins->attr("dict");
 //  PyObject* obj = vm->call(tp);	// this is a `dict`
@@ -61,3 +75,4 @@ int main() {
   delete vm;
   return 0;
 }
+ */

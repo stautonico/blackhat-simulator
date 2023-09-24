@@ -14,24 +14,33 @@ file(GLOB_RECURSE HEADERS include/*.h)
 
 # I really don't like putting all the sources all here, but it'll do for now ig
 set(SOURCES
-        # blackhat/
-#        src/blackhat/computer.cpp
-#        src/blackhat/user.cpp
-#        src/blackhat/process.cpp
-#
-#        src/blackhat/fs/ext4.cpp
-#
-#        # util/
-#        src/util/crypto.cpp
-#        src/util/string.cpp
-#        src/util/time.cpp
-#        src/blackhat/interpreter.cpp
-#
-#        # Vendor stuff
-#        vendor/duktape/duktape.c
+        #        blackhat/
+        src/blackhat/computer.cpp
+        src/blackhat/user.cpp
+        src/blackhat/process.cpp
+
+        src/blackhat/fs/ext4.cpp
+
+        # util/
+        src/util/crypto.cpp
+        src/util/string.cpp
+        src/util/time.cpp
+        src/blackhat/interpreter.cpp
         )
 
+# Add some settings for pocketpy
+
+set(PK_ENABLE_OS OFF CACHE BOOL "Disable OS access (read/write/os/etc.")
+set(PK_ENABLE_THREAD ON CACHE BOOL "Enable multi-threading support")
+set(PK_ENABLE_STD_FUNCTION ON CACHE BOOL "Use std::function for native bindings")
+set(PK_USE_BOX2D OFF CACHE BOOL "Don't compile box2D")
+set(PK_BUILD_STATIC_LIB ON CACHE BOOL "Compile the static library for pocketpy")
+add_subdirectory(pocketpy)
+
+include_directories(pocketpy/include)
+
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} src/main.cpp)
+
 
 # Build and link nlohmann/json
 set(JSON_BuildTests OFF CACHE INTERNAL "")
@@ -39,3 +48,4 @@ set(JSON_BuildTests OFF CACHE INTERNAL "")
 add_subdirectory(vendor/nlohmann_json)
 
 #target_link_libraries(${PROJECT_NAME} nlohmann_json::nlohmann_json)
+target_link_libraries(${PROJECT_NAME} pocketpy)
