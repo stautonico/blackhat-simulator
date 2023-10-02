@@ -1,52 +1,40 @@
-require("stdlib");
-require("dirent");
+require("stdlib")
+require("dirent")
 
-function main() {
-    while (true) {
-        var result = input(getenv("PS1") || "> ");
-        if (result == "") continue;
-        // Split the result
-        var args = result.split(" ");
-        if (result == "exit") break;
-        else if (args[0] == "export") {
-            var env = args[1].split("=");
-            setenv(env[0], env[1]);
-        } else {
-            if (result[0] == "/") {
-                // If we provided the path to the executable, just call it
-                // NOT THE MOST ROBUST, BUT WORKS FOR NOW
-                exec(result);
-            } else {
+def main():
+    while True:
+        prompt = getenv("PS1") or "Type a command> "
+        result = input(prompt)
 
-                var path = getenv("PATH");
+        if result == "": continue
 
-                var pieces = path.split(":");
+        if result == "exit": return 0
 
-                // Ignore the args passed to the command
-                var split_command = result.split(" ");
-                var command = split_command[0];
-                split_command.shift();
-                var args = split_command.join(" ");
+        # Split the result
+        args = result.split(" ")
 
-                var found_command = false;
+        if args[0] == "export":
+            key, value = args[1].split("=")
+            setenv(key, value)
+        else:
+            if result[0] == "/":
+                # Abs path to executable
+                exec(args[0], args[-1:])
+            else:
+                path = getenv("PATH") or "/bin"
+                pieces = path.split(":")
 
-                for (var x = 0; x < pieces.length; x++) {
-                    var entries = readdir(pieces[x]);
-                    for (var y = 0; y < entries.length; y++) {
-                        if (entries[y] == command) {
-                            if (split_command.length == 0) {
-                                exec(pieces[x] + "/" + entries[y]);
-                            } else {
-                                exec(pieces[x] + "/" + entries[y] + " " + args);
-                            }
-                            found_command = true;
-                        }
-                    }
-                }
-                if (!found_command) {
-                    print("shell: command not found: " + command);
-                }
-            }
-        }
-    }
-}
+                found_command = False
+
+                for piece in pieces:
+                    entries = readdir(piece)
+                    for entry in entries:
+                        if entry == args[0]:
+                            exec(f"{piece}/{args[0]}", args[-1:])
+                            found_command = True
+                            break
+
+                if not found_command:
+                    print(f"shell: command not found '{args[0]}'")
+
+

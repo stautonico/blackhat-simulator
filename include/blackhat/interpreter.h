@@ -1,44 +1,42 @@
 #pragma once
 
+
 // Forward declaration
 namespace Blackhat {
-class Process;
+    class Process;
 }
 
 #include <pocketpy.h>
-using namespace pkpy; // idk about this
+using namespace pkpy;// idk about this, maybe change later
 
 #include <string>
 #include <vector>
 
 namespace Blackhat {
-class Interpreter {
-public:
-  Interpreter(std::string code, Blackhat::Process *process);
+    class Interpreter {
+    public:
+        friend class Process;
+        Interpreter(std::string code, Blackhat::Process *process);
+        ~Interpreter();
 
-  int run(const std::vector<std::string> &args);
+        int run(const std::vector<std::string> &args);
 
-private:
-  Process *m_process;
-  pkpy::VM *m_vm;
+    private:
+        VM *m_vm = nullptr;
+        Blackhat::Process *m_process = nullptr;
 
-  std::vector<std::string> m_loaded_modules;
+        std::string m_code;
 
-  std::string m_code;
+        std::vector<std::string> m_imported_modules = {};
 
-  void _init_builtins();
+        void _init_builtins();
 
-  // Built-in functions
-  // TODO: Rewrite for pocketpy
-  void _print(std::string str, bool newline = true);
-  //  static duk_ret_t _print(duk_context *ctx);
-  //  static duk_ret_t _input(duk_context *ctx);
-  //  static duk_ret_t _tmp_exec(duk_context *ctx);
-  //  static duk_ret_t _require(duk_context *ctx);
-  //  static duk_ret_t _read_file(duk_context *ctx);
-  //  static duk_ret_t _internal_get_env(duk_context *ctx);
-  //  static duk_ret_t _internal_set_env(duk_context *ctx);
-  //  static duk_ret_t _internal_readdir(duk_context *ctx);
-};
+        void _print(std::string msg, bool newline = true);
+        std::string _input(std::string prompt);
+        int _exec(std::string path, std::vector<std::string> args);
+        void _require(std::string module_name);
 
-} // namespace Blackhat
+        std::vector<std::string> _internal_readdir(std::string path);
+
+    };
+}// namespace Blackhat

@@ -1,52 +1,46 @@
 #pragma once
 
-#include <blackhat/fs/filesystem.h>
-#include <blackhat/fs/ext4.h>
-#include <util/time.h>
-
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
-
-#include <filesystem>
-#include <iostream>
-#include <map>
-#include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
+#include <blackhat/fs/ext4.h>
+
+// Forward declaration
 namespace Blackhat {
-class Computer {
-public:
-  Computer();
+    class Process;
+}
 
-  void call_init();
-  int temporary_exec(std::string path, std::vector<std::string> args);
+#include <blackhat/process.h>
 
-  std::vector<std::string> temporary_readdir(std::string path);
+namespace Blackhat {
+    class Computer {
+    public:
+        Computer();
 
-  std::string temporary_read(std::string path);
+        // TODO: Maybe not be public?
+        void call_userland_init();
 
-  json serialize();
+        int _exec(std::string path, std::vector<std::string> args);
+        std::string _read(std::string path);
 
-private:
-  Timestamp m_boottime;
-  std::string m_hostname = "localhost"; // Fallback, will be overwritten by
-                                        // something post-init
+        std::vector<std::string> _readdir(std::string path);
 
-  std::map<std::string, Filesystem *> m_fs_mappings;
-  // TODO: Add process'
 
-  void _create_root_user();
+    private:
+        // TODO: boot time
+        std::string m_hostname = "localhost";// Fallback, will be overwritten by
+                                             // something post-init
 
-  void _kinit();
-  void _new_computer_kinit();
-  void _create_fs_from_base(const std::string &basepath,
-                            const std::string current_path);
-  void _post_fs_kinit();
+        Ext4 *m_fs = nullptr;
 
-  void _kernel_panic(std::string message);
-};
+        void _new_computer_kinit();
 
-} // namespace Blackhat
+        void _kinit();
+        void _post_fs_kinit();
+
+        void _kernel_panic(std::string message);
+
+        void _create_fs_from_base(const std::string &basepath, const std::string current_path);
+
+    };
+}// namespace Blackhat

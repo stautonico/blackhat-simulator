@@ -1,8 +1,0 @@
-function main(args) {
-    if (args.length < 1) {
-        print("usage: cat <file>");
-        return 1;
-    }
-    print(read(args[0]));
-    return 0;
-}

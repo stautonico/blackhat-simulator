@@ -1,0 +1,27 @@
+def main():
+    op_signs = {
+        "add": "+",
+        "sub": "-",
+        "mul": "*",
+        "div": "/"
+    }
+
+    print("Welcome to the calculator")
+    num_one = int(input("Enter the first number> "))
+    num_two = int(input("Enter the second number> "))
+
+    operation = input("Enter which operation to perform [add/sub/mul/div]: ")
+
+    result = 0
+
+    if operation == "add":
+        result = num_one + num_two
+    elif operation == "sub":
+        result = num_one - num_two
+    elif operation == "mul":
+        result = num_one * num_two
+    elif operation == "div":
+        result = num_one / num_two
+
+    print(f"{num_one} {op_signs[operation]} {num_two} = {result}")
+    return 0

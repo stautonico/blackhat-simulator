@@ -1,9 +1,6 @@
-function getenv(key) {
-    // We don't have a pointer to the environment, so we'll just fake it (like my girlfriend :( )
+def getenv(key: str) -> str:
+    # We don't have a pointer to the environment, so we'll just fake it (like my girlfriend :( )
     return _internal_get_env(key);
 
-}
-
-function setenv(key, value) {
-    return _internal_set_env(key, value);
-}
+def setenv(key: str, value: str) -> None:
+    return _internal_set_env(key, value)

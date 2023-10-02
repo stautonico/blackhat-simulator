@@ -1,0 +1,4 @@
+print("Testlib was imported!")
+
+def testfunc(name):
+    print(f"Hello {name}! This is the testlib!")

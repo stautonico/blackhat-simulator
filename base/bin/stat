@@ -1,5 +1,0 @@
-require("sys/stat");
-
-function main() {
-    print("Hello from stat!");
-}
