@@ -1,3 +1,3 @@
-def main():
+def main(argv):
     print("Hello from the test binary!")
     return 0

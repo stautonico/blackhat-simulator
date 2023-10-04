@@ -101,6 +101,18 @@ namespace Blackhat {
                 this);
 
         m_vm->bind(
+                m_vm->_main, "_internal_read(path:str) -> str",
+                [](VM *vm, ArgsView args) {
+                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
+                    auto path_obj = CAST(Str &, args[0]);
+                    const char *path = path_obj.c_str();
+
+                    auto result = t->_internal_read(path);
+                    return VAR(result);
+                },
+                this);
+
+        m_vm->bind(
                 m_vm->_main, "_internal_readdir(path: str) -> list[str]",
                 [](VM *vm, ArgsView args) {
                     Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
@@ -111,7 +123,7 @@ namespace Blackhat {
 
                     List l;
 
-                    for (auto entry : result) {
+                    for (auto entry: result) {
                         l.push_back(VAR(entry));
                     }
 
@@ -133,7 +145,9 @@ namespace Blackhat {
 
         m_vm->exec(m_code);
 
-        auto return_code_obj = m_vm->eval("main()");
+        auto python_args = _vector_to_python_string(args);
+
+        auto return_code_obj = m_vm->eval("main(" + python_args + ")");
 
         // TODO: Support default return code if program doesn't return one
         auto return_code = py_cast<int>(m_vm, return_code_obj);
@@ -147,6 +161,7 @@ namespace Blackhat {
         std::getline(std::cin, input);
         return input;
     }
+
     int Interpreter::_exec(std::string path, std::vector<std::string> args) {
         m_process->m_computer->_exec(path, args);
         return 0;
@@ -154,7 +169,8 @@ namespace Blackhat {
 
     void Interpreter::_require(std::string module_name) {
         // Only import if we didn't already
-        if (!(std::find(m_imported_modules.begin(), m_imported_modules.end(), module_name) != m_imported_modules.end())) {
+        if (!(std::find(m_imported_modules.begin(), m_imported_modules.end(), module_name) !=
+              m_imported_modules.end())) {
             auto result = m_process->m_computer->_read("/lib/" + module_name + ".so");
 
             m_vm->exec(result);
@@ -162,7 +178,42 @@ namespace Blackhat {
             m_imported_modules.push_back(module_name);
         }
     }
+
+    std::string Interpreter::_internal_read(std::string path) {
+        return m_process->m_computer->_read(path);
+    }
+
     std::vector<std::string> Interpreter::_internal_readdir(std::string path) {
         return m_process->m_computer->_readdir(path);
+    }
+
+    std::string Interpreter::_vector_to_python_string(std::vector<std::string> in) {
+        std::stringstream ss;
+
+        // TODO: Support arguments that contain quotes (bunch them up)
+
+        ss << "[";
+        for (auto component: in) {
+            // Replace all instances of " in the component with \"
+            std::string output;
+
+            for (auto c: component) {
+                if (c == '"') {
+                    output += "\\\"";
+                } else {
+                    output += c;
+                }
+            }
+
+            ss << "\"" << output << "\",";
+        }
+
+        // Only remove the last comma IF we have a comma (aka not empty args)
+        if (ss.str().back() != '[')
+            ss.seekp(-1, std::ios_base::end);
+        ss << "]";
+
+        auto final = ss.str();
+        return ss.str();
     }
 }// namespace Blackhat

@@ -1,0 +1,9 @@
+require("stdlib")
+
+def main(argv):
+    if len(argv)< 1:
+        print("usage: cat <file>")
+        return 1
+
+    print(read(argv[0]))
+    return 0

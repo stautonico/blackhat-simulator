@@ -113,7 +113,7 @@ int Blackhat::Computer::_exec(std::string path, std::vector<std::string> args) {
     }
 
     Blackhat::Process proc(result, this);
-    proc.start_sync({});
+    proc.start_sync(args);
     return 0;// TODO: Get the return value
 }
 

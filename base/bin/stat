@@ -1,0 +1,4 @@
+require("sys/stat")
+
+def main(argv):
+    return 0

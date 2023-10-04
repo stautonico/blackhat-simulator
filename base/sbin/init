@@ -1,7 +1,7 @@
 require("stdlib")
 require("dirent")
 
-def main():
+def main(argv):
     while True:
         prompt = getenv("PS1") or "Type a command> "
         result = input(prompt)
@@ -19,7 +19,7 @@ def main():
         else:
             if result[0] == "/":
                 # Abs path to executable
-                exec(args[0], args[-1:])
+                exec(args[0], args[1:])
             else:
                 path = getenv("PATH") or "/bin"
                 pieces = path.split(":")
@@ -30,7 +30,7 @@ def main():
                     entries = readdir(piece)
                     for entry in entries:
                         if entry == args[0]:
-                            exec(f"{piece}/{args[0]}", args[-1:])
+                            exec(f"{piece}/{args[0]}", args[1:])
                             found_command = True
                             break
 

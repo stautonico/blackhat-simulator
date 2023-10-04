@@ -1,0 +1,15 @@
+require("dirent")
+
+def main(argv):
+    if len(argv) == 0:
+        print("usage: ls <path>");
+        return 1
+
+    # TODO: Support errno for directory not found
+    # TODO: Support multiple args
+    entries = readdir(argv[0])
+
+    for entry in entries:
+        print(entry)  # TODO: Support no newline
+
+    return 0
