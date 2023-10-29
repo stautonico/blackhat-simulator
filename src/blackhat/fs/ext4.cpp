@@ -122,5 +122,10 @@ namespace Blackhat {
         return names;
     }
 
+    bool Ext4::exists(std::string path) {
+        auto inode = _find_inode(path);
+        return inode != nullptr;
+    }
+
 
 }// namespace Blackhat

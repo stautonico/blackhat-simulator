@@ -35,4 +35,8 @@ namespace Blackhat {
     void Process::setenv(std::string key, std::string value) {
         m_environ[key] = value;
     }
+
+    void Process::set_cwd(std::string path) {
+        m_cwd = path;
+    }
 }

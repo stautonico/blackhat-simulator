@@ -25,6 +25,8 @@ namespace Blackhat {
 
         std::vector<std::string> _readdir(std::string path);
 
+        void start();
+
 
     private:
         // TODO: boot time

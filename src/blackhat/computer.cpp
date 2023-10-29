@@ -25,7 +25,11 @@ void Blackhat::Computer::_kinit() {
     this->_new_computer_kinit();
 
     this->_post_fs_kinit();
+}
 
+void Blackhat::Computer::start() {
+    // This function isn't automatically called because sometimes
+    // we want a computer without starting it (like for testing)
     this->call_userland_init();
 
     // We should never reach this point, but if we did, init exited
@@ -50,6 +54,8 @@ void Blackhat::Computer::_new_computer_kinit() {
         path = "base";
     else if (std::filesystem::exists("../base"))
         path = "../base";
+    else if (std::filesystem::exists("../../base"))
+        path = "../../base";
     else
         _kernel_panic("No base directory found: Cannot initialize filesystem");
 
@@ -74,6 +80,7 @@ void Blackhat::Computer::call_userland_init() {
 
     // TODO: Create a process
     Blackhat::Process proc(result, this);
+    proc.set_cwd("/");
     proc.start_sync({});
 }
 void Blackhat::Computer::_create_fs_from_base(const std::string &basepath, const std::string current_path) {
@@ -88,7 +95,9 @@ void Blackhat::Computer::_create_fs_from_base(const std::string &basepath, const
             std::string relative_path =
                     entry.path().generic_string().substr(basepath.length());
             if (std::filesystem::is_directory(entry.status())) {
-                m_fs->create(relative_path, 0, 0, 0644);
+                // Check if it already exists
+                if (!m_fs->exists(relative_path))
+                    m_fs->create(relative_path, 0, 0, 0644);
                 dirs.push(entry.path().generic_string());// Generic string for win/lin compatability
             } else {
                 m_fs->create(relative_path, 0, 0, 0755);
@@ -113,6 +122,8 @@ int Blackhat::Computer::_exec(std::string path, std::vector<std::string> args) {
     }
 
     Blackhat::Process proc(result, this);
+    // TODO: Inherit parent cwd?
+    proc.set_cwd("/");
     proc.start_sync(args);
     return 0;// TODO: Get the return value
 }

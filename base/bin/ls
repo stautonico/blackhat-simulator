@@ -1,13 +1,15 @@
 require("dirent")
+require("unistd")
 
 def main(argv):
     if len(argv) == 0:
-        print("usage: ls <path>");
-        return 1
+        path = getcwd()
+    else:
+        path = argv[0]
 
     # TODO: Support errno for directory not found
     # TODO: Support multiple args
-    entries = readdir(argv[0])
+    entries = readdir(path)
 
     for entry in entries:
         print(entry)  # TODO: Support no newline

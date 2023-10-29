@@ -1,0 +1,38 @@
+require("stdlib")
+require("dirent")
+
+def main(argv):
+    while True:
+        prompt = getenv("PS1") or "Type a command> "
+        result = input(prompt)
+
+        if result == "": continue
+
+        if result == "exit": return 0
+
+        # Split the result
+        args = result.split(" ")
+
+        if args[0] == "export":
+            key, value = args[1].split("=")
+            setenv(key, value)
+        else:
+            if result[0] == "/":
+                # Abs path to executable
+                exec(args[0], args[1:])
+            else:
+                path = getenv("PATH") or "/bin"
+                pieces = path.split(":")
+
+                found_command = False
+
+                for piece in pieces:
+                    entries = readdir(piece)
+                    for entry in entries:
+                        if entry == args[0]:
+                            exec(f"{piece}/{args[0]}", args[1:])
+                            found_command = True
+                            break
+
+                if not found_command:
+                    print(f"sh: command not found '{args[0]}'")

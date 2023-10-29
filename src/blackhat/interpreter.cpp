@@ -130,6 +130,15 @@ namespace Blackhat {
                     return VAR(l);
                 },
                 this);
+
+        m_vm->bind(
+                m_vm->_main, "_internal_getcwd() -> str",
+                [](VM *vm, ArgsView args) {
+                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
+
+                    return VAR(t->_internal_getcwd());
+                },
+                this);
     }
 
     void Interpreter::_print(std::string msg, bool newline) {
@@ -185,6 +194,10 @@ namespace Blackhat {
 
     std::vector<std::string> Interpreter::_internal_readdir(std::string path) {
         return m_process->m_computer->_readdir(path);
+    }
+
+    std::string Interpreter::_internal_getcwd() {
+        return m_process->m_cwd;
     }
 
     std::string Interpreter::_vector_to_python_string(std::vector<std::string> in) {

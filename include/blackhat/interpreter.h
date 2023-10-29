@@ -38,6 +38,7 @@ namespace Blackhat {
 
         std::vector<std::string> _internal_readdir(std::string path);
         std::string _internal_read(std::string path);
+        std::string _internal_getcwd();
 
 
         std::string _vector_to_python_string(std::vector<std::string> in);

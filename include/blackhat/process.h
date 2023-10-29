@@ -24,6 +24,8 @@ namespace Blackhat {
         std::string getenv(std::string key);
         void setenv(std::string key, std::string value);
 
+        void set_cwd(std::string path);
+
     private:
         Blackhat::Computer* m_computer = nullptr;
 

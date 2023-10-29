@@ -27,11 +27,17 @@ add_subdirectory(vendor/pocketpy)
 
 include_directories(vendor/pocketpy/include)
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} src/main.cpp)
+add_library(blackhat-lib ${SOURCES} ${HEADERS})
+target_link_libraries(blackhat-lib pocketpy)
+
+enable_testing()
+add_subdirectory(test)
+
+add_executable(${PROJECT_NAME} src/main.cpp)
 
 # Build and link nlohmann/json
 # set(JSON_BuildTests OFF CACHE INTERAL "")
 #add_subdirectory(vendor/nlohmann_json)
 
 # add nlohmann_json::nlohmann_json'
-target_link_libraries(${PROJECT_NAME} pocketpy)
+target_link_libraries(${PROJECT_NAME} blackhat-lib)

@@ -1,0 +1,7 @@
+# This usually isn't a command, it's a shell builtin (but we'll just do it for now)
+require("unistd")
+def main(args):
+
+    print(getcwd())
+
+    return 0

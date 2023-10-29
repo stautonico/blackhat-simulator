@@ -29,6 +29,8 @@ namespace Blackhat {
         std::string read(std::string path);
         std::vector<std::string> readdir(std::string path);
 
+        bool exists(std::string path);
+
     private:
         std::map<int, Inode*> m_inodes; // Inode number -> Inode *
         std::map<int, std::vector<int>> m_dir_entries; // Inode num -> List of

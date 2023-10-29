@@ -22,4 +22,16 @@ S_IROTH = 0o0004
 S_IWOTH = 0o0002
 S_IXOTH = 0o0001
 
-print(oct(S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)[2:])
+def oct(n):
+    if n == 0:
+        return '0'
+
+    result = ''
+    while n > 0:
+        remainder = n % 8
+        result = str(remainder) + result
+        n //= 8
+
+    return result
+
+print(oct(S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))
