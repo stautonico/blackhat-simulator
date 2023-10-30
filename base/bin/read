@@ -1,0 +1,9 @@
+def main(args):
+    if len(args) != 1:
+        print(f"usage: read <path>")
+
+    result = _syscall(0x0, args[0])
+
+    print(result)
+
+    return 0

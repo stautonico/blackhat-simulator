@@ -139,6 +139,36 @@ namespace Blackhat {
                     return VAR(t->_internal_getcwd());
                 },
                 this);
+
+        m_vm->bind(
+                m_vm->_main, "_syscall(call: int, *args)",
+                [](VM *vm, ArgsView args) {
+                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
+                    auto syscall_id = CAST(int, args[0]);
+
+
+                    // Extrapolate the *args
+                    auto cmd_args = CAST(Tuple, args[1]);
+
+                    switch (syscall_id) {
+                        case SYSCALL_ID::SYS_READ: {
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+
+                            return VAR(t->m_process->m_computer->sys$read(path));
+                        }
+                        case SYSCALL_ID::SYS_WRITE: {
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto data = CAST(Str&, cmd_args[1]).c_str();
+
+                            return VAR(t->m_process->m_computer->sys$write(path, data));
+                        }
+                        default:
+                            return vm->None;
+                    }
+
+                    return vm->None;
+                },
+                this);
     }
 
     void Interpreter::_print(std::string msg, bool newline) {
