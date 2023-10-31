@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.22)
 project(blackhat-simulator)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -16,6 +16,7 @@ set(SOURCES
         src/blackhat/process.cpp
 
         src/blackhat/fs/ext4.cpp
+        src/blackhat/fs/file_descriptor.cpp
 
         src/util/string.cpp
         )

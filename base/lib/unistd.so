@@ -1,2 +1,6 @@
 def getcwd():
     return _internal_getcwd()
+
+def read(path):
+    # TODO: Take fd not path
+    return _syscall(0x0, path)

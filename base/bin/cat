@@ -1,9 +1,16 @@
-require("stdlib")
+require("stdio")
+require("unistd")
 
-def main(argv):
-    if len(argv)< 1:
-        print("usage: cat <file>")
+def main(args):
+    if len(args) != 1:
+        print(f"usage: cat <path>")
         return 1
 
-    print(read(argv[0]))
+    result = read(args[0])
+
+    if result is None:
+        perror("Unable to read file")
+    else:
+        print(result)
+
     return 0
