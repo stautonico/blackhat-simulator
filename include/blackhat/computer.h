@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <map>
 #include <vector>
 
 #include <blackhat/fs/ext4.h>
@@ -368,8 +369,8 @@ namespace Blackhat {
 
         void start();
 
-        std::string sys$read(std::string path);
-        int sys$write(std::string path, std::string data);
+        std::string sys$read(std::string path, int caller);
+        int sys$write(std::string path, std::string data, int caller);
 
 
     private:
@@ -378,6 +379,9 @@ namespace Blackhat {
                                              // something post-init
 
         Ext4 *m_fs = nullptr;
+
+        std::map<int, Process*> m_processes;
+        int m_pid_accumulator = 0;
 
         void _new_computer_kinit();
 

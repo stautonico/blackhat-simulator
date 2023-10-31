@@ -1,0 +1,4 @@
+require("errno")
+
+def strerror(errnum):
+     return _errno_messages.get(errnum, f"Unknown error {errnum}")

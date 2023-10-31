@@ -27,6 +27,14 @@ std::string join(std::vector<std::string> components, char delim, int start,
     return result;
 }
 
+std::string join(std::vector<std::string> components, char delim) {
+    std::string result = "";
+    for(auto i : components)
+        result += i + delim;
+
+    return result;
+}
+
 std::string erase(std::string str, std::string substr) {
     // Remove all instances of substr from str
     std::string result;

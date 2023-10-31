@@ -2,6 +2,7 @@
 #include <blackhat/fs/ext4.h>
 
 #include <util/string.h>
+#include <util/errno.h>
 
 #include <filesystem>
 #include <fstream>
@@ -122,10 +123,15 @@ namespace Blackhat {
             return -1;
         }
 
-        Process proc(result, this);
+        // TODO: Implement process spawner function
+        Process *proc = new Process(result, this);
+        proc->set_pid(m_pid_accumulator);
+        m_processes[m_pid_accumulator] = proc;
+        m_pid_accumulator++;
+
         // TODO: Inherit parent cwd?
-        proc.set_cwd("/");
-        proc.start_sync(args);
+        proc->set_cwd("/");
+        proc->start_sync(args);
         return 0;// TODO: Get the return value
     }
 
@@ -144,11 +150,18 @@ namespace Blackhat {
         return m_fs->readdir(path);
     }
 
-    std::string Computer::sys$read(std::string path) {
-        return _read(path);
+    std::string Computer::sys$read(std::string path, int caller) {
+        auto result = m_fs->read(path);
+
+        // Null value, aka doesn't exist, not empty string
+        if (result == std::string(1, '\0')) {
+            m_processes[caller]->set_errno(E::NOENT);
+        }
+
+        return result;
     }
 
-    int Computer::sys$write(std::string path, std::string data) {
+    int Computer::sys$write(std::string path, std::string data, int caller) {
         return m_fs->write(path, data);
     }
 

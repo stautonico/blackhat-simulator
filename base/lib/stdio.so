@@ -1,0 +1,7 @@
+require("errno")
+
+def perror(s):
+    output = f"{s}: "
+    # TODO: Maybe replace with strerror?
+    message = _errno_messages.get(errno, f"Unknown error {errno}")
+    print(output + message)

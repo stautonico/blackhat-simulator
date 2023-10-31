@@ -1,5 +1,5 @@
 #include <blackhat/process.h>
-
+#include <util/string.h>
 
 namespace Blackhat {
     Process::Process(std::string code, Computer *computer) : m_interpreter(code, this) {
@@ -7,6 +7,7 @@ namespace Blackhat {
     }
 
     void Process::start_sync(std::vector<std::string> args) {
+        m_cmdline = join(args, ' ');
         _run(args);
     }
     void Process::_run(std::vector<std::string> args) {
@@ -38,5 +39,10 @@ namespace Blackhat {
 
     void Process::set_cwd(std::string path) {
         m_cwd = path;
+    }
+
+    void Process::set_errno(int errnum) {
+        m_errno = errnum;
+        m_interpreter.set_errno(errnum);
     }
 }

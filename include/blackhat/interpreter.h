@@ -21,6 +21,9 @@ namespace Blackhat {
 
         int run(const std::vector<std::string> &args);
 
+        void set_errno(int errnum);
+
+
     private:
         VM *m_vm = nullptr;
         Blackhat::Process *m_process = nullptr;

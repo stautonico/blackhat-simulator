@@ -152,15 +152,21 @@ namespace Blackhat {
 
                     switch (syscall_id) {
                         case SYSCALL_ID::SYS_READ: {
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
 
-                            return VAR(t->m_process->m_computer->sys$read(path));
+                            auto result = t->m_process->m_computer->sys$read(path, t->m_process->m_pid);
+
+                            // Null value, aka doesn't exist, not empty string
+                            if (result == std::string(1, '\0'))
+                                return vm->None;
+
+                            return VAR(result);
                         }
                         case SYSCALL_ID::SYS_WRITE: {
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
-                            auto data = CAST(Str&, cmd_args[1]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
+                            auto data = CAST(Str &, cmd_args[1]).c_str();
 
-                            return VAR(t->m_process->m_computer->sys$write(path, data));
+                            return VAR(t->m_process->m_computer->sys$write(path, data, t->m_process->m_pid));
                         }
                         default:
                             return vm->None;
@@ -215,6 +221,10 @@ namespace Blackhat {
             m_vm->exec(result);
 
             m_imported_modules.push_back(module_name);
+
+            // If we're importing errno, set it appropriately
+            if (module_name == "errno")
+                m_vm->exec("errno = " + std::to_string(m_process->get_errno()));
         }
     }
 
@@ -258,5 +268,11 @@ namespace Blackhat {
 
         auto final = ss.str();
         return ss.str();
+    }
+
+    void Interpreter::set_errno(int errnum) {
+        if (std::find(m_imported_modules.begin(), m_imported_modules.end(), "errno") != m_imported_modules.end()) {
+            m_vm->exec("errno = " + std::to_string(errnum));
+        }
     }
 }// namespace Blackhat
