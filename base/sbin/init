@@ -1,7 +1,8 @@
 require("stdlib")
 require("dirent")
+require("unistd")
 
 def main(argv):
-    return exec("/bin/sh", [])
+    return execve("/bin/sh", [], {})
 
 

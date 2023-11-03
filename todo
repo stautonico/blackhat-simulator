@@ -1,0 +1,57 @@
+mkdir – creates a new directory.
+rmdir – removes a folder or path.
+rm – deletes a file.
+cp – copies files and directories, including their content.
+mv – moves or renames files and directories.
+touch – creates a new empty file.
+file – checks a file’s type.
+zip and unzip – creates and extracts a ZIP archive.
+tar – archives files without compression in a TAR format.
+nano, vi, and jed – edits a file with a text editor.
+cat – lists, combines, and writes a file’s content as a standard output.
+grep – searches a string within a file.
+sed – finds, replaces, or deletes patterns in a file.
+head – displays a file’s first ten lines.
+tail – prints a file’s last ten lines.
+awk – finds and manipulates patterns in a file.
+sort – reorders a file’s content.
+cut – sections and prints lines from a file.
+diff – compares two files’ content and their differences.
+tee – prints command outputs in Terminal and a file.
+locate – finds files in a system’s database.
+find – outputs a file or folder’s location.
+sudo – runs a command as a superuser.
+su – runs programs in the current shell as another user.
+chmod – modifies a file’s read, write, and execute permissions.
+chown – changes a file, directory, or symbolic link’s ownership.
+useradd and userdel – creates and removes a user account.
+df – displays the system’s overall disk space usage.
+du – checks a file or directory’s storage consumption.
+top – displays running processes and the system’s resource usage.
+htop – works like top but with an interactive user interface.
+ps – creates a snapshot of all running processes.
+uname – prints information about your machine’s kernel, name, and hardware.
+hostname – shows your system’s hostname.
+time – calculates commands’ execution time.
+systemctl – manages system services.
+watch – runs another command continuously.
+jobs – displays a shell’s running processes with their statuses.
+kill – terminates a running process.
+shutdown – turns off or restarts the system.
+ping – checks the system’s network connectivity.
+wget – downloads files from a URL.
+curl – transmits data between servers using URLs.
+scp – securely copies files or directories to another system.
+rsync – synchronizes content between directories or machines.
+Ifconfig – displays the system’s network interfaces and their configurations.
+netstat – shows the system’s network information, like routing and sockets.
+traceroute – tracks a packet’s hops to its destination.
+nslookup – queries a domain’s IP address and vice versa.
+dig – displays DNS information, including record types.
+history – lists previously run commands.
+man – shows a command’s manual.
+echo – prints a message as a standard output.
+ln – links files or directories.
+alias and unalias – sets and removes an alias for a file or command.
+cal – displays a calendar in Terminal.
+apt-get – manages Debian-based distros package libraries

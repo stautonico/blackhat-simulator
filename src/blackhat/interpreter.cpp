@@ -40,27 +40,6 @@ namespace Blackhat {
                 this);
 
         m_vm->bind(
-                m_vm->_main, "exec(path: str, args:list) -> int",
-                [](VM *vm, ArgsView args) {
-                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
-                    auto path_obj = CAST(Str &, args[0]);
-                    const char *path = path_obj.c_str();
-
-                    auto args_obj = CAST(List &, args[1]);
-                    std::vector<std::string> cmd_args;
-
-                    for (auto i: args_obj) {
-                        auto str_obj = CAST(Str &, i);
-                        cmd_args.push_back(str_obj.c_str());
-                    }
-
-                    auto result = t->_exec(path, cmd_args);
-
-                    return VAR(result);
-                },
-                this);
-
-        m_vm->bind(
                 m_vm->_main, "require(module:str) -> None",
                 [](VM *vm, ArgsView args) {
                     Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
@@ -132,15 +111,6 @@ namespace Blackhat {
                 this);
 
         m_vm->bind(
-                m_vm->_main, "_internal_getcwd() -> str",
-                [](VM *vm, ArgsView args) {
-                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
-
-                    return VAR(t->_internal_getcwd());
-                },
-                this);
-
-        m_vm->bind(
                 m_vm->_main, "_syscall(call: int, *args)",
                 [](VM *vm, ArgsView args) {
                     Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
@@ -152,9 +122,9 @@ namespace Blackhat {
 
                     switch (syscall_id) {
                         case SYSCALL_ID::SYS_READ: {
-                            auto path = CAST(Str &, cmd_args[0]).c_str();
+                            auto fd = CAST(int, cmd_args[0]);
 
-                            auto result = t->m_process->m_computer->sys$read(path, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$read(fd, t->m_process->m_pid);
 
                             // Null value, aka doesn't exist, not empty string
                             if (result == std::string(1, '\0'))
@@ -162,12 +132,66 @@ namespace Blackhat {
 
                             return VAR(result);
                         }
+
+                        case SYSCALL_ID::SYS_OPEN: {
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+
+                            // TODO: Make a macro for syscalls so we don't need to rewrite this each time
+                            auto result = t->m_process->m_computer->sys$open(path, t->m_process->m_pid);
+
+                            return VAR(result);
+                        }
+
                         case SYSCALL_ID::SYS_WRITE: {
-                            auto path = CAST(Str &, cmd_args[0]).c_str();
+                            auto fd = CAST(int, cmd_args[0]);
                             auto data = CAST(Str &, cmd_args[1]).c_str();
 
-                            return VAR(t->m_process->m_computer->sys$write(path, data, t->m_process->m_pid));
+                            return VAR(t->m_process->m_computer->sys$write(fd, data, t->m_process->m_pid));
                         }
+
+                        case SYSCALL_ID::SYS_GETCWD: {
+                            auto result = t->m_process->m_computer->sys$getcwd(t->m_process->m_pid);
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_CHDIR: {
+                            // TODO: Maybe make this into a macro?
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$chdir(path, t->m_process->m_pid);
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_EXECVE: {
+                            // TODO: Maybe make this into a macro?
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+
+                            auto argv_obj = CAST(List, cmd_args[1]);
+                            auto envp_obj = CAST(Dict, cmd_args[2]);
+
+                            // TODO: See if we can convert these automatically
+                            std::vector<std::string> argv;
+
+                            for (auto i = 0; i < argv_obj.size(); i++) {
+                                argv.push_back(CAST(Str&, argv_obj[i]).c_str());
+                            }
+
+                            std::map<std::string, std::string> envp;
+
+                            for (auto i = 0; i < envp_obj.keys().size(); i++) {
+                                auto key = CAST(Str&, envp_obj.keys()[i]).c_str();
+                                auto value = CAST(Str&, envp_obj.try_get(envp_obj.keys()[i])).c_str();
+                                envp.insert({key, value});
+                            }
+
+                            auto result = t->m_process->m_computer->sys$execve(path, argv, envp, t->m_process->m_pid);
+
+                            return VAR(result);
+
+                        }
+
                         default:
                             return vm->None;
                     }
@@ -207,11 +231,6 @@ namespace Blackhat {
         return input;
     }
 
-    int Interpreter::_exec(std::string path, std::vector<std::string> args) {
-        m_process->m_computer->_exec(path, args);
-        return 0;
-    }
-
     void Interpreter::_require(std::string module_name) {
         // Only import if we didn't already
         if (!(std::find(m_imported_modules.begin(), m_imported_modules.end(), module_name) !=
@@ -234,10 +253,6 @@ namespace Blackhat {
 
     std::vector<std::string> Interpreter::_internal_readdir(std::string path) {
         return m_process->m_computer->_readdir(path);
-    }
-
-    std::string Interpreter::_internal_getcwd() {
-        return m_process->m_cwd;
     }
 
     std::string Interpreter::_vector_to_python_string(std::vector<std::string> in) {

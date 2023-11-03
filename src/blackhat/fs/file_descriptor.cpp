@@ -8,4 +8,12 @@ namespace Blackhat {
 
         // TODO: Set mode and flags in separate functions?
     }
-}
+
+    std::string FileDescriptor::read() {
+        return m_inode->read();
+    }
+
+    int FileDescriptor::write(std::string data) {
+        return m_inode->write(data);
+    }
+}// namespace Blackhat

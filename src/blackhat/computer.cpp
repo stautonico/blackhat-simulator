@@ -1,8 +1,9 @@
 #include <blackhat/computer.h>
 #include <blackhat/fs/ext4.h>
+#include <blackhat/fs/file_descriptor.h>
 
-#include <util/string.h>
 #include <util/errno.h>
+#include <util/string.h>
 
 #include <filesystem>
 #include <fstream>
@@ -115,26 +116,6 @@ namespace Blackhat {
             }
         }
     }
-    int Computer::_exec(std::string path, std::vector<std::string> args) {
-        auto result = m_fs->read(path);
-
-        // Null value, aka doesn't exist, not empty string
-        if (result == std::string(1, '\0')) {
-            return -1;
-        }
-
-        // TODO: Implement process spawner function
-        Process *proc = new Process(result, this);
-        proc->set_pid(m_pid_accumulator);
-        m_processes[m_pid_accumulator] = proc;
-        m_pid_accumulator++;
-
-        // TODO: Inherit parent cwd?
-        proc->set_cwd("/");
-        proc->start_sync(args);
-        return 0;// TODO: Get the return value
-    }
-
 
     std::string Computer::_read(std::string path) {
         auto result = m_fs->read(path);
@@ -150,19 +131,126 @@ namespace Blackhat {
         return m_fs->readdir(path);
     }
 
-    std::string Computer::sys$read(std::string path, int caller) {
-        auto result = m_fs->read(path);
+    int Computer::sys$open(std::string path, int caller) {
+        auto caller_obj = m_processes[caller];
 
-        // Null value, aka doesn't exist, not empty string
-        if (result == std::string(1, '\0')) {
-            m_processes[caller]->set_errno(E::NOENT);
+        auto inode = m_fs->_find_inode(path);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
         }
 
-        return result;
+        // TODO: Write a helper to validate the caller pid
+
+        auto fd_num = caller_obj->get_fd_accumulator();
+
+        FileDescriptor fd(fd_num, path, inode);
+        caller_obj->add_file_descriptor(fd);
+
+        return fd_num;// We have to do this bc add_file_descriptor increments the accumulator
     }
 
-    int Computer::sys$write(std::string path, std::string data, int caller) {
-        return m_fs->write(path, data);
+    std::string Computer::sys$read(int fd, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        auto caller_obj = m_processes[caller];
+
+        auto fd_obj = caller_obj->get_file_descriptor(fd);
+
+        if (fd_obj == nullptr) {
+            caller_obj->set_errno(E::BADF);
+            return std::string(1, '\0');
+        }
+
+        // TODO: Permission check
+        return fd_obj->read();
+    }
+
+    int Computer::sys$write(int fd, std::string data, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        auto caller_obj = m_processes[caller];
+
+        auto fd_obj = caller_obj->get_file_descriptor(fd);
+
+        if (fd_obj == nullptr) {
+            caller_obj->set_errno(E::BADF);
+            return -1;
+        }
+
+        // TODO: Permission check
+        return fd_obj->write(data);
+    }
+
+    std::string Computer::sys$getcwd(int caller) {
+        // TODO: Write a helper to validate the caller pid
+        auto caller_obj = m_processes[caller];
+
+        std::cout << "The cwd of pid: " << caller_obj->get_pid() << " is " << caller_obj->get_cwd() << std::endl;
+
+        return caller_obj->get_cwd();
+    }
+
+    int Computer::sys$chdir(std::string path, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        auto caller_obj = m_processes[caller];
+
+        auto inode = m_fs->_find_inode(path);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        // TODO: Check for perms (EACCESS)
+        // TODO: Check if inode is a directory (ENOTDIR)
+        // TODO: Check name limit (ENAMETOOLONG)
+
+        std::cout << "Setting the cwd for pid: " << caller_obj->get_pid() << " to " << path << std::endl;
+        caller_obj->set_cwd(path);
+        std::cout << "The result of the cwd of pid: " << caller_obj->get_pid() << " after changing is: " << caller_obj->get_cwd() << std::endl;
+
+        return 0;
+    }
+
+    int Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        auto caller_obj = m_processes[caller];
+
+        auto inode = m_fs->_find_inode(pathname);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        // TODO: Check if executable (EACCES)
+
+        // Try to read the file content
+        auto file_content = inode->read();
+
+        // Null value, aka doesn't exist, not empty string
+        if (file_content == std::string(1, '\0')) {
+            caller_obj->set_errno(E::NOEXEC);
+            return -1;
+        }
+
+
+        // TODO: Implement process spawner function
+        Process *proc = new Process(file_content, this);
+        proc->set_pid(m_pid_accumulator);
+        m_processes[m_pid_accumulator] = proc;
+        m_pid_accumulator++;
+
+        // TODO: Come up with a proper solution for this
+        if (caller_obj == nullptr) {// Temp solution for /sbin/init
+            proc->set_cwd("/");
+        } else {
+            proc->set_cwd(caller_obj->get_cwd());
+        }
+
+        // TODO: Pass the environment
+        proc->start_sync(argv);
+        return 0;// TODO: Get the return value
     }
 
 }// namespace Blackhat

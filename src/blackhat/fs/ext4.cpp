@@ -5,6 +5,16 @@
 #include <util/string.h>
 
 namespace Blackhat {
+    std::string Inode::read() {
+        // TODO: Permission check
+        return m_data;
+    }
+
+    int Inode::write(std::string data) {
+        m_data = data;
+        return m_data.size();
+    }
+
     Ext4::Ext4() {
         m_root = new Inode();
         m_root->m_name = "/";

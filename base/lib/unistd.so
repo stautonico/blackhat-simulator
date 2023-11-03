@@ -1,6 +1,15 @@
-def getcwd():
-    return _internal_getcwd()
+def open(path):
+    return _syscall(2, path)
 
-def read(path):
-    # TODO: Take fd not path
-    return _syscall(0x0, path)
+def read(fd):
+    return _syscall(0, fd)
+
+def chdir(path):
+    # TODO: Make this pass the FULL path. We can use the current path to figure out the full path
+    return _syscall(80, path)
+
+def getcwd():
+    return _syscall(79)
+
+def execve(pathname, argv, envp):
+    return _syscall(59, pathname, argv, envp)

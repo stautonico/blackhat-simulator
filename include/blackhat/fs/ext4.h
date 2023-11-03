@@ -4,10 +4,21 @@
 #include <vector>
 #include <map>
 
+// Forward declaration
+//namespace Blackhat {
+//    class Computer;
+//}
+
+#include <blackhat/computer.h>
+
 namespace Blackhat {
     class Inode {
     public:
         friend class Ext4;
+
+        std::string read();
+        int write(std::string data);
+
     private:
         std::string m_name;
         std::string m_data;
@@ -19,6 +30,8 @@ namespace Blackhat {
 
     class Ext4 {
     public:
+        friend class Computer;
+
         Ext4();
 
         static Ext4 *make_standard_fs();

@@ -2,6 +2,11 @@
 
 #include <string>
 
+// Forward declaration
+namespace Blackhat {
+    class Inode;
+}
+
 #include <blackhat/fs/ext4.h>
 
 // https://www.oreilly.com/library/view/linux-device-drivers/0596000081/ch03s04.html
@@ -36,6 +41,12 @@ namespace Blackhat {
     class FileDescriptor {
     public:
         FileDescriptor(int fd, std::string path, Inode* inode);
+
+        int get_fd() {return m_fd;}
+
+        std::string read();
+        int write(std::string data);
+
     private:
         int m_fd;
         std::string m_path;

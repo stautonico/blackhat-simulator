@@ -5,14 +5,22 @@
 #include <map>
 #include <vector>
 
-#include <blackhat/fs/ext4.h>
+// Forward declaration
+namespace Blackhat {
+}
 
 // Forward declaration
 namespace Blackhat {
+    class Ext4;
     class Process;
 }
 
 #include <blackhat/process.h>
+#include <blackhat/fs/ext4.h>
+#include <blackhat/fs/file_descriptor.h>
+
+#include <blackhat/fs/ext4.h>
+
 
 using SyscallPointer = void *;
 
@@ -369,8 +377,13 @@ namespace Blackhat {
 
         void start();
 
-        std::string sys$read(std::string path, int caller);
-        int sys$write(std::string path, std::string data, int caller);
+        // TODO: Implement open flags and mode
+        int sys$open(std::string path, int caller);
+        std::string sys$read(int fd, int caller);
+        int sys$write(int fd, std::string data, int caller);
+        int sys$chdir(std::string path, int caller);
+        std::string sys$getcwd(int caller);
+        int sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp, int caller);
 
 
     private:
