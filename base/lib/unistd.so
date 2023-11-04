@@ -13,3 +13,9 @@ def getcwd():
 
 def execve(pathname, argv, envp):
     return _syscall(59, pathname, argv, envp)
+
+def rmdir(pathname):
+    return _syscall(84, pathname)
+
+def unlink(pathname):
+    return _syscall(87, pathname)

@@ -22,6 +22,7 @@ S_IROTH = 0o0004
 S_IWOTH = 0o0002
 S_IXOTH = 0o0001
 
+# TODO: Put this somewhere or make it a builtin?
 def oct(n):
     if n == 0:
         return '0'
@@ -34,4 +35,5 @@ def oct(n):
 
     return result
 
-print(oct(S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))
+def mkdir(pathname, mode):
+    return _syscall(83, pathname, mode)

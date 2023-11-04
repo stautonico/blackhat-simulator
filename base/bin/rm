@@ -1,0 +1,15 @@
+require("unistd")
+require("stdio")
+
+def main(args):
+    if len(args) != 1:
+        print("usage: rm <path>")
+        return 1
+
+    # TODO: Check if directory, then call rmdir
+
+    result = unlink(args[0])
+
+    # TODO: Check errno
+
+    return 0

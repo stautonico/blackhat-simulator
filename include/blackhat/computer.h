@@ -384,6 +384,9 @@ namespace Blackhat {
         int sys$chdir(std::string path, int caller);
         std::string sys$getcwd(int caller);
         int sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp, int caller);
+        int sys$mkdir(std::string pathname, int mode, int caller);
+        int sys$rmdir(std::string pathname, int caller);
+        int sys$unlink(std::string pathname, int caller);
 
 
     private:

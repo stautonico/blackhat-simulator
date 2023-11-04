@@ -1,0 +1,16 @@
+require("stdio")
+require("sys/stat")
+
+def main(args):
+    if len(args) != 1:
+        print("usage: mkdir <path>")
+        return 1
+
+    # TODO: Use umask or does the system use the umask?
+    result = mkdir(args[0], 0644)
+
+    if result < 0:
+        perror("mkdir")
+        return 1
+
+    return 0

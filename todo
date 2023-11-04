@@ -1,6 +1,3 @@
-mkdir – creates a new directory.
-rmdir – removes a folder or path.
-rm – deletes a file.
 cp – copies files and directories, including their content.
 mv – moves or renames files and directories.
 touch – creates a new empty file.

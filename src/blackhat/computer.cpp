@@ -10,6 +10,8 @@
 #include <iostream>
 #include <stack>
 
+#define GETCALLER() auto caller_obj = m_processes[caller]
+
 namespace Blackhat {
     Computer::Computer() {
         // Boot time
@@ -153,7 +155,7 @@ namespace Blackhat {
 
     std::string Computer::sys$read(int fd, int caller) {
         // TODO: Write a helper to validate the caller pid
-        auto caller_obj = m_processes[caller];
+        GETCALLER();
 
         auto fd_obj = caller_obj->get_file_descriptor(fd);
 
@@ -168,7 +170,7 @@ namespace Blackhat {
 
     int Computer::sys$write(int fd, std::string data, int caller) {
         // TODO: Write a helper to validate the caller pid
-        auto caller_obj = m_processes[caller];
+        GETCALLER();
 
         auto fd_obj = caller_obj->get_file_descriptor(fd);
 
@@ -183,16 +185,14 @@ namespace Blackhat {
 
     std::string Computer::sys$getcwd(int caller) {
         // TODO: Write a helper to validate the caller pid
-        auto caller_obj = m_processes[caller];
-
-        std::cout << "The cwd of pid: " << caller_obj->get_pid() << " is " << caller_obj->get_cwd() << std::endl;
+        GETCALLER();
 
         return caller_obj->get_cwd();
     }
 
     int Computer::sys$chdir(std::string path, int caller) {
         // TODO: Write a helper to validate the caller pid
-        auto caller_obj = m_processes[caller];
+        GETCALLER();
 
         auto inode = m_fs->_find_inode(path);
 
@@ -205,16 +205,14 @@ namespace Blackhat {
         // TODO: Check if inode is a directory (ENOTDIR)
         // TODO: Check name limit (ENAMETOOLONG)
 
-        std::cout << "Setting the cwd for pid: " << caller_obj->get_pid() << " to " << path << std::endl;
         caller_obj->set_cwd(path);
-        std::cout << "The result of the cwd of pid: " << caller_obj->get_pid() << " after changing is: " << caller_obj->get_cwd() << std::endl;
 
         return 0;
     }
 
     int Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp, int caller) {
         // TODO: Write a helper to validate the caller pid
-        auto caller_obj = m_processes[caller];
+        GETCALLER();
 
         auto inode = m_fs->_find_inode(pathname);
 
@@ -251,6 +249,59 @@ namespace Blackhat {
         // TODO: Pass the environment
         proc->start_sync(argv);
         return 0;// TODO: Get the return value
+    }
+
+    int Computer::sys$mkdir(std::string pathname, int mode, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto inode = m_fs->_find_inode(pathname);
+
+        if (inode != nullptr) {
+            caller_obj->set_errno(E::EXIST);
+            return -1;
+        }
+
+        // TODO: Set proper perms and owner
+        if (m_fs->create(pathname, 0, 0, mode)) return true;
+
+        return false;
+    }
+
+    int Computer::sys$rmdir(std::string pathname, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto inode = m_fs->_find_inode(pathname);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        auto result = m_fs->rmdir(pathname);
+
+        // TODO: Set errno
+        if (result) return 0;
+        else return -1;
+    }
+
+    int Computer::sys$unlink(std::string pathname, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto inode = m_fs->_find_inode(pathname);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        auto result = m_fs->unlink(pathname);
+
+        // TODO: Set errno
+
+        return 0;
     }
 
 }// namespace Blackhat

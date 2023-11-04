@@ -43,7 +43,7 @@ namespace Blackhat {
         return fs;
     }
 
-    int Ext4::create(std::string path, int uid, int gid, int mode) {
+    bool Ext4::create(std::string path, int uid, int gid, int mode) {
         // Do we really need this?
         // Can't we just put the src for `_create_inode` in here?
         return _create_inode(path, uid, gid, mode);
@@ -67,6 +67,7 @@ namespace Blackhat {
         m_inode_accumulator++;
         // Add the inode to the parent's directory entries
         m_dir_entries[parent->m_inode_number].push_back(inode->m_inode_number);
+        inode->m_link_count++;
         return true;
     }
 
@@ -135,6 +136,102 @@ namespace Blackhat {
     bool Ext4::exists(std::string path) {
         auto inode = _find_inode(path);
         return inode != nullptr;
+    }
+
+    bool Ext4::rmdir(std::string path) {
+        auto components = split(path, '/');
+        auto previous = -1;
+        auto current = m_root->m_inode_number;
+
+
+        for (const auto &component: components) {
+            if (component.empty())
+                continue;
+            // Find all the children of the current inode
+            auto children = m_dir_entries[current];
+            // Find the child with the same name as the component
+            auto child = std::find_if(
+                    children.begin(), children.end(), [&component, this](int inode_number) {
+                        return m_inodes[inode_number]->m_name == component;
+                    });
+
+            // If the child exists, set the current inode to the child
+            if (child != children.end()) {
+                previous = current;
+                current = *child;
+            } else {
+                return false;
+            }
+        }
+
+        // Only remove the directory IF ITS EMPTY
+        if (m_dir_entries[current].size() > 0) {
+            return false;
+        }
+
+        // current is the file to delete
+        // previous is its parent
+        auto entries = &m_dir_entries[previous];
+        auto it = find(entries->begin(), entries->end(), current);
+        if (it == entries->end()) return false;
+
+        auto idx = it - entries->begin();
+
+        // TODO: Don't remove the inode itself if the link count > 0
+        // Erase the file from the directory entries
+        entries->erase(entries->begin() + idx);
+
+        // Erase the inode itself
+        m_inodes.erase(current);
+
+        return true;
+    }
+
+    bool Ext4::unlink(std::string path) {
+        auto components = split(path, '/');
+        auto previous = -1;
+        auto current = m_root->m_inode_number;
+
+
+        for (const auto &component: components) {
+            if (component.empty())
+                continue;
+            // Find all the children of the current inode
+            auto children = m_dir_entries[current];
+            // Find the child with the same name as the component
+            auto child = std::find_if(
+                    children.begin(), children.end(), [&component, this](int inode_number) {
+                        return m_inodes[inode_number]->m_name == component;
+                    });
+
+            // If the child exists, set the current inode to the child
+            if (child != children.end()) {
+                previous = current;
+                current = *child;
+            } else {
+                return false;
+            }
+        }
+
+        // current is the file to delete
+        // previous is its parent
+        auto entries = &m_dir_entries[previous];
+        auto it = find(entries->begin(), entries->end(), current);
+        if (it == entries->end()) return false;
+
+        auto idx = it - entries->begin();
+
+        // Erase the file from the directory entries
+        entries->erase(entries->begin() + idx);
+
+        auto inode = m_inodes[current];
+        if (inode->m_link_count == 0) {
+            // Erase the inode itself
+            m_inodes.erase(current);
+        }
+
+
+        return true;
     }
 
 

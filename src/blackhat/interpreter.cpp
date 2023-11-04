@@ -134,7 +134,7 @@ namespace Blackhat {
                         }
 
                         case SYSCALL_ID::SYS_OPEN: {
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
 
                             // TODO: Make a macro for syscalls so we don't need to rewrite this each time
                             auto result = t->m_process->m_computer->sys$open(path, t->m_process->m_pid);
@@ -157,7 +157,7 @@ namespace Blackhat {
 
                         case SYSCALL_ID::SYS_CHDIR: {
                             // TODO: Maybe make this into a macro?
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
 
                             auto result = t->m_process->m_computer->sys$chdir(path, t->m_process->m_pid);
 
@@ -166,7 +166,7 @@ namespace Blackhat {
 
                         case SYSCALL_ID::SYS_EXECVE: {
                             // TODO: Maybe make this into a macro?
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
 
                             auto argv_obj = CAST(List, cmd_args[1]);
                             auto envp_obj = CAST(Dict, cmd_args[2]);
@@ -175,21 +175,46 @@ namespace Blackhat {
                             std::vector<std::string> argv;
 
                             for (auto i = 0; i < argv_obj.size(); i++) {
-                                argv.push_back(CAST(Str&, argv_obj[i]).c_str());
+                                argv.push_back(CAST(Str &, argv_obj[i]).c_str());
                             }
 
                             std::map<std::string, std::string> envp;
 
                             for (auto i = 0; i < envp_obj.keys().size(); i++) {
-                                auto key = CAST(Str&, envp_obj.keys()[i]).c_str();
-                                auto value = CAST(Str&, envp_obj.try_get(envp_obj.keys()[i])).c_str();
+                                auto key = CAST(Str &, envp_obj.keys()[i]).c_str();
+                                auto value = CAST(Str &, envp_obj.try_get(envp_obj.keys()[i])).c_str();
                                 envp.insert({key, value});
                             }
 
                             auto result = t->m_process->m_computer->sys$execve(path, argv, envp, t->m_process->m_pid);
 
                             return VAR(result);
+                        }
 
+                        case SYSCALL_ID::SYS_MKDIR: {
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto mode = CAST(int, cmd_args[1]);
+
+                            auto result = t->m_process->m_computer->sys$mkdir(path, mode, t->m_process->m_pid);
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_RMDIR: {
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$rmdir(path, t->m_process->m_pid);
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_UNLINK: {
+                            auto path = CAST(Str&, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$unlink(path, t->m_process->m_pid);
+
+                            return VAR(result);
                         }
 
                         default:
