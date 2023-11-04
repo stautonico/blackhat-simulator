@@ -12,6 +12,26 @@
 #include <blackhat/computer.h>
 
 namespace Blackhat {
+    enum O {
+        APPEND = 00002000,
+        ASYNC = 020000,
+        CLOEXEC = 02000000,
+        CREAT = 00000100,
+        DIRECT = 00040000,
+        DIRECTORY = 00200000,
+        DSYNC = 00010000,
+        EXCL = 00000200,
+        LARGEFILE = 00100000,
+        NOATIME = 01000000,
+        NOCTTY = 00000400,
+        NOFOLLOW = 00400000,
+        NONBLOCK = 00004000,
+        PATH = 010000000,
+        SYNC = 00010000,
+        TMPFILE = 020000000,
+        TRUNC = 00001000
+    };
+
     class Inode {
     public:
         friend class Ext4;

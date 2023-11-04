@@ -378,7 +378,8 @@ namespace Blackhat {
         void start();
 
         // TODO: Implement open flags and mode
-        int sys$open(std::string path, int caller);
+        int sys$open(std::string path, int flags, int caller);
+        int sys$open(std::string path, int flags, int mode, int caller);
         std::string sys$read(int fd, int caller);
         int sys$write(int fd, std::string data, int caller);
         int sys$chdir(std::string path, int caller);

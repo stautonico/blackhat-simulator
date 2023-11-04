@@ -135,9 +135,11 @@ namespace Blackhat {
 
                         case SYSCALL_ID::SYS_OPEN: {
                             auto path = CAST(Str &, cmd_args[0]).c_str();
+                            auto flags = CAST(int, cmd_args[1]);
+                            auto mode = CAST(int, cmd_args[2]);
 
                             // TODO: Make a macro for syscalls so we don't need to rewrite this each time
-                            auto result = t->m_process->m_computer->sys$open(path, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$open(path, flags, mode, t->m_process->m_pid);
 
                             return VAR(result);
                         }

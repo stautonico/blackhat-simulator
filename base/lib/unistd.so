@@ -1,5 +1,5 @@
-def open(path):
-    return _syscall(2, path)
+def open(path, flags, mode):
+    return _syscall(2, path, flags, mode)
 
 def read(fd):
     return _syscall(0, fd)

@@ -133,8 +133,15 @@ namespace Blackhat {
         return m_fs->readdir(path);
     }
 
-    int Computer::sys$open(std::string path, int caller) {
+    int Computer::sys$open(std::string path, int flags, int mode, int caller) {
         auto caller_obj = m_processes[caller];
+
+        if (mode & O::CREAT) {
+            // TODO: Set mode and uid/gid and stuff
+            auto result = m_fs->create(path, 0, 0, mode);
+            if (result) return true;
+            else return false;
+        }
 
         auto inode = m_fs->_find_inode(path);
 

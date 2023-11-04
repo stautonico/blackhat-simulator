@@ -3,7 +3,7 @@ require("unistd")
 
 def main(args):
     if len(args) != 1:
-        print(f"usage: cat <path>")
+        print(f"usage: tail <path>")
         return 1
 
     fd = open(args[0], 0, 0)
@@ -14,9 +14,11 @@ def main(args):
 
     result = read(fd)
 
+
     if result is None:
         perror("Unable to read file")
     else:
-        print(result)
+        lines = "\n".join(result.split("\n")[-10:])
+        print(lines)
 
     return 0

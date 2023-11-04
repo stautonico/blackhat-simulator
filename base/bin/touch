@@ -1,0 +1,17 @@
+require("stdio")
+require("unistd")
+
+def main(args):
+    if len(args) != 1:
+        print(f"usage: touch <path>")
+        return 1
+
+    fd = open(args[0], 0, 0o0000100);
+
+    if fd < 0:
+        perror("Unable to touch file")
+        return 1
+
+    # TODO: Implement close
+
+    return 0
