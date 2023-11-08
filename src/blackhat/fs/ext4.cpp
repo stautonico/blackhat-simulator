@@ -5,6 +5,11 @@
 #include <util/string.h>
 
 namespace Blackhat {
+    DirectoryEntry::DirectoryEntry(Blackhat::Inode *inode, std::string name) {
+        m_inode = inode;
+        m_name = name;
+    }
+
     std::string Inode::read() {
         // TODO: Permission check
         return m_data;
@@ -25,7 +30,7 @@ namespace Blackhat {
         return newinode;
     }
 
-    Ext4::Ext4() {
+    Ext4::Ext4() : m_root_directory_entry(m_root, "/") {
         m_root = new Inode();
         m_root->m_name = "/";
         m_root->m_mode = 0755;

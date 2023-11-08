@@ -51,6 +51,19 @@ namespace Blackhat {
         int m_mode;
     };
 
+    class DirectoryEntry {
+    public:
+        friend class Ext4;
+        friend class Inode;
+
+        DirectoryEntry(Inode* inode, std::string name);
+    private:
+        Inode* m_inode;
+        std::string m_name;
+
+        // TODO: This? Idk about this
+        std::map<std::string, DirectoryEntry> m_dir_entries; // file name -> DirectoryEntry
+    };
 
     class Ext4 {
     public:
@@ -77,6 +90,7 @@ namespace Blackhat {
                                                        // inode nums (children)
 
         Inode* m_root;
+        DirectoryEntry m_root_directory_entry;
 
         Inode* _find_inode(std::string path);
         bool _create_inode(std::string path, int uid, int gid, int mode);

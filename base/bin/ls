@@ -12,6 +12,8 @@ def main(argv):
     entries = readdir(path)
 
     for entry in entries:
-        print(entry)  # TODO: Support no newline
+        print(entry + " ", False)
+
+    print("") # newline
 
     return 0
