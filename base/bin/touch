@@ -1,12 +1,13 @@
 require("stdio")
 require("unistd")
+require("fcntl")
 
 def main(args):
     if len(args) != 1:
         print(f"usage: touch <path>")
         return 1
 
-    fd = open(args[0], 0, 0o0000100);
+    fd = open(args[0], O_CREAT, 0);
 
     if fd < 0:
         perror("Unable to touch file")

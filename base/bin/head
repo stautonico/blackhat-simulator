@@ -1,5 +1,6 @@
 require("stdio")
 require("unistd")
+require("fcntl")
 
 def main(args):
     if len(args) != 1:

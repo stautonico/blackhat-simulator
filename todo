@@ -1,5 +1,3 @@
-cp – copies files and directories, including their content.
-mv – moves or renames files and directories.
 file – checks a file’s type.
 zip and unzip – creates and extracts a ZIP archive.
 tar – archives files without compression in a TAR format.

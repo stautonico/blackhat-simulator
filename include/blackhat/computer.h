@@ -388,6 +388,7 @@ namespace Blackhat {
         int sys$mkdir(std::string pathname, int mode, int caller);
         int sys$rmdir(std::string pathname, int caller);
         int sys$unlink(std::string pathname, int caller);
+        int sys$rename(std::string oldpath, std::string newpath, int caller);
 
 
     private:

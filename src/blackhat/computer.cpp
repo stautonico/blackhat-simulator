@@ -136,11 +136,10 @@ namespace Blackhat {
     int Computer::sys$open(std::string path, int flags, int mode, int caller) {
         auto caller_obj = m_processes[caller];
 
-        if (mode & O::CREAT) {
+        if (flags & O::CREAT) {
             // TODO: Set mode and uid/gid and stuff
             auto result = m_fs->create(path, 0, 0, mode);
-            if (result) return true;
-            else return false;
+            if (!result) return -1;
         }
 
         auto inode = m_fs->_find_inode(path);
@@ -290,7 +289,8 @@ namespace Blackhat {
 
         // TODO: Set errno
         if (result) return 0;
-        else return -1;
+        else
+            return -1;
     }
 
     int Computer::sys$unlink(std::string pathname, int caller) {
@@ -307,6 +307,22 @@ namespace Blackhat {
         auto result = m_fs->unlink(pathname);
 
         // TODO: Set errno
+
+        return 0;
+    }
+
+    int Computer::sys$rename(std::string oldpath, std::string newpath, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto result = m_fs->rename(oldpath, newpath);
+        // TODO: Check better
+        // TODO: If the newpath is a directory, set errno to EISDIR
+
+        if (!result) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
 
         return 0;
     }

@@ -1,0 +1,34 @@
+require("unistd")
+require("stdio")
+require("fcntl")
+
+def main(args):
+    if len(args) != 2:
+        print("usage: cp <source> <destination>")
+        return 1
+
+    source_file = open(args[0], 0, O_RDONLY)
+
+    if source_file < 0:
+        perror("can't open source file")
+        return 1
+
+    destination_file = open(args[1], O_CREAT, O_WRONLY)
+
+    if destination_file < 0:
+        perror("can't open destination file")
+        return 1
+
+    source_content = read(source_file)
+
+    if source_content is None:
+        perror("can't read source file")
+        return 1
+
+    write_result = write(destination_file, source_content)
+
+    if write_result <= 0:
+        perror("can't write destination file")
+        return 1
+
+    return 0

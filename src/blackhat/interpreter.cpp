@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+#define PID() t->m_process->m_pid
+
 namespace Blackhat {
     Interpreter::Interpreter(std::string code, Process *process) {
         m_code = std::move(code);
@@ -24,6 +26,7 @@ namespace Blackhat {
                     auto msg_obj = CAST(Str &, args[0]);
                     auto msg = msg_obj.c_str();
                     auto newline = CAST(bool, args[1]);
+
                     t->_print(msg, newline);
                     return vm->None;
                 },
@@ -124,7 +127,7 @@ namespace Blackhat {
                         case SYSCALL_ID::SYS_READ: {
                             auto fd = CAST(int, cmd_args[0]);
 
-                            auto result = t->m_process->m_computer->sys$read(fd, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$read(fd, PID());
 
                             // Null value, aka doesn't exist, not empty string
                             if (result == std::string(1, '\0'))
@@ -139,7 +142,7 @@ namespace Blackhat {
                             auto mode = CAST(int, cmd_args[2]);
 
                             // TODO: Make a macro for syscalls so we don't need to rewrite this each time
-                            auto result = t->m_process->m_computer->sys$open(path, flags, mode, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$open(path, flags, mode, PID());
 
                             return VAR(result);
                         }
@@ -148,11 +151,11 @@ namespace Blackhat {
                             auto fd = CAST(int, cmd_args[0]);
                             auto data = CAST(Str &, cmd_args[1]).c_str();
 
-                            return VAR(t->m_process->m_computer->sys$write(fd, data, t->m_process->m_pid));
+                            return VAR(t->m_process->m_computer->sys$write(fd, data, PID()));
                         }
 
                         case SYSCALL_ID::SYS_GETCWD: {
-                            auto result = t->m_process->m_computer->sys$getcwd(t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$getcwd(PID());
 
                             return VAR(result);
                         }
@@ -161,7 +164,7 @@ namespace Blackhat {
                             // TODO: Maybe make this into a macro?
                             auto path = CAST(Str &, cmd_args[0]).c_str();
 
-                            auto result = t->m_process->m_computer->sys$chdir(path, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$chdir(path, PID());
 
                             return VAR(result);
                         }
@@ -188,7 +191,7 @@ namespace Blackhat {
                                 envp.insert({key, value});
                             }
 
-                            auto result = t->m_process->m_computer->sys$execve(path, argv, envp, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$execve(path, argv, envp, PID());
 
                             return VAR(result);
                         }
@@ -198,7 +201,7 @@ namespace Blackhat {
 
                             auto mode = CAST(int, cmd_args[1]);
 
-                            auto result = t->m_process->m_computer->sys$mkdir(path, mode, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$mkdir(path, mode, PID());
 
                             return VAR(result);
                         }
@@ -206,7 +209,7 @@ namespace Blackhat {
                         case SYSCALL_ID::SYS_RMDIR: {
                             auto path = CAST(Str &, cmd_args[0]).c_str();
 
-                            auto result = t->m_process->m_computer->sys$rmdir(path, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$rmdir(path, PID());
 
                             return VAR(result);
                         }
@@ -214,7 +217,16 @@ namespace Blackhat {
                         case SYSCALL_ID::SYS_UNLINK: {
                             auto path = CAST(Str&, cmd_args[0]).c_str();
 
-                            auto result = t->m_process->m_computer->sys$unlink(path, t->m_process->m_pid);
+                            auto result = t->m_process->m_computer->sys$unlink(path, PID());
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_RENAME: {
+                            auto oldpath = CAST(Str&, cmd_args[0]).c_str();
+                            auto newpath = CAST(Str&, cmd_args[1]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$rename(oldpath, newpath, PID());
 
                             return VAR(result);
                         }

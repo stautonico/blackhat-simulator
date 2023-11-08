@@ -1,8 +1,8 @@
-def open(path, flags, mode):
-    return _syscall(2, path, flags, mode)
-
 def read(fd):
     return _syscall(0, fd)
+
+def write(fd, content):
+    return _syscall(1, fd, content)
 
 def chdir(path):
     # TODO: Make this pass the FULL path. We can use the current path to figure out the full path

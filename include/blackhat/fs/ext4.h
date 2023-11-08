@@ -40,6 +40,8 @@ namespace Blackhat {
         int write(std::string data);
 
     private:
+        Inode _clone();
+
         std::string m_name = "";
         std::string m_data = "";
         int m_inode_number = -1;
@@ -67,6 +69,7 @@ namespace Blackhat {
         bool unlink(std::string path);
         bool rmdir(std::string path);
         bool exists(std::string path);
+        bool rename(std::string oldpath, std::string newpath);
 
     private:
         std::map<int, Inode*> m_inodes; // Inode number -> Inode *

@@ -5,3 +5,6 @@ def perror(s):
     # TODO: Maybe replace with strerror?
     message = _errno_messages.get(errno, f"Unknown error {errno}")
     print(output + message)
+
+def rename(oldpath, newpath):
+    return _syscall(82, oldpath, newpath)

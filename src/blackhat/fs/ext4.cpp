@@ -15,6 +15,16 @@ namespace Blackhat {
         return m_data.size();
     }
 
+    Inode Inode::_clone() {
+        Inode newinode;
+        newinode.m_name = m_name;
+        newinode.m_data = m_data;
+        newinode.m_inode_number = m_inode_number;
+        newinode.m_link_count = m_link_count;
+        newinode.m_mode = m_mode;
+        return newinode;
+    }
+
     Ext4::Ext4() {
         m_root = new Inode();
         m_root->m_name = "/";
@@ -231,6 +241,44 @@ namespace Blackhat {
         }
 
 
+        return true;
+    }
+
+    bool Ext4::rename(std::string oldpath, std::string newpath) {
+        auto old_inode = _find_inode(oldpath);
+
+        if (old_inode == nullptr) return false;
+
+        // If the newpath exists, fail as well
+        if (_find_inode(newpath) != nullptr) return false;
+
+        // Make sure our new parent path exists
+        auto split_path = split(newpath, '/');
+        auto new_file_name = split_path.back();
+        split_path.pop_back();
+        auto new_parent_path = join(split_path, '/');
+
+        auto new_parent_inode = _find_inode(new_parent_path);
+
+        if (new_parent_inode == nullptr) return false;
+
+
+        // Find the inode number of our old path parent
+        split_path = split(oldpath, '/');
+        split_path.pop_back();
+        auto old_parent_path = join(split_path, '/');
+
+        auto old_parent_inode = _find_inode(old_parent_path);
+
+
+        // Remove the inode from its current parent
+        auto entries = &m_dir_entries[old_parent_inode->m_inode_number];
+        entries->erase(std::remove(entries->begin(), entries->end(), old_inode->m_inode_number), entries->end());
+
+        // Add it to its new parent
+        m_dir_entries[new_parent_inode->m_inode_number].push_back(old_inode->m_inode_number);
+        // Change its name
+        old_inode->m_name = new_file_name;
         return true;
     }
 
