@@ -39,6 +39,11 @@ namespace Blackhat {
         std::string read();
         int write(std::string data);
 
+        void increment_link_count() {m_link_count++;}
+        void decrement_link_count() {m_link_count--;}
+
+        int get_link_count() {return m_link_count;}
+
     private:
         Inode _clone();
 
@@ -56,12 +61,19 @@ namespace Blackhat {
         friend class Ext4;
         friend class Inode;
 
-        DirectoryEntry(Inode* inode, std::string name);
+        DirectoryEntry(std::string name, Inode* inode);
+
+        bool has_child(std::string name);
+
+        bool add_child(std::string name, Inode* inode);
+        DirectoryEntry* get_child(std::string name);
+        bool remove_child(std::string name);
+
     private:
         Inode* m_inode;
         std::string m_name;
 
-        // TODO: This? Idk about this
+        // TODO: This? Idk about this. Maybe store it in a different data structure
         std::map<std::string, DirectoryEntry> m_dir_entries; // file name -> DirectoryEntry
     };
 
@@ -86,14 +98,15 @@ namespace Blackhat {
 
     private:
         std::map<int, Inode*> m_inodes; // Inode number -> Inode *
-        std::map<int, std::vector<int>> m_dir_entries; // Inode num -> List of
-                                                       // inode nums (children)
+        // TODO: Maybe store the actual inode here?
 
         Inode* m_root;
         DirectoryEntry m_root_directory_entry;
 
         Inode* _find_inode(std::string path);
+        DirectoryEntry* _find_directory_entry(std::string path);
         bool _create_inode(std::string path, int uid, int gid, int mode);
+        bool _add_inode_to_path(std::string parent_path, std::string filename, Inode* inode);
 
         int m_inode_accumulator = 3; // Start at something higher? We'll see
     };

@@ -5,9 +5,33 @@
 #include <util/string.h>
 
 namespace Blackhat {
-    DirectoryEntry::DirectoryEntry(Blackhat::Inode *inode, std::string name) {
-        m_inode = inode;
+    DirectoryEntry::DirectoryEntry(std::string name, Blackhat::Inode *inode) {
         m_name = name;
+        m_inode = inode;
+    }
+
+    bool DirectoryEntry::has_child(std::string name) {
+        return m_dir_entries.find(name) != m_dir_entries.end();
+    }
+
+    DirectoryEntry *DirectoryEntry::get_child(std::string name) {
+        if (has_child(name)) return &m_dir_entries.at(name);
+        return nullptr;
+    }
+
+    bool DirectoryEntry::add_child(std::string name, Blackhat::Inode *inode) {
+        if (has_child(name)) return false;
+
+        DirectoryEntry newdirent(name, inode);
+
+        m_dir_entries.insert({name, newdirent});
+        return true;
+    }
+
+    bool DirectoryEntry::remove_child(std::string name) {
+        if (!has_child(name)) return false;
+        m_dir_entries.erase(name);
+        return true;
     }
 
     std::string Inode::read() {
@@ -30,13 +54,16 @@ namespace Blackhat {
         return newinode;
     }
 
-    Ext4::Ext4() : m_root_directory_entry(m_root, "/") {
+    Ext4::Ext4() : m_root_directory_entry("/", m_root) {
         m_root = new Inode();
         m_root->m_name = "/";
         m_root->m_mode = 0755;
         m_root->m_inode_number = 2;
         m_inodes[2] = m_root;
-        m_dir_entries[2] = std::vector<int>();
+
+        // We have to set our directory entries root again because it didn't exist at the top of this func
+        m_root_directory_entry.m_inode = m_root;
+        m_root_directory_entry.m_name = "/";
     }
 
     Ext4 *Ext4::make_standard_fs() {
@@ -64,50 +91,79 @@ namespace Blackhat {
         return _create_inode(path, uid, gid, mode);
     }
 
+    bool Ext4::_add_inode_to_path(std::string parent_path, std::string filename, Blackhat::Inode *inode) {
+        // We have to follow the path components and find each directory entry
+        auto components = split(parent_path, '/');
+
+        std::vector<DirectoryEntry *> current;
+        current.push_back(&m_root_directory_entry);
+
+        for (const auto &component: components) {
+            if (component.empty()) continue;// TODO: ?
+            if (!current.back()->has_child(component)) return false;
+
+            current.push_back(current.back()->get_child(component));
+        }
+
+
+        // If we made it here, current should be our final directory
+        current.back()->add_child(filename, inode);
+        return true;
+    }
+
     bool Ext4::_create_inode(std::string path, int uid, int gid, int mode) {
         // We have to find the parent first
         auto components = split(path, '/');
         auto parent_path = join(components, '/', 0, components.size() - 1);
-        auto parent = _find_inode(parent_path);
-        if (parent == nullptr)
-            return false;// TODO: Find a way to return an error code (maybe return
-                         //       int)
+
+        // Make sure the parent exists
+        auto parent_dirent = _find_directory_entry(parent_path);
+
+        if (parent_dirent == nullptr) return false;
 
         // Create the new inode
         auto inode = new Inode();
-        inode->m_name = components[components.size() - 1];
         inode->m_mode = mode;
         m_inodes[m_inode_accumulator] = inode;
         inode->m_inode_number = m_inode_accumulator;
         m_inode_accumulator++;
         // Add the inode to the parent's directory entries
-        m_dir_entries[parent->m_inode_number].push_back(inode->m_inode_number);
+        auto result = _add_inode_to_path(parent_path, components[components.size() - 1], inode);
+        // This should never fail, but it doesn't hurt to check
+        if (!result) {
+            // Delete the inode we just created
+            m_inodes.erase(inode->m_inode_number);
+            delete inode;
+            return false;
+        }
+
         inode->m_link_count++;
         return true;
     }
 
     Inode *Ext4::_find_inode(std::string path) {
+        auto result = _find_directory_entry(path);
+
+        if (result == nullptr) return nullptr;
+        return result->m_inode;
+    }
+
+    DirectoryEntry *Ext4::_find_directory_entry(std::string path) {
         auto components = split(path, '/');
-        auto current = m_root->m_inode_number;
+        // TODO: I hate this, but its the only way I can think of how to fix this (3:27 am)
+        std::vector<DirectoryEntry *> current;
+        current.push_back(&m_root_directory_entry);
+
+
         for (const auto &component: components) {
             if (component.empty())
-                continue;
-            // Find all the children of the current inode
-            auto children = m_dir_entries[current];
-            // Find the child with the same name as the component
-            auto child = std::find_if(
-                    children.begin(), children.end(), [&component, this](int inode_number) {
-                        return m_inodes[inode_number]->m_name == component;
-                    });
+                continue;// TODO: Don't continue?
 
-            // If the child exists, set the current inode to the child
-            if (child != children.end()) {
-                current = *child;
-            } else {
-                return nullptr;
-            }
+            current.push_back(current.back()->get_child(component));
+            if (current.back() == nullptr) return nullptr;
         }
-        return m_inodes[current];
+
+        return current.back();
     }
 
     int Ext4::write(std::string path, std::string data) {
@@ -121,6 +177,7 @@ namespace Blackhat {
 
     std::string Ext4::read(std::string path) {
         auto inode = _find_inode(path);
+
         if (inode == nullptr) {
             return std::string(1, '\0');
         }
@@ -128,22 +185,15 @@ namespace Blackhat {
         return inode->m_data;
     }
     std::vector<std::string> Ext4::readdir(std::string path) {
-        auto inode = _find_inode(path);
+        auto dir_entry = _find_directory_entry(path);
 
-        if (inode == nullptr) return {};
+        if (dir_entry == nullptr) return {};
 
-        auto entries = m_dir_entries[inode->m_inode_number];
+        auto entries = dir_entry->m_dir_entries;
 
         std::vector<std::string> names;
 
-        for (auto entry: entries) {
-            auto node = m_inodes[entry];
-            if (node == nullptr) {
-                throw std::runtime_error("Invalid inode number: " + entry);
-            }
-
-            names.push_back(node->m_name);
-        }
+        for (auto e: entries) names.push_back(e.first);
 
         return names;
     }
@@ -154,137 +204,119 @@ namespace Blackhat {
     }
 
     bool Ext4::rmdir(std::string path) {
+        // Step 1: Find the parent directory entry
         auto components = split(path, '/');
         auto previous = -1;
-        auto current = m_root->m_inode_number;
 
+        auto file_to_delete = components.back();
+        components.pop_back();
 
-        for (const auto &component: components) {
-            if (component.empty())
-                continue;
-            // Find all the children of the current inode
-            auto children = m_dir_entries[current];
-            // Find the child with the same name as the component
-            auto child = std::find_if(
-                    children.begin(), children.end(), [&component, this](int inode_number) {
-                        return m_inodes[inode_number]->m_name == component;
-                    });
+        auto parent_dir_entry = _find_directory_entry(join(components, '/'));
+        if (parent_dir_entry == nullptr) return false;
 
-            // If the child exists, set the current inode to the child
-            if (child != children.end()) {
-                previous = current;
-                current = *child;
-            } else {
-                return false;
-            }
+        // Step 2: Get the inode for later
+        auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
+
+        if (to_delete_direntry == nullptr) return false;
+
+        auto inode = to_delete_direntry->m_inode;
+
+        // Step 3: Remove the directory entry from the parent
+        // Check if the directory is empty before removing it
+        if (to_delete_direntry->m_dir_entries.size() != 0) return false;
+
+        // TODO: Only remove the entry if it is a directory (currently removes any dir entry regardless of type)
+
+        auto remove_result = parent_dir_entry->remove_child(file_to_delete);
+
+        if (!remove_result) return false;
+
+        // Reduce the link count
+        inode->m_link_count--;
+
+        if (inode->m_link_count == 0) {
+            m_inodes.erase(inode->m_inode_number);
+            // Delete the inode (since we have no links to it)
+            delete inode;
         }
-
-        // Only remove the directory IF ITS EMPTY
-        if (m_dir_entries[current].size() > 0) {
-            return false;
-        }
-
-        // current is the file to delete
-        // previous is its parent
-        auto entries = &m_dir_entries[previous];
-        auto it = find(entries->begin(), entries->end(), current);
-        if (it == entries->end()) return false;
-
-        auto idx = it - entries->begin();
-
-        // TODO: Don't remove the inode itself if the link count > 0
-        // Erase the file from the directory entries
-        entries->erase(entries->begin() + idx);
-
-        // Erase the inode itself
-        m_inodes.erase(current);
 
         return true;
     }
 
     bool Ext4::unlink(std::string path) {
+        // TODO: Don't unlink until all fds to the entry is gone
+        // Step 1: Find the parent directory entry
         auto components = split(path, '/');
         auto previous = -1;
-        auto current = m_root->m_inode_number;
 
+        auto file_to_delete = components.back();
+        components.pop_back();
 
-        for (const auto &component: components) {
-            if (component.empty())
-                continue;
-            // Find all the children of the current inode
-            auto children = m_dir_entries[current];
-            // Find the child with the same name as the component
-            auto child = std::find_if(
-                    children.begin(), children.end(), [&component, this](int inode_number) {
-                        return m_inodes[inode_number]->m_name == component;
-                    });
+        auto parent_dir_entry = _find_directory_entry(join(components, '/'));
+        if (parent_dir_entry == nullptr) return false;
 
-            // If the child exists, set the current inode to the child
-            if (child != children.end()) {
-                previous = current;
-                current = *child;
-            } else {
-                return false;
-            }
-        }
+        // Step 2: Get the inode for later
+        auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
 
-        // current is the file to delete
-        // previous is its parent
-        auto entries = &m_dir_entries[previous];
-        auto it = find(entries->begin(), entries->end(), current);
-        if (it == entries->end()) return false;
+        if (to_delete_direntry == nullptr) return false;
 
-        auto idx = it - entries->begin();
+        auto inode = to_delete_direntry->m_inode;
 
-        // Erase the file from the directory entries
-        entries->erase(entries->begin() + idx);
+        // Step 3: Remove the directory entry from the parent
+        auto remove_result = parent_dir_entry->remove_child(file_to_delete);
 
-        auto inode = m_inodes[current];
+        if (!remove_result) return false;
+
+        // Reduce the link count
+        inode->m_link_count--;
+
         if (inode->m_link_count == 0) {
-            // Erase the inode itself
-            m_inodes.erase(current);
+            m_inodes.erase(inode->m_inode_number);
+            // Delete the inode (since we have no links to it)
+            delete inode;
         }
-
 
         return true;
     }
 
     bool Ext4::rename(std::string oldpath, std::string newpath) {
-        auto old_inode = _find_inode(oldpath);
+        auto old_dirent = _find_directory_entry(oldpath);
 
-        if (old_inode == nullptr) return false;
+        if (old_dirent == nullptr) return false;
 
-        // If the newpath exists, fail as well
-        if (_find_inode(newpath) != nullptr) return false;
+        auto new_dirent = _find_directory_entry(newpath);
+        if (new_dirent != nullptr) return false;
 
-        // Make sure our new parent path exists
+        // Create a new dirent in the new path pointing to the inode
+        // Find the parent (new path)
         auto split_path = split(newpath, '/');
         auto new_file_name = split_path.back();
         split_path.pop_back();
-        auto new_parent_path = join(split_path, '/');
+        auto parent_path = join(split_path, '/');
 
-        auto new_parent_inode = _find_inode(new_parent_path);
+        auto parent_dirent = _find_directory_entry(parent_path);
 
-        if (new_parent_inode == nullptr) return false;
+        if (parent_dirent == nullptr) return false;
 
+        auto add_result = parent_dirent->add_child(new_file_name, old_dirent->m_inode);
 
-        // Find the inode number of our old path parent
-        split_path = split(oldpath, '/');
-        split_path.pop_back();
-        auto old_parent_path = join(split_path, '/');
+        if (!add_result) return false;
 
-        auto old_parent_inode = _find_inode(old_parent_path);
+        // Now that we added the new dirent, remove the old one
+        // Find the old parent
+        auto old_split_path = split(oldpath, '/');
+        auto old_file_name = old_split_path.back();
+        old_split_path.pop_back();
+        auto old_parent_path = join(old_split_path, '/');
 
+        auto old_parent_dirent = _find_directory_entry(old_parent_path);
 
-        // Remove the inode from its current parent
-        auto entries = &m_dir_entries[old_parent_inode->m_inode_number];
-        entries->erase(std::remove(entries->begin(), entries->end(), old_inode->m_inode_number), entries->end());
+        // Should never happen but doesn't hurt to check
+        if (old_parent_dirent == nullptr) return false;
 
-        // Add it to its new parent
-        m_dir_entries[new_parent_inode->m_inode_number].push_back(old_inode->m_inode_number);
-        // Change its name
-        old_inode->m_name = new_file_name;
-        return true;
+        auto remove_result = old_parent_dirent->remove_child(old_file_name);
+
+        return remove_result;
     }
 
 
