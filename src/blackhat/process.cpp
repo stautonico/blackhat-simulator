@@ -2,9 +2,19 @@
 #include <util/string.h>
 
 namespace Blackhat {
-    Process::Process(std::string code, Computer *computer) : m_interpreter(code, this) {
+    Process::Process(std::string code, Computer *computer, int uid, int gid) : m_interpreter(code, this) {
         m_computer = computer;
         m_cwd = "/";
+
+        m_ruid = uid;
+        m_suid = uid;
+        m_euid = uid;
+        m_fsuid = uid;
+
+        m_rgid = gid;
+        m_sgid = gid;
+        m_egid = gid;
+        m_fsgid = gid;
     }
 
     void Process::start_sync(std::vector<std::string> args) {

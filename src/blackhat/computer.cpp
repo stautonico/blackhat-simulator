@@ -11,6 +11,7 @@
 #include <stack>
 
 #define GETCALLER() auto caller_obj = m_processes[caller]
+#define SETERRNO(errno) caller_obj->set_errno(errno)
 
 namespace Blackhat {
     Computer::Computer() {
@@ -44,6 +45,8 @@ namespace Blackhat {
 
     void Computer::_post_fs_kinit() {
         // TODO: Implement
+        // Create a test tmp file that is unreadable to anyone but root
+        m_fs->create("/tmp/unreadable", 0, 0, 0);
     }
 
     void Computer::_new_computer_kinit() {
@@ -55,6 +58,7 @@ namespace Blackhat {
 
         std::string path;
 
+        // TODO: Fix this temporary code
         if (std::filesystem::exists("base"))
             path = "base";
         else if (std::filesystem::exists("../base"))
@@ -71,6 +75,7 @@ namespace Blackhat {
         std::cout << "Kernel panic - not syncing: " << message << std::endl;
         exit(1);
     }
+
     void Computer::call_userland_init() {
         // TODO: Load the /sbin/init from filesystem
 
@@ -84,10 +89,11 @@ namespace Blackhat {
         }
 
         // TODO: Create a process
-        Process proc(result, this);
+        Process proc(result, this, 1000, 1000);
         proc.set_cwd("/");
         proc.start_sync({});
     }
+
     void Computer::_create_fs_from_base(const std::string &basepath, const std::string current_path) {
         std::stack<std::string> dirs;
         dirs.push(current_path);
@@ -129,13 +135,19 @@ namespace Blackhat {
 
         return result;
     }
+
     std::vector<std::string> Computer::_readdir(std::string path) {
         return m_fs->readdir(path);
     }
 
     int Computer::sys$open(std::string path, int flags, int mode, int caller) {
-        auto caller_obj = m_processes[caller];
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
 
+        // We have to get our open modes and check the permissions before we
+        // create a file descriptor
+
+        // TODO: Implement permissions for this
         if (flags & O::CREAT) {
             // TODO: Set mode and uid/gid and stuff
             auto result = m_fs->create(path, 0, 0, mode);
@@ -144,12 +156,36 @@ namespace Blackhat {
 
         auto inode = m_fs->_find_inode(path);
 
+        // ENOENT check comes first
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return -1;
         }
 
-        // TODO: Write a helper to validate the caller pid
+        // Then permission checks
+        if (flags & O::RDWR) {
+            // Check if we have read and write permissions
+            if (!inode->check_perm(Inode::Permission::READ, caller_obj) ||
+                !inode->check_perm(Inode::Permission::WRITE, caller_obj)) {
+                caller_obj->set_errno(E::PERM);
+                return -1;
+            }
+        } else if (flags & O::WRONLY) {
+            if (!inode->check_perm(Inode::Permission::WRITE, caller_obj)) {
+                caller_obj->set_errno(E::PERM);
+                return -1;
+            }
+        } else {
+            // We can't check flags & O::RDONLY since RDONLY = 0
+            if (!inode->check_perm(Inode::Permission::READ, caller_obj)) {
+                caller_obj->set_errno(E::PERM);
+                return -1;
+            }
+        }
+
+        // Now, in theory, we should have the correct permissions, so we can just make a fd
+
+
 
         auto fd_num = caller_obj->get_fd_accumulator();
 
@@ -216,7 +252,9 @@ namespace Blackhat {
         return 0;
     }
 
-    int Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp, int caller) {
+    int
+    Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp,
+                         int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
@@ -227,7 +265,14 @@ namespace Blackhat {
             return -1;
         }
 
-        // TODO: Check if executable (EACCES)
+        // TODO: Come up with a proper solution for this
+        // This is when we call /sbin/init
+        if (caller_obj != nullptr) {
+            if (!inode->check_perm(Inode::Permission::EXECUTE, caller_obj)) {
+                SETERRNO(E::PERM);
+                return -1;
+            }
+        }
 
         // Try to read the file content
         auto file_content = inode->read();
@@ -238,9 +283,21 @@ namespace Blackhat {
             return -1;
         }
 
+        int uid;
+        int gid;
+
+        // TODO: Come up with a proper solution for this
+        if (caller_obj == nullptr) {
+            uid = 0;
+            gid = 0;
+        } else {
+            uid = caller_obj->get_uid();
+            gid = caller_obj->get_gid();
+        }
+
 
         // TODO: Implement process spawner function
-        Process *proc = new Process(file_content, this);
+        Process *proc = new Process(file_content, this, uid, gid);
         proc->set_pid(m_pid_accumulator);
         m_processes[m_pid_accumulator] = proc;
         m_pid_accumulator++;

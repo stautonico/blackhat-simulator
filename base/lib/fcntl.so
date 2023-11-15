@@ -20,5 +20,5 @@ O_RDWR   = 0o0002
 O_SEARCH = 0o0 # TODO: Set value
 O_WRONLY = 0o1
 
-def open(path, flags, mode):
+def open(path, flags, mode=0):
     return _syscall(2, path, flags, mode)

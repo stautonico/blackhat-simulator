@@ -7,7 +7,7 @@ def main(args):
         print(f"usage: cat <path>")
         return 1
 
-    fd = open(args[0], 0, 0)
+    fd = open(args[0], O_RDONLY)
 
     if fd < 0:
         perror("Unable to read file")

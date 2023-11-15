@@ -54,6 +54,42 @@ namespace Blackhat {
         return newinode;
     }
 
+    bool Inode::check_perm(Inode::Permission perm, Process *process) {
+        // If we're root, just return yes. Root can do whatever they want
+        // EXCEPT for if we're executing. Even root can't execute a file without +x being set
+        if (perm != Permission::EXECUTE) {
+            if (process->get_fsuid() == 0 || process->get_fsgid() == 0) return true;
+        }
+
+        // Check the appropriate file permission bit based on the requested permission
+        unsigned int permissionBit;
+        switch (perm) {
+            case Permission::READ:
+                permissionBit = 0004;
+                break;
+            case Permission::WRITE:
+                permissionBit = 0002;
+                break;
+            case Permission::EXECUTE:
+                permissionBit = 0001;
+                break;
+            default:
+                return false;
+        }
+
+        // Check if the public permission bit is set
+        if (m_mode & permissionBit) return true;
+
+        // Check if the group permission bit is set and the current user belongs to the group owner
+        if (m_mode & permissionBit << 3 && m_group_owner == process->get_fsgid()) return true;
+
+        // Check if the user permission bit is set and the current user is the owner
+        if (m_mode & permissionBit << 6 && m_owner == process->get_fsuid()) return true;
+
+        return false;
+    }
+
+
     Ext4::Ext4() : m_root_directory_entry("/", m_root) {
         m_root = new Inode();
         m_root->m_name = "/";
@@ -184,6 +220,7 @@ namespace Blackhat {
 
         return inode->m_data;
     }
+
     std::vector<std::string> Ext4::readdir(std::string path) {
         auto dir_entry = _find_directory_entry(path);
 

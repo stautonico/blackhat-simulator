@@ -25,7 +25,8 @@ def main(argv):
         else:
             if result[0] == "/":
                 # Abs path to executable
-                execve(args[0], args[1:], {})
+                if execve(args[0], args[1:], {}) < 0:
+                    perror(f"sh: {args[0]}")
             else:
                 path = getenv("PATH") or "/bin"
                 pieces = path.split(":")
@@ -36,7 +37,8 @@ def main(argv):
                     entries = readdir(piece)
                     for entry in entries:
                         if entry == args[0]:
-                            execve(f"{piece}/{args[0]}", args[1:], {})
+                            if execve(f"{piece}/{args[0]}", args[1:], {}) < 0:
+                                perror(f"sh: {args[0]}")
                             found_command = True
                             break
 

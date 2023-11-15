@@ -29,7 +29,11 @@ namespace Blackhat {
         PATH = 010000000,
         SYNC = 00010000,
         TMPFILE = 020000000,
-        TRUNC = 00001000
+        TRUNC = 00001000,
+
+        RDONLY = 00,
+        WRONLY = 01,
+        RDWR   = 02,
     };
 
     class Inode {
@@ -44,6 +48,15 @@ namespace Blackhat {
 
         int get_link_count() {return m_link_count;}
 
+        enum Permission {
+            READ,
+            WRITE,
+            EXECUTE
+        };
+
+        bool check_perm(Permission perm, Process* process);
+
+
     private:
         Inode _clone();
 
@@ -52,6 +65,9 @@ namespace Blackhat {
         int m_inode_number = -1;
 
         int m_link_count = 0;
+
+        int m_owner = 0;
+        int m_group_owner = 0;
 
         int m_mode;
     };
@@ -70,7 +86,9 @@ namespace Blackhat {
         bool remove_child(std::string name);
 
     private:
-        Inode* m_inode;
+        Inode* m_inode; // TODO: Maybe replace this with inode number?
+        // It would make the code slightly more complicated, but it would make
+        // saving WAY easier.
         std::string m_name;
 
         // TODO: This? Idk about this. Maybe store it in a different data structure

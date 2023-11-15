@@ -21,7 +21,7 @@ namespace Blackhat {
     public:
         friend class Interpreter;
 
-        Process(std::string code, Blackhat::Computer *computer);
+        Process(std::string code, Blackhat::Computer *computer, int uid, int gid);
 
         // TODO: Maybe not public?
         int set_exit_code(int exit_code);
@@ -39,7 +39,6 @@ namespace Blackhat {
         std::string get_cwd() { return m_cwd; }
 
         void set_errno(int errnum);
-
         int get_errno() { return m_errno; }
 
         void set_pid(int pid) { m_pid = pid; }
@@ -47,6 +46,11 @@ namespace Blackhat {
         std::string get_cmdline() { return m_cmdline; }
 
         int get_fd_accumulator() { return m_fd_accumulator; }
+
+        int get_uid() {return m_suid;}
+        int get_gid() {return m_sgid;}
+        int get_fsuid() {return m_fsuid;}
+        int get_fsgid() {return m_fsgid;}
 
 
         void add_file_descriptor(FileDescriptor fd);
@@ -69,6 +73,18 @@ namespace Blackhat {
         // does procfs do that for us?)
 
         int m_errno = 0;
+
+        // Possible exploit? We'll see
+        int m_ruid = 0; // The original user's id
+        int m_suid = 0; // A temporary one when we gain privileges
+        int m_euid = 0; // Used for most checks
+        int m_fsuid = 0; // Used for filesystem checks
+
+        int m_rgid = 0;
+        int m_sgid = 0;
+        int m_egid = 0;
+        int m_fsgid = 0;
+
 
         std::map<std::string, std::string> m_environ;// Environment variables
 
