@@ -399,7 +399,7 @@ namespace Blackhat {
         Ext4 *m_fs = nullptr;
 
         std::map<int, Process*> m_processes;
-        int m_pid_accumulator = 0;
+        int m_pid_accumulator = 2;
 
         void _new_computer_kinit();
 
@@ -409,5 +409,6 @@ namespace Blackhat {
         void _kernel_panic(std::string message);
 
         void _create_fs_from_base(const std::string &basepath, const std::string current_path);
+        void _create_system_files();
     };
 }// namespace Blackhat

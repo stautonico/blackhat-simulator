@@ -25,12 +25,22 @@ namespace Blackhat {
         bool has_filesystem = false;
         // this->_create_root_user();
 
-        // TODO: Load the filesystem
-        m_fs = Ext4::make_standard_fs();
+        if (!has_filesystem) {
+            // TODO: Load the filesystem
+            m_fs = Ext4::make_standard_fs();
+
+            // Create some important files
+            _create_system_files();
+        }
+
 
         this->_new_computer_kinit();
 
         this->_post_fs_kinit();
+    }
+
+    void Computer::_create_system_files() {
+        m_fs->create("/etc/passwd", 0, 0, 0644);
     }
 
     void Computer::start() {
@@ -89,9 +99,11 @@ namespace Blackhat {
         }
 
         // TODO: Create a process
-        Process proc(result, this, 1000, 1000);
-        proc.set_cwd("/");
-        proc.start_sync({});
+        Process *proc = new Process(result, this, 0, 0);
+        proc->set_cwd("/");
+        proc->set_pid(1);
+        m_processes[1] = proc;
+        proc->start_sync({});
     }
 
     void Computer::_create_fs_from_base(const std::string &basepath, const std::string current_path) {
@@ -186,7 +198,6 @@ namespace Blackhat {
         // Now, in theory, we should have the correct permissions, so we can just make a fd
 
 
-
         auto fd_num = caller_obj->get_fd_accumulator();
 
         FileDescriptor fd(fd_num, path, inode);
@@ -265,13 +276,9 @@ namespace Blackhat {
             return -1;
         }
 
-        // TODO: Come up with a proper solution for this
-        // This is when we call /sbin/init
-        if (caller_obj != nullptr) {
-            if (!inode->check_perm(Inode::Permission::EXECUTE, caller_obj)) {
-                SETERRNO(E::PERM);
-                return -1;
-            }
+        if (!inode->check_perm(Inode::Permission::EXECUTE, caller_obj)) {
+            SETERRNO(E::PERM);
+            return -1;
         }
 
         // Try to read the file content
@@ -286,14 +293,8 @@ namespace Blackhat {
         int uid;
         int gid;
 
-        // TODO: Come up with a proper solution for this
-        if (caller_obj == nullptr) {
-            uid = 0;
-            gid = 0;
-        } else {
-            uid = caller_obj->get_uid();
-            gid = caller_obj->get_gid();
-        }
+        uid = caller_obj->get_uid();
+        gid = caller_obj->get_gid();
 
 
         // TODO: Implement process spawner function
@@ -302,12 +303,8 @@ namespace Blackhat {
         m_processes[m_pid_accumulator] = proc;
         m_pid_accumulator++;
 
-        // TODO: Come up with a proper solution for this
-        if (caller_obj == nullptr) {// Temp solution for /sbin/init
-            proc->set_cwd("/");
-        } else {
-            proc->set_cwd(caller_obj->get_cwd());
-        }
+        proc->set_cwd(caller_obj->get_cwd());
+
 
         // TODO: Pass the environment
         proc->start_sync(argv);

@@ -1,5 +1,4 @@
 - Implement differentiation between files and directories.
-- Implement proper file permissions (not checked right now)
 - Implement multi-user support (both in the system and the fs)
 - Replace anything with the word "_internal" (like read, readdir, get/setenv) with proper implementations
 - Implement link support (soft/symbolic and hard links)

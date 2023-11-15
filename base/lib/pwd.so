@@ -1,0 +1,17 @@
+require("unistd")
+require("fcntl")
+
+
+def getpwnam(name):
+    # Try to read the password file
+    fd = open("/etc/passwd", O_RDONLY)
+
+    if fd < 0:
+        return None
+
+    # TODO: Parse the file and return data
+
+    return True
+
+def getpwuid(uid):
+    pass

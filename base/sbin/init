@@ -1,8 +1,61 @@
 require("stdlib")
 require("dirent")
 require("unistd")
+require("stdio")
+require("pwd")
 
 def main(argv):
+    print("blackhat-simulator 0.0.0 (tty0)")
+    print("")
+
+    username = input("<hostname> login: ")
+    password = input("Password: ")
+
+    # TODO: Get the user structure
+    result = getpwnam(username)
+
+    if result is None:
+        print("No pw entry found!")
+    else:
+        print(f"We have a pw entry for {username}")
+
+
     return execve("/bin/sh", [], {})
 
 
+
+
+# TODO Make login:
+"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+
+int main() {
+    const char *username = "test_user";
+
+    struct passwd *user_info = getpwnam(username);
+
+    if (user_info != NULL) {
+        // Replace this with the actual password you want to check
+        const char *entered_password = "user_password";
+
+        // Hash the entered password with the salt from the stored hash
+        char *hashed_password = crypt(entered_password, user_info->pw_passwd);
+
+        // Compare the stored hash with the newly hashed entered password
+        if (strcmp(user_info->pw_passwd, hashed_password) == 0) {
+            printf("Password is correct.\n");
+        } else {
+            printf("Password is incorrect.\n");
+        }
+    } else {
+        fprintf(stderr, "User not found.\n");
+    }
+
+    return 0;
+}
+"""
