@@ -19,3 +19,9 @@ def rmdir(pathname):
 
 def unlink(pathname):
     return _syscall(87, pathname)
+
+def getuid():
+    return _syscall(102)
+
+def geteuid():
+    return _syscall(107)

@@ -49,6 +49,10 @@ namespace Blackhat {
 
         int get_uid() {return m_suid;}
         int get_gid() {return m_sgid;}
+
+        int get_euid() {return m_euid;}
+        int get_egid() {return m_egid;}
+
         int get_fsuid() {return m_fsuid;}
         int get_fsgid() {return m_fsgid;}
 

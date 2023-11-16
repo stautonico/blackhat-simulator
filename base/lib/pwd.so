@@ -2,16 +2,88 @@ require("unistd")
 require("fcntl")
 
 
-def getpwnam(name):
+class passwd:
+    def __init__(self, name, passwd, uid, gid, gecos, dir, shell):
+        self.pw_name = name
+        self.pw_passwd = passwd
+        self.pw_uid = uid
+        self.pw_gid = gid
+        self.pw_change = None
+        self.pw_class = None
+        self.pw_gecos = gecos
+        self.pw_dir = dir
+        self.pw_shell = shell
+        self.pw_expire = None
+
+
+def _parse_passwd():
     # Try to read the password file
     fd = open("/etc/passwd", O_RDONLY)
 
     if fd < 0:
         return None
 
-    # TODO: Parse the file and return data
+    # TODO: set errno?
 
-    return True
+    data = read(fd)
+
+    if data is None:
+        return None
+
+    lines = data.split("\n")
+
+    while "" in lines:
+        lines.remove("")
+
+    entries = []
+
+    for line in lines:
+        fields = line.split(":")
+
+        entries.append(passwd(fields[0], fields[1], int(fields[2]), int(fields[3]), fields[4], fields[5], fields[6]))
+
+    return entries
+
+def getallpwdent():
+    return _parse_passwd()
+
+def getpwnam(name):
+    entries = _parse_passwd()
+
+    for ent in entries:
+        if ent.pw_name == name:
+            return ent
+
+    return None
+
 
 def getpwuid(uid):
-    pass
+    entries = _parse_passwd()
+
+    for ent in entries:
+        if ent.pw_uid == uid:
+            return ent
+
+    return None
+
+def putpwent(passwd_entry, fd):
+    # TODO: Check if fd is valid
+
+    output = ""
+
+    output += passwd_entry.pw_name + ":"
+    output += passwd_entry.pw_passwd + ":"
+    output += str(passwd_entry.pw_uid) + ":"
+    output += str(passwd_entry.pw_gid) + ":"
+    output += passwd_entry.pw_gecos + ":"
+    output += passwd_entry.pw_dir + ":"
+    output += passwd_entry.pw_shell
+
+    # TODO: Set errno?
+
+    write_result = write(fd, output)
+
+    if write_result < 0:
+        return -1
+
+    return 0

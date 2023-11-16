@@ -46,6 +46,10 @@ namespace Blackhat {
 
         std::string read();
         int write(std::string data);
+        int append(std::string data);
+
+        void set_append(bool enabled) {printf("Your boolean variable is: %s\n", enabled ? "true" : "false"); m_append = enabled;}
+        bool is_append_enabled() {printf("Getting enabled status: %s\n", m_append ? "true" : "false"); return m_append;}
 
     private:
         int m_fd;
@@ -55,6 +59,8 @@ namespace Blackhat {
         int f_mode;
         int f_pos;
         int f_flags;
+        bool m_append = false;
+        // TODO: Maybe make some struct or something to keep track of flags in an easier way
         // TODO: Maybe include f_pid (the pid that this fd belongs to?)
         //       Might be unnecessary?
     };

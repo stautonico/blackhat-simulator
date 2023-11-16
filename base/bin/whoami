@@ -1,0 +1,15 @@
+require("pwd")
+
+def main(args):
+
+    uid = geteuid()
+
+    entry = getpwuid(uid)
+
+    if entry is None:
+        print(f"whoami: cannot find name for user ID {uid}")
+        return 1
+
+    print(entry.pw_name)
+
+    return 0

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stack>
 
 #define GETCALLER() auto caller_obj = m_processes[caller]
@@ -23,7 +24,7 @@ namespace Blackhat {
         // The kernel's init function (not to be confused with userland init:
         // /sbin/init)
         bool has_filesystem = false;
-        // this->_create_root_user();
+        this->_create_root_user();
 
         if (!has_filesystem) {
             // TODO: Load the filesystem
@@ -40,7 +41,15 @@ namespace Blackhat {
     }
 
     void Computer::_create_system_files() {
+        // TODO: Unneeded when we have saving and loading
         m_fs->create("/etc/passwd", 0, 0, 0644);
+    }
+
+    void Computer::_create_root_user() {
+        User rootuser(0, "root");
+        rootuser.set_password("password");
+        rootuser.set_home_dir("/root");
+        m_users.insert({0, rootuser});
     }
 
     void Computer::start() {
@@ -57,6 +66,7 @@ namespace Blackhat {
         // TODO: Implement
         // Create a test tmp file that is unreadable to anyone but root
         m_fs->create("/tmp/unreadable", 0, 0, 0);
+        flush_users();// TODO: SYNC USERS WHEN WE HAVE SAVING, NOT FLUSH
     }
 
     void Computer::_new_computer_kinit() {
@@ -137,6 +147,24 @@ namespace Blackhat {
         }
     }
 
+    void Computer::flush_users() {
+        std::stringstream ss;
+
+        for (auto const &[uid, user]: m_users) {
+            ss << user.passwd_entry() << "\n";
+        }
+
+        // Remove the last newline
+        auto towrite = ss.str();
+        towrite.erase(towrite.size() - 1, 1);
+
+        auto write_result = m_fs->write("/etc/passwd", towrite);
+
+        if (write_result < 0) {
+            _kernel_panic("failed to flush users to disk");
+        }
+    }
+
     std::string Computer::_read(std::string path) {
         auto result = m_fs->read(path);
 
@@ -203,6 +231,29 @@ namespace Blackhat {
         FileDescriptor fd(fd_num, path, inode);
         caller_obj->add_file_descriptor(fd);
 
+        printf("What do our flags look like as octal?: %o\n", flags);
+        printf("What does O::APPEND look like as octal?: %o\n", O::APPEND);
+        printf("What does O::WRONLY look like as octal?: %o\n", O::WRONLY);
+        printf("What does O::WRONLY | O::APPEND look like as octal?: %o\n", O::WRONLY | O::APPEND);
+
+        if (flags & O::APPEND) {
+            std::cout << "APPEND flag is set\n";
+        }
+
+        if (flags & O::WRONLY) {
+            std::cout << "WRONLY flag is set\n";
+        }
+
+
+        // TODO: Check our flags
+        if (flags & O::APPEND) {
+            std::cout << "Enabling append!" << std::endl;
+            fd.set_append(true);
+        }
+
+        std::cout << "We opened fd #" << fd_num << std::endl;
+        
+
         return fd_num;// We have to do this bc add_file_descriptor increments the accumulator
     }
 
@@ -217,7 +268,6 @@ namespace Blackhat {
             return std::string(1, '\0');
         }
 
-        // TODO: Permission check
         return fd_obj->read();
     }
 
@@ -232,8 +282,17 @@ namespace Blackhat {
             return -1;
         }
 
-        // TODO: Permission check
-        return fd_obj->write(data);
+        // TODO: This doesn't work. Debug tmrw morning
+        std::cout << "Is append enabled: " << fd_obj->is_append_enabled() << " on fd #" << fd << std::endl;
+
+        if (fd_obj->is_append_enabled()) {
+            std::cout << "Append is enabled, appending data..." << std::endl;
+            return fd_obj->append(data);
+        }
+        else {
+            std::cout << "Writing normally..." << std::endl;
+            return fd_obj->write(data);
+        }
     }
 
     std::string Computer::sys$getcwd(int caller) {
@@ -379,6 +438,20 @@ namespace Blackhat {
         }
 
         return 0;
+    }
+
+    int Computer::sys$getuid(int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        return caller_obj->get_uid();
+    }
+
+    int Computer::sys$geteuid(int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        return caller_obj->get_euid();
     }
 
 }// namespace Blackhat

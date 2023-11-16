@@ -44,6 +44,11 @@ namespace Blackhat {
         return m_data.size();
     }
 
+    int Inode::append(std::string data) {
+        m_data += data;
+        return data.size();
+    }
+
     Inode Inode::_clone() {
         Inode newinode;
         newinode.m_name = m_name;

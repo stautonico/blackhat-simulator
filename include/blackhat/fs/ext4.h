@@ -12,7 +12,7 @@
 #include <blackhat/computer.h>
 
 namespace Blackhat {
-    enum O {
+    enum O : unsigned int {
         APPEND = 00002000,
         ASYNC = 020000,
         CLOEXEC = 02000000,
@@ -31,9 +31,9 @@ namespace Blackhat {
         TMPFILE = 020000000,
         TRUNC = 00001000,
 
-        RDONLY = 00,
-        WRONLY = 01,
-        RDWR   = 02,
+        RDONLY = 00000000,
+        WRONLY = 00000001,
+        RDWR   = 00000002,
     };
 
     class Inode {
@@ -42,6 +42,7 @@ namespace Blackhat {
 
         std::string read();
         int write(std::string data);
+        int append(std::string data);
 
         void increment_link_count() {m_link_count++;}
         void decrement_link_count() {m_link_count--;}

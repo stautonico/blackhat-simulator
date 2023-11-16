@@ -16,4 +16,8 @@ namespace Blackhat {
     int FileDescriptor::write(std::string data) {
         return m_inode->write(data);
     }
+
+    int FileDescriptor::append(std::string data) {
+        return m_inode->append(data);
+    }
 }// namespace Blackhat

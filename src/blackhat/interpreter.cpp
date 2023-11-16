@@ -231,6 +231,14 @@ namespace Blackhat {
                             return VAR(result);
                         }
 
+                        case SYSCALL_ID::SYS_GETUID: {
+                            return VAR(t->m_process->m_computer->sys$getuid(PID()));
+                        }
+
+                        case SYSCALL_ID::SYS_GETEUID: {
+                            return VAR(t->m_process->m_computer->sys$geteuid(PID()));
+                        }
+
                         default:
                             return vm->None;
                     }

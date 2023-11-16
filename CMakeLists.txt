@@ -14,6 +14,7 @@ set(SOURCES
         src/blackhat/computer.cpp
         src/blackhat/interpreter.cpp
         src/blackhat/process.cpp
+        src/blackhat/user.cpp
 
         src/blackhat/fs/ext4.cpp
         src/blackhat/fs/file_descriptor.cpp

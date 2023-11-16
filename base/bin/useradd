@@ -1,0 +1,45 @@
+require("pwd")
+require("unistd")
+require("fcntl")
+
+
+def main(args):
+    # TODO: Check uid (must be 0)
+
+    if len(args) == 0:
+        print("usage: useradd <username>")
+        return 0
+
+    # Figure out what our next uid should be
+    all_entries = getallpwdent()
+
+    highest_uid = 0
+
+    for ent in all_entries:
+        if ent.pw_uid > highest_uid:
+            highest_uid = ent.pw_uid
+
+    if highest_uid < 1000:
+        new_uid = 1000
+    else:
+        new_uid = highest_uid + 1
+
+
+    fd = open("/etc/passwd", O_WRONLY | O_APPEND)
+
+    if fd < 0:
+        perror("useradd")
+        return 1
+
+    # TODO: Seek in file?
+
+
+
+    passwd_entry = passwd(args[0], "", new_uid, new_uid, "", f"/home/{args[0]}", "/bin/sh")
+
+    putpwent(passwd_entry, fd)
+
+    # TODO: Implement
+    # close(fd)
+
+    return 0

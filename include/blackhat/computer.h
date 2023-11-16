@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 
+
 // Forward declaration
 namespace Blackhat {
 }
@@ -18,8 +19,8 @@ namespace Blackhat {
 #include <blackhat/process.h>
 #include <blackhat/fs/ext4.h>
 #include <blackhat/fs/file_descriptor.h>
+#include <blackhat/user.h>
 
-#include <blackhat/fs/ext4.h>
 
 
 using SyscallPointer = void *;
@@ -370,6 +371,8 @@ namespace Blackhat {
         // TODO: Maybe not be public?
         void call_userland_init();
 
+        void _create_root_user();
+
         int _exec(std::string path, std::vector<std::string> args);
         std::string _read(std::string path);
 
@@ -389,6 +392,13 @@ namespace Blackhat {
         int sys$rmdir(std::string pathname, int caller);
         int sys$unlink(std::string pathname, int caller);
         int sys$rename(std::string oldpath, std::string newpath, int caller);
+        int sys$getuid(int caller);
+        int sys$geteuid(int caller);
+
+        // There are two sets of functions: sync and flush
+        // Sync loads data from the "filesystem" into the computer object
+        // Flush takes the data from the computer object and puts them into the filesystem
+        void flush_users();
 
 
     private:
@@ -397,6 +407,8 @@ namespace Blackhat {
                                              // something post-init
 
         Ext4 *m_fs = nullptr;
+
+        std::map<int, User> m_users;
 
         std::map<int, Process*> m_processes;
         int m_pid_accumulator = 2;

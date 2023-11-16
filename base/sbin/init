@@ -8,19 +8,32 @@ def main(argv):
     print("blackhat-simulator 0.0.0 (tty0)")
     print("")
 
-    username = input("<hostname> login: ")
-    password = input("Password: ")
-
-    # TODO: Get the user structure
-    result = getpwnam(username)
-
-    if result is None:
-        print("No pw entry found!")
-    else:
-        print(f"We have a pw entry for {username}")
-
-
+    # TODO: Disable this
+    # Bypass login for dev
     return execve("/bin/sh", [], {})
+
+    while True:
+        username = input("<hostname> login: ")
+        password = input("Password: ")
+
+        result = getpwnam(username)
+
+        if result is None:
+            print("Login Incorrect")
+            continue
+        else:
+            # TODO: Hash the inputted password and compare
+            if password == result.pw_passwd:
+                # TODO: Set UID
+                # TODO: Spawn the user's shell
+                return execve("/bin/sh", [], {})
+            else:
+                print("Login Incorrect")
+                continue
+
+    # We should never reach here! (just in case)
+    return -1
+
 
 
 
