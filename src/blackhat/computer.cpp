@@ -228,31 +228,13 @@ namespace Blackhat {
 
         auto fd_num = caller_obj->get_fd_accumulator();
 
-        FileDescriptor fd(fd_num, path, inode);
+        auto fd = new FileDescriptor(fd_num, path, inode);
         caller_obj->add_file_descriptor(fd);
-
-        printf("What do our flags look like as octal?: %o\n", flags);
-        printf("What does O::APPEND look like as octal?: %o\n", O::APPEND);
-        printf("What does O::WRONLY look like as octal?: %o\n", O::WRONLY);
-        printf("What does O::WRONLY | O::APPEND look like as octal?: %o\n", O::WRONLY | O::APPEND);
-
-        if (flags & O::APPEND) {
-            std::cout << "APPEND flag is set\n";
-        }
-
-        if (flags & O::WRONLY) {
-            std::cout << "WRONLY flag is set\n";
-        }
-
 
         // TODO: Check our flags
         if (flags & O::APPEND) {
-            std::cout << "Enabling append!" << std::endl;
-            fd.set_append(true);
+            fd->set_append(true);
         }
-
-        std::cout << "We opened fd #" << fd_num << std::endl;
-        
 
         return fd_num;// We have to do this bc add_file_descriptor increments the accumulator
     }
@@ -282,17 +264,10 @@ namespace Blackhat {
             return -1;
         }
 
-        // TODO: This doesn't work. Debug tmrw morning
-        std::cout << "Is append enabled: " << fd_obj->is_append_enabled() << " on fd #" << fd << std::endl;
-
-        if (fd_obj->is_append_enabled()) {
-            std::cout << "Append is enabled, appending data..." << std::endl;
+        if (fd_obj->is_append_enabled())
             return fd_obj->append(data);
-        }
-        else {
-            std::cout << "Writing normally..." << std::endl;
+        else
             return fd_obj->write(data);
-        }
     }
 
     std::string Computer::sys$getcwd(int caller) {
@@ -322,9 +297,8 @@ namespace Blackhat {
         return 0;
     }
 
-    int
-    Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp,
-                         int caller) {
+    int Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp,
+                             int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 

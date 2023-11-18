@@ -69,13 +69,16 @@ def getpwuid(uid):
 def putpwent(passwd_entry, fd):
     # TODO: Check if fd is valid
 
-    output = ""
+    # TODO: We shouldn't have to manually add the newline?
+    # I think this is because if we end a file with "\n", the "console" prints it leaving an extra empty line
+
+    output = "\n"
 
     output += passwd_entry.pw_name + ":"
-    output += passwd_entry.pw_passwd + ":"
+    output += passwd_entry.pw_passwd or "*" + ":"
     output += str(passwd_entry.pw_uid) + ":"
     output += str(passwd_entry.pw_gid) + ":"
-    output += passwd_entry.pw_gecos + ":"
+    output += passwd_entry.pw_gecos or ",,,," + ":"
     output += passwd_entry.pw_dir + ":"
     output += passwd_entry.pw_shell
 

@@ -48,8 +48,8 @@ namespace Blackhat {
         int write(std::string data);
         int append(std::string data);
 
-        void set_append(bool enabled) {printf("Your boolean variable is: %s\n", enabled ? "true" : "false"); m_append = enabled;}
-        bool is_append_enabled() {printf("Getting enabled status: %s\n", m_append ? "true" : "false"); return m_append;}
+        void set_append(bool enabled) {m_append = enabled;}
+        bool is_append_enabled() {return m_append;}
 
     private:
         int m_fd;

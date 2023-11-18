@@ -57,8 +57,8 @@ namespace Blackhat {
         m_interpreter.set_errno(errnum);
     }
 
-    void Process::add_file_descriptor(Blackhat::FileDescriptor fd) {
-        m_file_descriptors.insert({fd.get_fd(), std::move(fd)});
+    void Process::add_file_descriptor(Blackhat::FileDescriptor* fd) {
+        m_file_descriptors.insert({fd->get_fd(), fd});
         // Increment our fd accumulator
         _increment_fd_accumulator();
     }
@@ -66,7 +66,7 @@ namespace Blackhat {
     FileDescriptor *Process::get_file_descriptor(int fd) {
         auto it = m_file_descriptors.find(fd);
 
-        if (it != m_file_descriptors.end()) return &(it->second);
+        if (it != m_file_descriptors.end()) return it->second;
 
         return nullptr;
     }

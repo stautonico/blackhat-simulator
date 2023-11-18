@@ -57,7 +57,7 @@ namespace Blackhat {
         int get_fsgid() {return m_fsgid;}
 
 
-        void add_file_descriptor(FileDescriptor fd);
+        void add_file_descriptor(FileDescriptor* fd);
         FileDescriptor *get_file_descriptor(int fd);
 
     private:
@@ -95,7 +95,7 @@ namespace Blackhat {
         Blackhat::Interpreter m_interpreter;
 
         int m_fd_accumulator = 3;                        // 0, 1, 2 reserved for stdin, stdout, and stderr
-        std::map<int, FileDescriptor> m_file_descriptors;// FD# -> FileDescriptor
+        std::map<int, FileDescriptor*> m_file_descriptors;// FD# -> FileDescriptor
 
         void _run(std::vector<std::string> args);
 
