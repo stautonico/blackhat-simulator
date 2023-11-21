@@ -231,6 +231,16 @@ namespace Blackhat {
                             return VAR(result);
                         }
 
+                        case SYSCALL_ID::SYS_SETUID: {
+                            auto uid = CAST(int, cmd_args[0]);
+                            return VAR(t->m_process->m_computer->sys$setuid(uid, PID()));
+                        }
+
+                        case SYSCALL_ID::SYS_SETGID: {
+                            auto gid = CAST(int, cmd_args[0]);
+                            return VAR(t->m_process->m_computer->sys$setgid(gid, PID()));
+                        }
+
                         case SYSCALL_ID::SYS_GETUID: {
                             return VAR(t->m_process->m_computer->sys$getuid(PID()));
                         }
@@ -240,6 +250,7 @@ namespace Blackhat {
                         }
 
                         default:
+                            throw std::runtime_error("Syscall " + std::to_string(syscall_id) + " not implemented!");
                             return vm->None;
                     }
 

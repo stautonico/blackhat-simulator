@@ -1,27 +1,43 @@
 def read(fd):
     return _syscall(0, fd)
 
+
 def write(fd, content):
     return _syscall(1, fd, content)
+
 
 def chdir(path):
     # TODO: Make this pass the FULL path. We can use the current path to figure out the full path
     return _syscall(80, path)
 
+
 def getcwd():
     return _syscall(79)
+
 
 def execve(pathname, argv, envp):
     return _syscall(59, pathname, argv, envp)
 
+
 def rmdir(pathname):
     return _syscall(84, pathname)
+
 
 def unlink(pathname):
     return _syscall(87, pathname)
 
+
+def setuid(uid):
+    return _syscall(105, uid)
+
+
+def setgid(gid):
+    return _syscall(106, gid)
+
+
 def getuid():
     return _syscall(102)
+
 
 def geteuid():
     return _syscall(107)

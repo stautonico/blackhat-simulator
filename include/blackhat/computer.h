@@ -392,6 +392,8 @@ namespace Blackhat {
         int sys$rmdir(std::string pathname, int caller);
         int sys$unlink(std::string pathname, int caller);
         int sys$rename(std::string oldpath, std::string newpath, int caller);
+        int sys$setuid(int uid, int caller);
+        int sys$setgid(int gid, int caller);
         int sys$getuid(int caller);
         int sys$geteuid(int caller);
 

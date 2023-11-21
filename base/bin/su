@@ -1,0 +1,33 @@
+require("unistd")
+require("pwd")
+
+# TODO: Won't work until setuid binaries are implement properly
+
+def main(args):
+    if len(args) < 1:
+        print("usage: su <username>")
+        return 1
+
+    username = args[0]
+
+    # Try to get the user entry
+    entry = getpwnam(username)
+
+    if entry is None:
+        print(f"su: user {username} does not exist or the user entry does not contain all the required fields")
+        return 1
+    
+    password = input("Password: ")
+
+    # TODO: Hash and compare hash
+    if password != entry.pw_passwd:
+        # TODO: This looks like an errno message, but its not in errno --list?
+        print("su: Authentication failure")
+        
+    setuid(entry.pw_uid)
+    setgid(entry.pw_gid)
+
+    # Spawn the user's shell
+    execve(entry.pw_shell, [], {})
+
+    return 0

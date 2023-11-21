@@ -326,8 +326,9 @@ namespace Blackhat {
         int uid;
         int gid;
 
-        uid = caller_obj->get_uid();
-        gid = caller_obj->get_gid();
+        // TODO: Idk if this is correct, but we're just gonna use euid
+        uid = caller_obj->get_euid();
+        gid = caller_obj->get_egid();
 
 
         // TODO: Implement process spawner function
@@ -411,6 +412,24 @@ namespace Blackhat {
             return -1;
         }
 
+        return 0;
+    }
+
+    int Computer::sys$setuid(int uid, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // TODO: PROPER PERMISSION CHECKING!
+        caller_obj->set_euid(uid);
+        return 0;
+    }
+
+    int Computer::sys$setgid(int gid, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // TODO: PROPER PERMISSION CHECKING!
+        caller_obj->set_egid(gid);
         return 0;
     }
 

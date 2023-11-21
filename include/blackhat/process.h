@@ -47,13 +47,24 @@ namespace Blackhat {
 
         int get_fd_accumulator() { return m_fd_accumulator; }
 
+        void set_uid(int uid) {m_suid = uid;}
         int get_uid() {return m_suid;}
+
+        void set_gid(int gid) {m_sgid = gid;}
         int get_gid() {return m_sgid;}
 
+        void set_euid(int uid) {m_euid = uid;}
         int get_euid() {return m_euid;}
+
+        void set_egid(int gid) {m_egid = gid;}
         int get_egid() {return m_egid;}
 
+
+        void set_fsuid(int uid) {m_fsuid = uid;}
         int get_fsuid() {return m_fsuid;}
+
+
+        void set_fsgid(int gid) {m_fsgid = gid;}
         int get_fsgid() {return m_fsgid;}
 
 
