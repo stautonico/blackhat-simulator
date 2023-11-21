@@ -1,0 +1,26 @@
+class utsname:
+    def __init__(self):
+        self.sysname = ""
+        self.nodename = ""
+        self.release = ""
+        self.version = ""
+        self.machine = ""
+        self.domainname = ""
+
+def uname():
+    result = _syscall(63)
+
+    # Populate the utsname object
+    # TODO: Catch errors
+    if len(result) != 6:
+        return None
+
+    uname_res = utsname()
+    uname_res.sysname = result[0]
+    uname_res.nodename = result[1]
+    uname_res.release = result[2]
+    uname_res.version = result[3]
+    uname_res.machine = result[4]
+    uname_res.domainname = result[5]
+
+    return uname_res

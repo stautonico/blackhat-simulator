@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <stack>
+#include <sys/utsname.h>
 
 #define GETCALLER() auto caller_obj = m_processes[caller]
 #define SETERRNO(errno) caller_obj->set_errno(errno)
@@ -297,8 +298,9 @@ namespace Blackhat {
         return 0;
     }
 
-    int Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp,
-                             int caller) {
+    int
+    Computer::sys$execve(std::string pathname, std::vector<std::string> argv, std::map<std::string, std::string> envp,
+                         int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
@@ -445,6 +447,33 @@ namespace Blackhat {
         GETCALLER();
 
         return caller_obj->get_euid();
+    }
+
+    int Computer::sys$sethostname(std::string hostname, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // TODO: Does this need any kind of validation?
+        m_hostname = hostname;
+        return 0;
+    }
+
+    std::vector<std::string> Computer::sys$uname(int caller) {
+        std::vector<std::string> uname_output;
+
+
+        struct utsname realUnameData;
+        if (uname(&realUnameData) < 0)
+            throw std::runtime_error("uname failed on line " + std::to_string(__LINE__-1));
+
+        uname_output.emplace_back("Blackhat"); // sysname (operating system name)
+        uname_output.emplace_back(m_hostname); // nodename (hostname)
+        uname_output.emplace_back("0.0.0"); // release (operating system release)
+        uname_output.emplace_back("0.0.0"); // version (operating system version)
+        uname_output.emplace_back("x86_64"); // Machine (hardware arch) TODO: Use real uname arch
+        uname_output.emplace_back("");
+
+        return uname_output;
     }
 
 }// namespace Blackhat

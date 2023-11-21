@@ -3,11 +3,19 @@ require("dirent")
 require("unistd")
 require("stdio")
 require("pwd")
+require("sys/utsname")
 
 def main(argv):
     uid = geteuid()
 
     entry = getpwuid(uid)
+
+    uname_res = uname()
+
+    if uname_res == None:
+        hostname = "<hostname>"
+    else:
+        hostname = uname_res.nodename
 
     if entry is None:
         username = "I have no name!"
@@ -15,7 +23,7 @@ def main(argv):
         username = entry.pw_name
 
     while True:
-        prompt = getenv("PS1") or f"{username}@<hostname>{'#' if uid == 0 else '$'} "
+        prompt = getenv("PS1") or f"{username}@{hostname}{'#' if uid == 0 else '$'} "
         result = input(prompt)
 
         if result == "": continue

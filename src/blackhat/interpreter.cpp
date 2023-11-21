@@ -215,7 +215,7 @@ namespace Blackhat {
                         }
 
                         case SYSCALL_ID::SYS_UNLINK: {
-                            auto path = CAST(Str&, cmd_args[0]).c_str();
+                            auto path = CAST(Str &, cmd_args[0]).c_str();
 
                             auto result = t->m_process->m_computer->sys$unlink(path, PID());
 
@@ -223,8 +223,8 @@ namespace Blackhat {
                         }
 
                         case SYSCALL_ID::SYS_RENAME: {
-                            auto oldpath = CAST(Str&, cmd_args[0]).c_str();
-                            auto newpath = CAST(Str&, cmd_args[1]).c_str();
+                            auto oldpath = CAST(Str &, cmd_args[0]).c_str();
+                            auto newpath = CAST(Str &, cmd_args[1]).c_str();
 
                             auto result = t->m_process->m_computer->sys$rename(oldpath, newpath, PID());
 
@@ -247,6 +247,26 @@ namespace Blackhat {
 
                         case SYSCALL_ID::SYS_GETEUID: {
                             return VAR(t->m_process->m_computer->sys$geteuid(PID()));
+                        }
+
+                        case SYSCALL_ID::SYS_SETHOSTNAME: {
+                            auto hostname = CAST(Str &, cmd_args[0]).c_str();
+
+                            return VAR(t->m_process->m_computer->sys$sethostname(hostname, PID()));
+                        }
+
+                        case SYSCALL_ID::SYS_UNAME: {
+                            auto result = t->m_process->m_computer->sys$uname(PID());
+
+                            // Make an array and return it
+                            List unameResult;
+                            for (auto field: result) {
+                                unameResult.push_back(VAR(field));
+                            }
+
+                            auto unameObject = VAR(std::move(unameResult));
+
+                            return unameObject;
                         }
 
                         default:

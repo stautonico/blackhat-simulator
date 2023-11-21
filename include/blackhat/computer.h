@@ -396,6 +396,10 @@ namespace Blackhat {
         int sys$setgid(int gid, int caller);
         int sys$getuid(int caller);
         int sys$geteuid(int caller);
+        int sys$sethostname(std::string hostname, int caller);
+        std::vector<std::string> sys$uname(int caller);
+
+
 
         // There are two sets of functions: sync and flush
         // Sync loads data from the "filesystem" into the computer object
