@@ -15,6 +15,7 @@ def uname():
     if len(result) != 6:
         return None
 
+    # TODO: Make this more accurate
     uname_res = utsname()
     uname_res.sysname = result[0]
     uname_res.nodename = result[1]

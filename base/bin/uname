@@ -1,0 +1,42 @@
+require("sys/utsname")
+require("stdio")
+
+# TODO: Implement --version and --help
+
+def main(args):
+    uname_res = uname()
+
+    # Should never fail but check anyway
+    if uname_res is None:
+        print("uname: Something went wrong!")
+        return 1
+
+    output = ""
+
+    if len(args) == 0:
+        args.append("-s")
+
+    if "-a" in args:
+        print(f"{uname_res.sysname} {uname_res.nodename} {uname_res.release} {uname_res.version} {uname_res.machine}")
+        return 0
+
+    if "-s" in args or "--kernel-name" in args:
+        output += f"{uname_res.sysname} "
+        
+    if "-n" in args or "--nodename" in args:
+        output += f"{uname_res.nodename} "
+
+    if "-r" in args or "--kernel-release" in args:
+        output += f"{uname_res.release} "
+        
+    if "-v" in args or "--kernel-version" in args:
+        output += f"{uname_res.version} "
+        
+    if "-m" in args or "--machine" in args:
+        output += f"{uname_res.machine} "
+
+    # Trim out the leftover space
+    print(output[:-1])
+
+    
+    return 0
