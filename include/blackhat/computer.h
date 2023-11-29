@@ -398,6 +398,8 @@ namespace Blackhat {
         int sys$geteuid(int caller);
         int sys$sethostname(std::string hostname, int caller);
         std::vector<std::string> sys$uname(int caller);
+        int sys$link(std::string oldpath, std::string newpath, int caller);
+        std::vector<std::string> sys$stat(std::string pathname, int caller);
 
 
 

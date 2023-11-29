@@ -22,6 +22,7 @@ S_IROTH = 0o0004
 S_IWOTH = 0o0002
 S_IXOTH = 0o0001
 
+
 # TODO: Put this somewhere or make it a builtin?
 def oct(n):
     if n == 0:
@@ -35,5 +36,51 @@ def oct(n):
 
     return result
 
+
+# TODO: Find a way to do this without overlapping with the stat function
+class struct_stat():
+    def __init__(self):
+        self.st_dev = None
+        self.st_ino = None
+        self.st_mode = None
+        self.st_nlink = None
+        self.st_uid = None
+        self.st_gid = None
+        self.st_rdev = None
+        self.st_size = None
+        self.st_blksize = None
+        self.st_blocks = None
+        self.st_atim = None
+        self.st_mtim = None
+        self.st_ctim = None
+
+
 def mkdir(pathname, mode):
     return _syscall(83, pathname, mode)
+
+
+def stat(pathname):
+    result = _syscall(4, pathname)
+
+    # Populate the stat object
+    # TODO: Catch errors
+    if len(result) != 13:
+        print(f"Failed: Our len is: {len(result)}")
+        return None
+
+    res_obj = struct_stat()
+    res_obj.st_dev = result[0]
+    res_obj.st_ino = result[1]
+    res_obj.st_mode = result[2]
+    res_obj.st_nlink = result[3]
+    res_obj.st_uid = result[4]
+    res_obj.st_gid = result[5]
+    res_obj.st_rdev = result[6]
+    res_obj.st_size = result[7]
+    res_obj.st_blksize = result[8]
+    res_obj.st_blocks = result[9]
+    res_obj.st_atim = result[10]
+    res_obj.st_mtim = result[11]
+    res_obj.st_ctim = result[12]
+
+    return res_obj

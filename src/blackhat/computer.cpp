@@ -476,4 +476,75 @@ namespace Blackhat {
         return uname_output;
     }
 
+    int Computer::sys$link(std::string oldpath, std::string newpath, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // Make sure both oldpath exists and newpath doesn't
+        auto oldent = m_fs->_find_directory_entry(oldpath);
+
+        if (oldent == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        auto newent = m_fs->_find_directory_entry(newpath);
+
+        if (newent != nullptr) {
+            caller_obj->set_errno(E::EXIST);
+            return -1;
+        }
+
+        // Create a new directory entry that points to the same inode, but with newpath
+        auto origInode = oldent->get_inode();
+
+        auto split_path_components = split(newpath, '/');
+        auto filename = split_path_components.back();
+        split_path_components.pop_back();
+
+
+        auto result = m_fs->add_inode_to_path(join(split_path_components, '/'), filename, origInode);
+        origInode->increment_link_count();
+        // TODO: Set errno?
+        return result;
+    }
+
+    std::vector<std::string> Computer::sys$stat(std::string pathname, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto dirent = m_fs->_find_directory_entry(pathname);
+
+        if (dirent == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return {};
+        }
+
+        auto inode = dirent->get_inode();
+
+        // Shouldn't fail but check anyway
+        if (inode == nullptr) {
+            // TODO: EIO?
+            caller_obj->set_errno(E::NOENT);
+            return {};
+        }
+
+        std::vector<std::string> result;
+        result.push_back("0"); // TODO: st_dev
+        result.push_back(std::to_string(inode->get_inode_number())); // st_ino
+        result.push_back(std::to_string(inode->get_mode())); // st_mode TODO: format as octal
+        result.push_back(std::to_string(inode->get_link_count())); // st_nlink
+        result.push_back(std::to_string(inode->get_uid())); // st_uid
+        result.push_back(std::to_string(inode->get_gid())); // st_gid
+        result.push_back("0"); // TODO: st_rdev
+        result.push_back("0"); // TODO: st_size
+        result.push_back("0"); // TODO: st_blksize
+        result.push_back("0"); // TODO: st_blocks
+        result.push_back("0"); // TODO: st_atim
+        result.push_back("0"); // TODO: st_mtim
+        result.push_back("0"); // TODO: st_ctim
+
+        return result;
+    }
+
 }// namespace Blackhat

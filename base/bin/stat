@@ -1,4 +1,32 @@
 require("sys/stat")
+require("stdio")
 
 def main(argv):
+    if len(argv) < 1:
+        print("usage: stat <pathname>")
+        return 1
+
+    result = stat(argv[0])
+    
+    if result is None:
+        perror("stat")
+        return 1
+
+    # TODO: Parse the mode
+    # TODO: Parse the usernames for UID/GID
+    # TODO: Format a/c/m time
+
+    output = ""
+
+    output += f"  File: {argv[0]}\n"
+    output += f"  Size: {result.st_size}\tBlocks: {result.st_blocks}\tIO Blocks: {result.st_blksize}\t <TODO: File type (use st_mode)>\n"
+    output += f"Device: {result.st_dev} Inode: {result.st_ino}\tLinks: {result.st_nlink}\n"
+    output += f"Access: ({result.st_mode}/----------)  Uid: ({result.st_uid}/ <username_here>)   Gid: ({result.st_gid}/ <groupname_here>)\n"
+    output += f"Access: {result.st_atim}\n"
+    output += f"Modify: {result.st_mtim}\n"
+    output += f"Change: {result.st_ctim}\n"
+    output += f" Birth: <TODO>\n"
+
+    print(output)
+
     return 0

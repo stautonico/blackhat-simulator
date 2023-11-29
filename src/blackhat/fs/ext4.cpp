@@ -132,7 +132,7 @@ namespace Blackhat {
         return _create_inode(path, uid, gid, mode);
     }
 
-    bool Ext4::_add_inode_to_path(std::string parent_path, std::string filename, Blackhat::Inode *inode) {
+    bool Ext4::add_inode_to_path(std::string parent_path, std::string filename, Blackhat::Inode *inode) {
         // We have to follow the path components and find each directory entry
         auto components = split(parent_path, '/');
 
@@ -169,7 +169,7 @@ namespace Blackhat {
         inode->m_inode_number = m_inode_accumulator;
         m_inode_accumulator++;
         // Add the inode to the parent's directory entries
-        auto result = _add_inode_to_path(parent_path, components[components.size() - 1], inode);
+        auto result = add_inode_to_path(parent_path, components[components.size() - 1], inode);
         // This should never fail, but it doesn't hurt to check
         if (!result) {
             // Delete the inode we just created

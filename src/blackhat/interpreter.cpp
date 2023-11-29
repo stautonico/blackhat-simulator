@@ -269,6 +269,30 @@ namespace Blackhat {
                             return unameObject;
                         }
 
+                        case SYSCALL_ID::SYS_LINK: {
+                            auto oldpath = CAST(Str &, cmd_args[0]).c_str();
+                            auto newpath = CAST(Str &, cmd_args[1]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$link(oldpath, newpath, PID());
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_STAT: {
+                            auto pathname = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$stat(pathname, PID());
+
+                            List statResult;
+                            for (auto field: result) {
+                                statResult.push_back(VAR(field));
+                            }
+
+                            auto statObject = VAR(std::move(statResult));
+
+                            return statObject;
+                        }
+
                         default:
                             throw std::runtime_error("Syscall " + std::to_string(syscall_id) + " not implemented!");
                             return vm->None;

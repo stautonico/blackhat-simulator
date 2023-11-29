@@ -22,6 +22,8 @@ def execve(pathname, argv, envp):
 def rmdir(pathname):
     return _syscall(84, pathname)
 
+def link(oldpath, newpath):
+    return _syscall(86, oldpath, newpath)
 
 def unlink(pathname):
     return _syscall(87, pathname)
