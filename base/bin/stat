@@ -1,5 +1,29 @@
 require("sys/stat")
 require("stdio")
+require("unistd")
+require("pwd")
+
+
+def octal_to_text_permissions(octal_permissions):
+    try:
+        # Convert octal to binary and format it as a string with leading zeros
+        binary_permissions = bin(octal_permissions)[2:].zfill(3)
+
+        # Map binary digits to permission symbols
+        permission_map = {'000': '---', '001': '--x', '010': '-w-', '011': '-wx',
+                          '100': 'r--', '101': 'r-x', '110': 'rw-', '111': 'rwx'}
+
+        # Extract user, group, and other permissions
+        user_permissions = permission_map[binary_permissions[0:3]]
+        group_permissions = permission_map[binary_permissions[3:6]]
+        other_permissions = permission_map[binary_permissions[6:9]]
+
+        # Combine permissions and return the result
+        text_permissions = f"{user_permissions}{group_permissions}{other_permissions}"
+        return text_permissions
+    except Exception:
+        return "---------"
+
 
 def main(argv):
     if len(argv) < 1:
@@ -7,21 +31,58 @@ def main(argv):
         return 1
 
     result = stat(argv[0])
-    
+
     if result is None:
         perror("stat")
         return 1
 
+    is_link = False
+    linked_to = None
+
+    if S_ISLNK(result.st_mode):
+        is_link = True
+        linked_to = readlink(argv[0]) or "?"
+
+    additional_file_text = f" -> {linked_to}" if is_link else ""
+
+    uid_entry = getpwuid(result.st_uid)
+
+    if uid_entry is None:
+        username = "?"
+    else:
+        username = uid_entry.pw_name
+
+    # We can save some time by skipping this if the gid is the same
+    if result.st_uid == result.st_gid:
+        group = username
+    else:
+        # TODO: use `getgrgid` (needs to be implemented first)
+        gid_entry = getpwduid(result.st_gid)
+        if gid_entry is None:
+            group = "?"
+        else:
+            group = gid_entry.pw_name
+
+    file_type = "?"
+
+    if S_ISLNK(result.st_mode):
+        file_type = "symbolic link"
+    elif S_ISDIR(result.st_mode):
+        file_type = "directory"
+    elif S_ISREG(result.st_mode):
+        file_type = "regular file"
+
     # TODO: Parse the mode
-    # TODO: Parse the usernames for UID/GID
     # TODO: Format a/c/m time
+
+    print(f"Our st_mode is: {result.st_mode}")
 
     output = ""
 
-    output += f"  File: {argv[0]}\n"
-    output += f"  Size: {result.st_size}\tBlocks: {result.st_blocks}\tIO Blocks: {result.st_blksize}\t <TODO: File type (use st_mode)>\n"
+    output += f"  File: {argv[0]}{additional_file_text}\n"
+    output += f"  Size: {result.st_size}\tBlocks: {result.st_blocks}\tIO Blocks: {result.st_blksize}\t {file_type}\n"
     output += f"Device: {result.st_dev} Inode: {result.st_ino}\tLinks: {result.st_nlink}\n"
-    output += f"Access: ({result.st_mode}/----------)  Uid: ({result.st_uid}/ <username_here>)   Gid: ({result.st_gid}/ <groupname_here>)\n"
+    output += f"Access: ({oct(int(result.st_mode) & 0o777)}/{octal_to_text_permissions(int(result.st_mode) & 0o777)})  Uid: ({result.st_uid}/ {username})   Gid: ({result.st_gid}/ {group})\n"
     output += f"Access: {result.st_atim}\n"
     output += f"Modify: {result.st_mtim}\n"
     output += f"Change: {result.st_ctim}\n"

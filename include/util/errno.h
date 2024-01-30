@@ -6,4 +6,5 @@ enum E {
     NOEXEC = 8, // Exec format error
     BADF   = 9, // Bad file descriptor
     EXIST  = 17, // File exists
+    INVAL  = 22, // Invalid argument
 };

@@ -28,6 +28,11 @@ def link(oldpath, newpath):
 def unlink(pathname):
     return _syscall(87, pathname)
 
+def symlink(oldpath, newpath):
+    return _syscall(88, oldpath, newpath)
+
+def readlink(pathname):
+    return _syscall(89, pathname)
 
 def setuid(uid):
     return _syscall(105, uid)

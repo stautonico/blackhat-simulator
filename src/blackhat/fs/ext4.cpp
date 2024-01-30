@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdint>
 
 #include <blackhat/fs/ext4.h>
 #include <stdexcept>
@@ -94,11 +95,28 @@ namespace Blackhat {
         return false;
     }
 
+    bool Inode::make_symlink(std::string point_to_path) {
+        m_is_symlink = true;
+        m_points_to = point_to_path;
+        return true;
+    }
+
+    int Inode::get_mode() {
+        uint16_t mode = m_mode;
+
+        if (m_is_symlink) {
+            mode = mode | S::IFLNK;
+        }
+
+        return mode;
+
+    }
+
 
     Ext4::Ext4() : m_root_directory_entry("/", m_root) {
         m_root = new Inode();
         m_root->m_name = "/";
-        m_root->m_mode = 0755;
+        m_root->m_mode = 0755 | S::IFDIR;
         m_root->m_inode_number = 2;
         m_inodes[2] = m_root;
 
@@ -114,19 +132,19 @@ namespace Blackhat {
         for (auto dir: {"/bin", "/etc", "/home", "/lib", "/root", "/run", "/sbin",
                         "/proc", "/tmp", "/usr", "/var"}) {
             if (dir == "/root")
-                fs->create(dir, 0, 0, 0750);
+                fs->create(dir, 0, 0, 0750 | S::IFDIR);
             else if (dir == "/proc")
-                fs->create(dir, 0, 0, 0555);
+                fs->create(dir, 0, 0, 0555 | S::IFDIR);
             else if (dir == "/tmp")
-                fs->create(dir, 0, 0, 0777);
+                fs->create(dir, 0, 0, 0777 | S::IFDIR);
             else
-                fs->create(dir, 0, 0, 0755);
+                fs->create(dir, 0, 0, 0755 | S::IFDIR);
         }
 
         return fs;
     }
 
-    bool Ext4::create(std::string path, int uid, int gid, int mode) {
+    int Ext4::create(std::string path, int uid, int gid, int mode) {
         // Do we really need this?
         // Can't we just put the src for `_create_inode` in here?
         return _create_inode(path, uid, gid, mode);
@@ -152,7 +170,7 @@ namespace Blackhat {
         return true;
     }
 
-    bool Ext4::_create_inode(std::string path, int uid, int gid, int mode) {
+    int Ext4::_create_inode(std::string path, int uid, int gid, int mode) {
         // We have to find the parent first
         auto components = split(path, '/');
         auto parent_path = join(components, '/', 0, components.size() - 1);
@@ -175,11 +193,21 @@ namespace Blackhat {
             // Delete the inode we just created
             m_inodes.erase(inode->m_inode_number);
             delete inode;
-            return false;
+            return -1;
         }
 
+        // Figure out what we tried to make based on the mode
+        if (ISDIR(inode->m_mode)) {
+            inode->m_is_directory = true;
+        } else if (ISLNK(inode->m_mode)) {
+            inode->m_is_symlink = true;
+        } else if (ISREG(inode->m_mode)) {
+            inode->m_is_file = true;
+        }
+
+
         inode->m_link_count++;
-        return true;
+        return inode->m_inode_number;
     }
 
     Inode *Ext4::_find_inode(std::string path) {
@@ -187,6 +215,13 @@ namespace Blackhat {
 
         if (result == nullptr) return nullptr;
         return result->m_inode;
+    }
+
+    Inode *Ext4::_find_inode_by_inode_num(int num) {
+        if (m_inodes.find(num) != m_inodes.end()) {
+            return m_inodes[num];
+        }
+        return nullptr;
     }
 
     DirectoryEntry *Ext4::_find_directory_entry(std::string path) {
@@ -221,6 +256,16 @@ namespace Blackhat {
 
         if (inode == nullptr) {
             return std::string(1, '\0');
+        }
+
+        // If we have a symlink, read from the linked node
+        if (inode->is_symlink()) {
+            auto linked_node = _find_inode(inode->m_points_to);
+            if (linked_node == nullptr) {
+                return std::string(1, '\0'); // Technically broken links don't resolve to anything
+            } else {
+                return linked_node->m_data;
+            }
         }
 
         return inode->m_data;

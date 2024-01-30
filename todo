@@ -1,7 +1,10 @@
 - Implement differentiation between files and directories.
-- Implement multi-user support (both in the system and the fs)
+- Implement multi-user support (both in the system and the fs) (IP)
 - Replace anything with the word "_internal" (like read, readdir, get/setenv) with proper implementations
 - Implement link support (soft/symbolic and hard links) (HARD DONE)
+- Implement statx
+- Implement relative path (only absolute works right now)
+- Stat resolve links, implement lstat to stat the link itself
 
 file – checks a file’s type.
 zip and unzip – creates and extracts a ZIP archive.

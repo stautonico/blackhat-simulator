@@ -1,8 +1,8 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 // Forward declaration
 //namespace Blackhat {
@@ -12,6 +12,58 @@
 #include <blackhat/computer.h>
 
 namespace Blackhat {
+    enum S : unsigned int {
+        IXOTH = 0x1,
+        IWOTH = 0x2,
+        IROTH = 0x4,
+        IXGRP = 0x8,
+        IWGRP = 0x10,
+        IRGRP = 0x20,
+        IXUSR = 0x40,
+        IWUSR = 0x80,
+        IRUSR = 0x100,
+        ISVTX = 0x200,
+        ISGID = 0x400,
+        ISUID = 0x800,
+        // Mutually exclusive
+        IFIFO = 0x1000,
+        IFCHR = 0x2000,
+        IFDIR = 0x4000,
+        IFBLK = 0x6000,
+        IFREG = 0x8000,
+        IFLNK = 0xA000,
+        IFSOCK = 0xC000
+    };
+
+    inline bool ISFIFO(int mode) {
+        return mode & S::IFIFO == S::IFIFO;
+    }
+
+    inline bool ISCHR(int mode) {
+        return mode & S::IFCHR == S::IFCHR;
+    }
+
+    inline bool ISDIR(int mode) {
+        return mode & S::IFDIR == S::IFDIR;
+    }
+
+    inline bool ISBLK(int mode) {
+        return mode & S::IFBLK == S::IFBLK;
+    }
+
+    inline bool ISREG(int mode) {
+        return mode & S::IFREG == S::IFREG;
+    }
+
+    inline bool ISLNK(int mode) {
+        return mode & S::IFLNK == S::IFLNK;
+    }
+
+    inline bool ISSOCK(int mode) {
+        return mode & S::IFSOCK == S::IFSOCK;
+    }
+
+
     enum O : unsigned int {
         APPEND = 00002000,
         ASYNC = 020000,
@@ -51,14 +103,17 @@ namespace Blackhat {
         void decrement_link_count() { m_link_count--; }
 
         int get_inode_number() { return m_inode_number; }
+        std::string get_linked_name() {return m_points_to; }
 
-        int get_mode() { return m_mode; }
+        int get_mode();
 
         int get_uid() { return m_owner; }
 
         int get_gid() { return m_group_owner; }
 
         int get_link_count() { return m_link_count; }
+
+        bool make_symlink(std::string point_to_path);
 
         enum Permission {
             READ,
@@ -67,6 +122,10 @@ namespace Blackhat {
         };
 
         bool check_perm(Permission perm, Process *process);
+
+        bool is_file() { return m_is_file; }
+        bool is_directory() { return m_is_directory; }
+        bool is_symlink() { return m_is_symlink; }
 
 
     private:
@@ -82,6 +141,14 @@ namespace Blackhat {
         int m_group_owner = 0;
 
         int m_mode;
+
+
+        std::string m_points_to = "";
+
+        // TODO: Utilize these properly
+        bool m_is_file = false;
+        bool m_is_directory = false;
+        bool m_is_symlink = false;
     };
 
     class DirectoryEntry {
@@ -102,14 +169,17 @@ namespace Blackhat {
 
         Inode *get_inode() { return m_inode; }
 
+        std::string get_name() {return m_name;}
+
+
     private:
-        Inode *m_inode; // TODO: Maybe replace this with inode number?
+        Inode *m_inode;// TODO: Maybe replace this with inode number?
         // It would make the code slightly more complicated, but it would make
         // saving WAY easier.
         std::string m_name;
 
         // TODO: This? Idk about this. Maybe store it in a different data structure
-        std::map<std::string, DirectoryEntry> m_dir_entries; // file name -> DirectoryEntry
+        std::map<std::string, DirectoryEntry> m_dir_entries;// file name -> DirectoryEntry
     };
 
     class Ext4 {
@@ -120,7 +190,7 @@ namespace Blackhat {
 
         static Ext4 *make_standard_fs();
 
-        bool create(std::string path, int uid, int gid, int mode);
+        int create(std::string path, int uid, int gid, int mode);
 
         int write(std::string path, std::string data);
 
@@ -141,19 +211,20 @@ namespace Blackhat {
 
 
     private:
-        std::map<int, Inode *> m_inodes; // Inode number -> Inode *
+        std::map<int, Inode *> m_inodes;// Inode number -> Inode *
         // TODO: Maybe store the actual inode here?
 
         Inode *m_root;
         DirectoryEntry m_root_directory_entry;
 
         Inode *_find_inode(std::string path);
+        Inode *_find_inode_by_inode_num(int num);
 
         DirectoryEntry *_find_directory_entry(std::string path);
 
-        bool _create_inode(std::string path, int uid, int gid, int mode);
+        int _create_inode(std::string path, int uid, int gid, int mode);
 
 
-        int m_inode_accumulator = 3; // Start at something higher? We'll see
+        int m_inode_accumulator = 3;// Start at something higher? We'll see
     };
-}
+}// namespace Blackhat

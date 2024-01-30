@@ -131,10 +131,10 @@ namespace Blackhat {
                 if (std::filesystem::is_directory(entry.status())) {
                     // Check if it already exists
                     if (!m_fs->exists(relative_path))
-                        m_fs->create(relative_path, 0, 0, 0644);
+                        m_fs->create(relative_path, 0, 0, 0644 | S::IFDIR);
                     dirs.push(entry.path().generic_string());// Generic string for win/lin compatability
                 } else {
-                    m_fs->create(relative_path, 0, 0, 0755);
+                    m_fs->create(relative_path, 0, 0, 0755 | S::IFREG);
 
                     m_fs->write(
                             erase(entry.path().generic_string(), basepath),
@@ -316,8 +316,10 @@ namespace Blackhat {
             return -1;
         }
 
-        // Try to read the file content
-        auto file_content = inode->read();
+        auto file_content = m_fs->read(pathname);
+
+        //         Try to read the file content
+        //        auto file_content = inode->read();
 
         // Null value, aka doesn't exist, not empty string
         if (file_content == std::string(1, '\0')) {
@@ -359,7 +361,7 @@ namespace Blackhat {
         }
 
         // TODO: Set proper perms and owner
-        if (m_fs->create(pathname, 0, 0, mode)) return true;
+        if (m_fs->create(pathname, 0, 0, mode | S::IFDIR)) return true;
 
         return false;
     }
@@ -464,13 +466,13 @@ namespace Blackhat {
 
         struct utsname realUnameData;
         if (uname(&realUnameData) < 0)
-            throw std::runtime_error("uname failed on line " + std::to_string(__LINE__-1));
+            throw std::runtime_error("uname failed on line " + std::to_string(__LINE__ - 1));
 
-        uname_output.emplace_back("Blackhat"); // sysname (operating system name)
-        uname_output.emplace_back(m_hostname); // nodename (hostname)
-        uname_output.emplace_back("0.0.0"); // release (operating system release)
-        uname_output.emplace_back("0.0.0"); // version (operating system version)
-        uname_output.emplace_back("x86_64"); // Machine (hardware arch) TODO: Use real uname arch
+        uname_output.emplace_back("Blackhat");// sysname (operating system name)
+        uname_output.emplace_back(m_hostname);// nodename (hostname)
+        uname_output.emplace_back("0.0.0");   // release (operating system release)
+        uname_output.emplace_back("0.0.0");   // version (operating system version)
+        uname_output.emplace_back("x86_64");  // Machine (hardware arch) TODO: Use real uname arch
         uname_output.emplace_back("");
 
         return uname_output;
@@ -509,6 +511,60 @@ namespace Blackhat {
         return result;
     }
 
+    int Computer::sys$symlink(std::string oldpath, std::string newpath, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // Make sure both oldpath exists and newpath doesn't
+        auto oldent = m_fs->_find_directory_entry(oldpath);
+
+        if (oldent == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return -1;
+        }
+
+        auto newent = m_fs->_find_directory_entry(newpath);
+
+        if (newent != nullptr) {
+            caller_obj->set_errno(E::EXIST);
+            return -1;
+        }
+
+        auto new_inode_number = m_fs->create(newpath, oldent->get_inode()->get_uid(), oldent->get_inode()->get_gid(), (oldent->get_inode()->get_mode() & 777) | S::IFLNK);
+
+        if (new_inode_number < 0) {
+            // TODO: Set some errno
+            return -1;
+        } else {
+            auto new_inode = m_fs->_find_inode_by_inode_num(new_inode_number);
+            // Should never fail since we checked it above
+            new_inode->make_symlink(oldpath);
+        }
+
+
+        return 0;
+    }
+
+    std::string Computer::sys$readlink(std::string pathname, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto inode = m_fs->_find_inode(pathname);
+
+        if (inode == nullptr) {
+            caller_obj->set_errno(E::NOENT);
+            return "";
+        }
+
+        if (!inode->is_symlink()) {
+            caller_obj->set_errno(E::INVAL);
+            return "";
+        }
+
+        return inode->get_linked_name();
+    }
+
+
     std::vector<std::string> Computer::sys$stat(std::string pathname, int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
@@ -530,19 +586,19 @@ namespace Blackhat {
         }
 
         std::vector<std::string> result;
-        result.push_back("0"); // TODO: st_dev
-        result.push_back(std::to_string(inode->get_inode_number())); // st_ino
-        result.push_back(std::to_string(inode->get_mode())); // st_mode TODO: format as octal
-        result.push_back(std::to_string(inode->get_link_count())); // st_nlink
-        result.push_back(std::to_string(inode->get_uid())); // st_uid
-        result.push_back(std::to_string(inode->get_gid())); // st_gid
-        result.push_back("0"); // TODO: st_rdev
-        result.push_back("0"); // TODO: st_size
-        result.push_back("0"); // TODO: st_blksize
-        result.push_back("0"); // TODO: st_blocks
-        result.push_back("0"); // TODO: st_atim
-        result.push_back("0"); // TODO: st_mtim
-        result.push_back("0"); // TODO: st_ctim
+        result.push_back("0");                                      // TODO: st_dev
+        result.push_back(std::to_string(inode->get_inode_number()));// st_ino
+        result.push_back(std::to_string(inode->get_mode()));        // st_mode TODO: format as octal
+        result.push_back(std::to_string(inode->get_link_count()));  // st_nlink
+        result.push_back(std::to_string(inode->get_uid()));         // st_uid
+        result.push_back(std::to_string(inode->get_gid()));         // st_gid
+        result.push_back("0");                                      // TODO: st_rdev
+        result.push_back("0");                                      // TODO: st_size
+        result.push_back("0");                                      // TODO: st_blksize
+        result.push_back("0");                                      // TODO: st_blocks
+        result.push_back("0");                                      // TODO: st_atim
+        result.push_back("0");                                      // TODO: st_mtim
+        result.push_back("0");                                      // TODO: st_ctim
 
         return result;
     }

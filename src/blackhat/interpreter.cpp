@@ -278,6 +278,23 @@ namespace Blackhat {
                             return VAR(result);
                         }
 
+                        case SYSCALL_ID::SYS_SYMLINK: {
+                            auto oldpath = CAST(Str &, cmd_args[0]).c_str();
+                            auto newpath = CAST(Str &, cmd_args[1]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$symlink(oldpath, newpath, PID());
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_READLINK: {
+                            auto pathname = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$readlink(pathname, PID());
+
+                            return VAR(result);
+                        }
+
                         case SYSCALL_ID::SYS_STAT: {
                             auto pathname = CAST(Str &, cmd_args[0]).c_str();
 

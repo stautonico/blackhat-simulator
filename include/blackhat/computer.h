@@ -399,6 +399,8 @@ namespace Blackhat {
         int sys$sethostname(std::string hostname, int caller);
         std::vector<std::string> sys$uname(int caller);
         int sys$link(std::string oldpath, std::string newpath, int caller);
+        int sys$symlink(std::string oldpath, std::string newpath, int caller);
+        std::string sys$readlink(std::string pathname, int caller);
         std::vector<std::string> sys$stat(std::string pathname, int caller);
 
 

@@ -60,6 +60,7 @@ def getpwnam(name):
 def getpwuid(uid):
     entries = _parse_passwd()
 
+
     for ent in entries:
         if ent.pw_uid == uid:
             return ent
