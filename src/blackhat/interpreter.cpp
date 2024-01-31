@@ -84,25 +84,6 @@ namespace Blackhat {
                 this);
 
         m_vm->bind(
-                m_vm->_main, "_internal_readdir(path: str) -> list[str]",
-                [](VM *vm, ArgsView args) {
-                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
-                    auto path_obj = CAST(Str &, args[0]);
-                    const char *path = path_obj.c_str();
-
-                    auto result = t->_internal_readdir(path);
-
-                    List l;
-
-                    for (auto entry: result) {
-                        l.push_back(VAR(entry));
-                    }
-
-                    return VAR(l);
-                },
-                this);
-
-        m_vm->bind(
                 m_vm->_main, "_syscall(call: int, *args)",
                 [](VM *vm, ArgsView args) {
                     Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
@@ -297,6 +278,20 @@ namespace Blackhat {
                             auto statObject = VAR(std::move(statResult));
 
                             return statObject;
+                        }
+
+                        case SYSCALL_ID::SYS_GETDENTS: {
+                            auto pathname = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto result = t->m_process->m_computer->sys$getdents(pathname, PID());
+
+                            List ents;
+                            for (auto r: result) {
+                                ents.push_back(VAR(r));
+                            }
+
+                            return VAR(std::move(ents));
+
                         }
 
                         default:

@@ -1,2 +1,2 @@
 def readdir(path: str) -> list[str]:
-    return _internal_readdir(path)
+    return _syscall(78, path)

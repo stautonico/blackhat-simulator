@@ -39,9 +39,6 @@ namespace Blackhat {
         int _exec(std::string path, std::vector<std::string> args);
         void _require(std::string module_name);
 
-        std::vector<std::string> _internal_readdir(std::string path);
-        std::string _internal_getcwd();
-
 
         std::string _vector_to_python_string(std::vector<std::string> in);
 

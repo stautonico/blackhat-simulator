@@ -242,6 +242,16 @@ namespace Blackhat {
         return current.back();
     }
 
+    std::vector<std::string> DirectoryEntry::get_children_names() {
+        std::vector<std::string> names;
+
+        for (auto it = m_dir_entries.begin(); it != m_dir_entries.end(); ++it) {
+            names.push_back(it->first);
+        }
+
+        return names;
+    }
+
     int Ext4::write(std::string path, std::string data) {
         auto inode = _find_inode(path);
         if (inode == nullptr) {

@@ -603,20 +603,20 @@ namespace Blackhat {
         return result;
     }
 
-    std::vector<std::string> Computer::sys$readdir(std::string pathname, int caller) {
+    std::vector<std::string> Computer::sys$getdents(std::string pathname, int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
         // Check that the path exists
         auto dirent = m_fs->_find_directory_entry(pathname);
 
+
         if (dirent == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return {};
         }
 
-        // TODO: Read just the keys (from the std::map) into a vector, then return it
-
+        return dirent->get_children_names();
     }
 
 }// namespace Blackhat

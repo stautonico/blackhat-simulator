@@ -171,6 +171,8 @@ namespace Blackhat {
 
         std::string get_name() {return m_name;}
 
+        std::vector<std::string> get_children_names();
+
 
     private:
         Inode *m_inode;// TODO: Maybe replace this with inode number?
