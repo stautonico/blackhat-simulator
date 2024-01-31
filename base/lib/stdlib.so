@@ -6,4 +6,4 @@ def setenv(key: str, value: str) -> None:
     return _internal_set_env(key, value)
 
 def read(path: str) -> str:
-    return _internal_read(path)
+    return _syscall(0, path)

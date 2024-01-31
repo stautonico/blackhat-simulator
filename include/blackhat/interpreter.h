@@ -40,7 +40,6 @@ namespace Blackhat {
         void _require(std::string module_name);
 
         std::vector<std::string> _internal_readdir(std::string path);
-        std::string _internal_read(std::string path);
         std::string _internal_getcwd();
 
 

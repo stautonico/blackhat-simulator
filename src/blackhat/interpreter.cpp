@@ -3,6 +3,7 @@
 #include <blackhat/process.h>
 
 #include <iostream>
+#include <sstream>
 
 #define PID() t->m_process->m_pid
 
@@ -79,18 +80,6 @@ namespace Blackhat {
 
                     t->m_process->setenv(key, value);
                     return vm->None;
-                },
-                this);
-
-        m_vm->bind(
-                m_vm->_main, "_internal_read(path:str) -> str",
-                [](VM *vm, ArgsView args) {
-                    Interpreter *t = lambda_get_userdata<Interpreter *>(args.begin());
-                    auto path_obj = CAST(Str &, args[0]);
-                    const char *path = path_obj.c_str();
-
-                    auto result = t->_internal_read(path);
-                    return VAR(result);
                 },
                 this);
 
@@ -364,14 +353,6 @@ namespace Blackhat {
             if (module_name == "errno")
                 m_vm->exec("errno = " + std::to_string(m_process->get_errno()));
         }
-    }
-
-    std::string Interpreter::_internal_read(std::string path) {
-        return m_process->m_computer->_read(path);
-    }
-
-    std::vector<std::string> Interpreter::_internal_readdir(std::string path) {
-        return m_process->m_computer->_readdir(path);
     }
 
     std::string Interpreter::_vector_to_python_string(std::vector<std::string> in) {

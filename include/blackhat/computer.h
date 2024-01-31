@@ -402,6 +402,7 @@ namespace Blackhat {
         int sys$symlink(std::string oldpath, std::string newpath, int caller);
         std::string sys$readlink(std::string pathname, int caller);
         std::vector<std::string> sys$stat(std::string pathname, int caller);
+        std::vector<std::string> sys$readdir(std::string pathname, int caller);
 
 
 
