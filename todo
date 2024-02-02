@@ -19,7 +19,6 @@ tee – prints command outputs in Terminal and a file.
 locate – finds files in a system’s database.
 find – outputs a file or folder’s location.
 sudo – runs a command as a superuser.
-su – runs programs in the current shell as another user.
 chmod – modifies a file’s read, write, and execute permissions.
 chown – changes a file, directory, or symbolic link’s ownership.
 useradd and userdel – creates and removes a user account.

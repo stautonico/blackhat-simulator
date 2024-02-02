@@ -90,6 +90,17 @@ namespace Blackhat {
             _kernel_panic("No base directory found: Cannot initialize filesystem");
 
         _create_fs_from_base(path, path);
+
+        // Create the /etc/os-release file
+        // TODO: Should be a link to /usr/lib/os-release
+        if (m_fs->create("/etc/os-release", 0, 0, 0644 | S::IFREG) < 0) {
+            _kernel_panic("Failed to create /etc/os-release");
+        }
+
+        if (m_fs->write("/etc/os-release", "NAME=\"Blackhat Linux\"\nVERSION=\"0.0.0\"\nPRETTY_NAME=\"Blackhat Linux 0.0.0\"") < 0) {
+            _kernel_panic("Failed to write to /etc/os-release");
+        }
+
     }
 
     void Computer::_kernel_panic(std::string message) {
