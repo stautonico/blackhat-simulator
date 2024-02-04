@@ -4,6 +4,7 @@ require("unistd")
 require("stdio")
 require("pwd")
 require("sys/utsname")
+require("stdlib")
 
 def main(argv):
     uid = geteuid()
@@ -21,6 +22,12 @@ def main(argv):
         username = "I have no name!"
     else:
         username = entry.pw_name
+        setenv("USER", username)
+
+
+    setenv("SHELL", "sh")
+    setenv("TERM", "tty0") # TODO: Don't set this here
+
 
     while True:
         prompt = getenv("PS1") or f"{username}@{hostname}{'#' if uid == 0 else '$'} "

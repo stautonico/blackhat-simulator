@@ -63,6 +63,17 @@ namespace Blackhat {
         _increment_fd_accumulator();
     }
 
+    std::map<std::string, std::string> Process::get_entire_environment() {
+        std::map<std::string, std::string> env_copy(m_environ); // Uses copy-construction
+        return std::move(env_copy);
+    }
+
+    void Process::set_env_from_parent(std::map<std::string, std::string> env) {
+        m_environ = std::move(env);
+    }
+
+
+
     FileDescriptor *Process::get_file_descriptor(int fd) {
         auto it = m_file_descriptors.find(fd);
 

@@ -4,90 +4,11 @@
 #include <string>
 #include <vector>
 
-// Forward declaration
-//namespace Blackhat {
-//    class Computer;
-//}
-
 #include <blackhat/computer.h>
+#include <blackhat/fs/basefs.h>
+
 
 namespace Blackhat {
-    enum S : unsigned int {
-        IXOTH = 0x1,
-        IWOTH = 0x2,
-        IROTH = 0x4,
-        IXGRP = 0x8,
-        IWGRP = 0x10,
-        IRGRP = 0x20,
-        IXUSR = 0x40,
-        IWUSR = 0x80,
-        IRUSR = 0x100,
-        ISVTX = 0x200,
-        ISGID = 0x400,
-        ISUID = 0x800,
-        // Mutually exclusive
-        IFIFO = 0x1000,
-        IFCHR = 0x2000,
-        IFDIR = 0x4000,
-        IFBLK = 0x6000,
-        IFREG = 0x8000,
-        IFLNK = 0xA000,
-        IFSOCK = 0xC000
-    };
-
-    inline bool ISFIFO(int mode) {
-        return mode & S::IFIFO == S::IFIFO;
-    }
-
-    inline bool ISCHR(int mode) {
-        return mode & S::IFCHR == S::IFCHR;
-    }
-
-    inline bool ISDIR(int mode) {
-        return mode & S::IFDIR == S::IFDIR;
-    }
-
-    inline bool ISBLK(int mode) {
-        return mode & S::IFBLK == S::IFBLK;
-    }
-
-    inline bool ISREG(int mode) {
-        return mode & S::IFREG == S::IFREG;
-    }
-
-    inline bool ISLNK(int mode) {
-        return mode & S::IFLNK == S::IFLNK;
-    }
-
-    inline bool ISSOCK(int mode) {
-        return mode & S::IFSOCK == S::IFSOCK;
-    }
-
-
-    enum O : unsigned int {
-        APPEND = 00002000,
-        ASYNC = 020000,
-        CLOEXEC = 02000000,
-        CREAT = 00000100,
-        DIRECT = 00040000,
-        DIRECTORY = 00200000,
-        DSYNC = 00010000,
-        EXCL = 00000200,
-        LARGEFILE = 00100000,
-        NOATIME = 01000000,
-        NOCTTY = 00000400,
-        NOFOLLOW = 00400000,
-        NONBLOCK = 00004000,
-        PATH = 010000000,
-        SYNC = 00010000,
-        TMPFILE = 020000000,
-        TRUNC = 00001000,
-
-        RDONLY = 00000000,
-        WRONLY = 00000001,
-        RDWR = 00000002,
-    };
-
     class Inode {
     public:
         friend class Ext4;
@@ -103,7 +24,7 @@ namespace Blackhat {
         void decrement_link_count() { m_link_count--; }
 
         int get_inode_number() { return m_inode_number; }
-        std::string get_linked_name() {return m_points_to; }
+        std::string get_linked_name() { return m_points_to; }
 
         int get_mode();
 
@@ -169,7 +90,7 @@ namespace Blackhat {
 
         Inode *get_inode() { return m_inode; }
 
-        std::string get_name() {return m_name;}
+        std::string get_name() { return m_name; }
 
         std::vector<std::string> get_children_names();
 
@@ -184,7 +105,7 @@ namespace Blackhat {
         std::map<std::string, DirectoryEntry> m_dir_entries;// file name -> DirectoryEntry
     };
 
-    class Ext4 {
+    class Ext4 : private BaseFS {
     public:
         friend class Computer;
 

@@ -67,6 +67,10 @@ namespace Blackhat {
         void set_fsgid(int gid) {m_fsgid = gid;}
         int get_fsgid() {return m_fsgid;}
 
+        std::map<std::string, std::string> get_entire_environment();
+
+        void set_env_from_parent(std::map<std::string, std::string> env);
+
 
         void add_file_descriptor(FileDescriptor* fd);
         FileDescriptor *get_file_descriptor(int fd);

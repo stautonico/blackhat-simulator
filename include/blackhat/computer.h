@@ -17,6 +17,7 @@ namespace Blackhat {
 }
 
 #include <blackhat/process.h>
+#include <blackhat/fs/basefs.h>
 #include <blackhat/fs/ext4.h>
 #include <blackhat/fs/file_descriptor.h>
 #include <blackhat/user.h>
@@ -418,6 +419,7 @@ namespace Blackhat {
                                              // something post-init
 
         Ext4 *m_fs = nullptr;
+        std::vector<BaseFS *>m_mount_points = {};
 
         std::map<int, User> m_users;
 

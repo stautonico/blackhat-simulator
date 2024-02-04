@@ -1,5 +1,6 @@
 #include <blackhat/computer.h>
 #include <blackhat/fs/ext4.h>
+#include <blackhat/fs/basefs.h>
 #include <blackhat/fs/file_descriptor.h>
 
 #include <util/errno.h>
@@ -353,6 +354,7 @@ namespace Blackhat {
         m_pid_accumulator++;
 
         proc->set_cwd(caller_obj->get_cwd());
+        proc->set_env_from_parent(caller_obj->get_entire_environment());
 
 
         // TODO: Pass the environment

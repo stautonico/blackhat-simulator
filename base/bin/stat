@@ -75,8 +75,6 @@ def main(argv):
     # TODO: Parse the mode
     # TODO: Format a/c/m time
 
-    print(f"Our st_mode is: {result.st_mode}")
-
     output = ""
 
     output += f"  File: {argv[0]}{additional_file_text}\n"

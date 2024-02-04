@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <util/string.h>
 
-namespace Blackhat {
+namespace Blackhat{
     DirectoryEntry::DirectoryEntry(std::string name, Blackhat::Inode *inode) {
         m_name = name;
         m_inode = inode;
