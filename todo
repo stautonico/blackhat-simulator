@@ -5,6 +5,7 @@
 - Implement relative path (only absolute works right now)
 - Stat resolve links, implement lstat to stat the link itself
 - Implement close syscall
+- Provide the filesystem with its mountpoint so we can ignore it (a fs mounted to /mnt/files should look for /myfolder/myfile, not /mnt/files/myfolder/myfile)
 
 file – checks a file’s type.
 zip and unzip – creates and extracts a ZIP archive.

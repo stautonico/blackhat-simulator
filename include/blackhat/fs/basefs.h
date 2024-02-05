@@ -5,6 +5,8 @@
 #include <vector>
 #include <stdexcept>
 
+#include <blackhat/fs/file_descriptor.h>
+
 namespace Blackhat {
     enum S : unsigned int {
         IXOTH = 0x1,
@@ -101,7 +103,7 @@ namespace Blackhat {
         virtual int chown(std::string path, int uid, int gid) {throw std::runtime_error("chown() is not implemented!");};
         virtual int truncate(std::string path, int size) {throw std::runtime_error("truncate() is not implemented!");}; // Change the size of a file
         virtual int utime(std::string path, void* ubuf) {throw std::runtime_error("utime() is not implemented!");}; // Change the timestamps of a file // TODO: Set the ubuf argument type
-        virtual int open(std::string path, int flags, int mode) {throw std::runtime_error("open() is not implemented!");};
+        virtual FileDescriptor *open(std::string path, int flags, int mode) {throw std::runtime_error("open() is not implemented!");};
         virtual std::string read(std::string path) {throw std::runtime_error("read() is not implemented!");}; // TODO: Maybe implement offset?
         virtual int write(std::string path, std::string data) {throw std::runtime_error("write() is not implemented!");};
         virtual void statfs(std::string path) {throw std::runtime_error("statfs() is not implemented!");}; // Get filesystem stats // TODO: Set the return value properly

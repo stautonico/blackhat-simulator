@@ -300,33 +300,158 @@ namespace Blackhat{
         return inode != nullptr;
     }
 
-    bool Ext4::rmdir(std::string path) {
+//    bool Ext4::rmdir(std::string path) {
+//        // Step 1: Find the parent directory entry
+//        auto components = split(path, '/');
+//        auto previous = -1;
+//
+//        auto file_to_delete = components.back();
+//        components.pop_back();
+//
+//        auto parent_dir_entry = _find_directory_entry(join(components, '/'));
+//        if (parent_dir_entry == nullptr) return false;
+//
+//        // Step 2: Get the inode for later
+//        auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
+//
+//        if (to_delete_direntry == nullptr) return false;
+//
+//        auto inode = to_delete_direntry->m_inode;
+//
+//        // Step 3: Remove the directory entry from the parent
+//        // Check if the directory is empty before removing it
+//        if (to_delete_direntry->m_dir_entries.size() != 0) return false;
+//
+//        // TODO: Only remove the entry if it is a directory (currently removes any dir entry regardless of type)
+//
+//        auto remove_result = parent_dir_entry->remove_child(file_to_delete);
+//
+//        if (!remove_result) return false;
+//
+//        // Reduce the link count
+//        inode->m_link_count--;
+//
+//        if (inode->m_link_count == 0) {
+//            m_inodes.erase(inode->m_inode_number);
+//            // Delete the inode (since we have no links to it)
+//            delete inode;
+//        }
+//
+//        return true;
+//    }
+//
+//    bool Ext4::unlink(std::string path) {
+//        // TODO: Don't unlink until all fds to the entry is gone
+//        // Step 1: Find the parent directory entry
+//        auto components = split(path, '/');
+//        auto previous = -1;
+//
+//        auto file_to_delete = components.back();
+//        components.pop_back();
+//
+//        auto parent_dir_entry = _find_directory_entry(join(components, '/'));
+//        if (parent_dir_entry == nullptr) return false;
+//
+//        // Step 2: Get the inode for later
+//        auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
+//
+//        if (to_delete_direntry == nullptr) return false;
+//
+//        auto inode = to_delete_direntry->m_inode;
+//
+//        // Step 3: Remove the directory entry from the parent
+//        auto remove_result = parent_dir_entry->remove_child(file_to_delete);
+//
+//        if (!remove_result) return false;
+//
+//        // Reduce the link count
+//        inode->m_link_count--;
+//
+//        if (inode->m_link_count == 0) {
+//            m_inodes.erase(inode->m_inode_number);
+//            // Delete the inode (since we have no links to it)
+//            delete inode;
+//        }
+//
+//        return true;
+//    }
+//
+//    bool Ext4::rename(std::string oldpath, std::string newpath) {
+//        auto old_dirent = _find_directory_entry(oldpath);
+//
+//        if (old_dirent == nullptr) return false;
+//
+//        auto new_dirent = _find_directory_entry(newpath);
+//        if (new_dirent != nullptr) return false;
+//
+//        // Create a new dirent in the new path pointing to the inode
+//        // Find the parent (new path)
+//        auto split_path = split(newpath, '/');
+//        auto new_file_name = split_path.back();
+//        split_path.pop_back();
+//        auto parent_path = join(split_path, '/');
+//
+//        auto parent_dirent = _find_directory_entry(parent_path);
+//
+//        if (parent_dirent == nullptr) return false;
+//
+//        auto add_result = parent_dirent->add_child(new_file_name, old_dirent->m_inode);
+//
+//        if (!add_result) return false;
+//
+//        // Now that we added the new dirent, remove the old one
+//        // Find the old parent
+//        auto old_split_path = split(oldpath, '/');
+//        auto old_file_name = old_split_path.back();
+//        old_split_path.pop_back();
+//        auto old_parent_path = join(old_split_path, '/');
+//
+//        auto old_parent_dirent = _find_directory_entry(old_parent_path);
+//
+//        // Should never happen but doesn't hurt to check
+//        if (old_parent_dirent == nullptr) return false;
+//
+//        auto remove_result = old_parent_dirent->remove_child(old_file_name);
+//
+//        return remove_result;
+//    }
+
+    FileDescriptor *Ext4::open(std::string path, int flags, int mode) {
+        auto dirent = _find_directory_entry(path);
+
+        if (dirent == nullptr && flags & O::CREAT != O::CREAT) {
+            // TODO: Find a way to return an error message (something calling open can't tell what went wrong)
+            return nullptr;
+        }
+
+        return nullptr;
+
+    }
+
+    int Ext4::unlink(std::string path) {
+        // TODO: Don't unlink until all fds to the entry is gone (this should be checked at the machine level, not the fs level?)
+        // TODO: The way we do this is by marking a file as "deleted" if we were supposed to remove it but there are
+        // still open fds to it. Then, when we call `close()` and the file is marked as deleted, fully remove it.
         // Step 1: Find the parent directory entry
         auto components = split(path, '/');
         auto previous = -1;
-
         auto file_to_delete = components.back();
         components.pop_back();
 
         auto parent_dir_entry = _find_directory_entry(join(components, '/'));
-        if (parent_dir_entry == nullptr) return false;
+        if (parent_dir_entry == nullptr) return 1;
 
         // Step 2: Get the inode for later
         auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
 
-        if (to_delete_direntry == nullptr) return false;
+        if (to_delete_direntry == nullptr) return 1;
 
         auto inode = to_delete_direntry->m_inode;
 
         // Step 3: Remove the directory entry from the parent
-        // Check if the directory is empty before removing it
-        if (to_delete_direntry->m_dir_entries.size() != 0) return false;
-
-        // TODO: Only remove the entry if it is a directory (currently removes any dir entry regardless of type)
-
         auto remove_result = parent_dir_entry->remove_child(file_to_delete);
 
-        if (!remove_result) return false;
+        if (!remove_result) return 1;
 
         // Reduce the link count
         inode->m_link_count--;
@@ -337,83 +462,7 @@ namespace Blackhat{
             delete inode;
         }
 
-        return true;
-    }
-
-    bool Ext4::unlink(std::string path) {
-        // TODO: Don't unlink until all fds to the entry is gone
-        // Step 1: Find the parent directory entry
-        auto components = split(path, '/');
-        auto previous = -1;
-
-        auto file_to_delete = components.back();
-        components.pop_back();
-
-        auto parent_dir_entry = _find_directory_entry(join(components, '/'));
-        if (parent_dir_entry == nullptr) return false;
-
-        // Step 2: Get the inode for later
-        auto to_delete_direntry = parent_dir_entry->get_child(file_to_delete);
-
-        if (to_delete_direntry == nullptr) return false;
-
-        auto inode = to_delete_direntry->m_inode;
-
-        // Step 3: Remove the directory entry from the parent
-        auto remove_result = parent_dir_entry->remove_child(file_to_delete);
-
-        if (!remove_result) return false;
-
-        // Reduce the link count
-        inode->m_link_count--;
-
-        if (inode->m_link_count == 0) {
-            m_inodes.erase(inode->m_inode_number);
-            // Delete the inode (since we have no links to it)
-            delete inode;
-        }
-
-        return true;
-    }
-
-    bool Ext4::rename(std::string oldpath, std::string newpath) {
-        auto old_dirent = _find_directory_entry(oldpath);
-
-        if (old_dirent == nullptr) return false;
-
-        auto new_dirent = _find_directory_entry(newpath);
-        if (new_dirent != nullptr) return false;
-
-        // Create a new dirent in the new path pointing to the inode
-        // Find the parent (new path)
-        auto split_path = split(newpath, '/');
-        auto new_file_name = split_path.back();
-        split_path.pop_back();
-        auto parent_path = join(split_path, '/');
-
-        auto parent_dirent = _find_directory_entry(parent_path);
-
-        if (parent_dirent == nullptr) return false;
-
-        auto add_result = parent_dirent->add_child(new_file_name, old_dirent->m_inode);
-
-        if (!add_result) return false;
-
-        // Now that we added the new dirent, remove the old one
-        // Find the old parent
-        auto old_split_path = split(oldpath, '/');
-        auto old_file_name = old_split_path.back();
-        old_split_path.pop_back();
-        auto old_parent_path = join(old_split_path, '/');
-
-        auto old_parent_dirent = _find_directory_entry(old_parent_path);
-
-        // Should never happen but doesn't hurt to check
-        if (old_parent_dirent == nullptr) return false;
-
-        auto remove_result = old_parent_dirent->remove_child(old_file_name);
-
-        return remove_result;
+        return 0;
     }
 
 

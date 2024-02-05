@@ -6,6 +6,7 @@
 
 #include <blackhat/computer.h>
 #include <blackhat/fs/basefs.h>
+#include <blackhat/fs/file_descriptor.h>
 
 
 namespace Blackhat {
@@ -113,6 +114,10 @@ namespace Blackhat {
 
         static Ext4 *make_standard_fs();
 
+        FileDescriptor *open(std::string path, int flags, int mode) override;
+        int unlink(std::string path) override;
+
+
         int create(std::string path, int uid, int gid, int mode);
 
         int write(std::string path, std::string data);
@@ -121,13 +126,13 @@ namespace Blackhat {
 
         std::vector<std::string> readdir(std::string path);
 
-        bool unlink(std::string path);
+//        bool unlink(std::string path);
 
-        bool rmdir(std::string path);
+//        bool rmdir(std::string path);
 
         bool exists(std::string path);
 
-        bool rename(std::string oldpath, std::string newpath);
+//        bool rename(std::string oldpath, std::string newpath);
 
         // TODO: Shouldn't be public, write API later
         bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode);
