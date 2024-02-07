@@ -110,9 +110,9 @@ namespace Blackhat {
     public:
         friend class Computer;
 
-        Ext4();
+        Ext4(std::string mount_point);
 
-        static Ext4 *make_standard_fs();
+        static Ext4 *make_standard_fs(std::string mount_point);
 
         FileDescriptor *open(std::string path, int flags, int mode) override;
         int unlink(std::string path) override;
@@ -130,25 +130,27 @@ namespace Blackhat {
 
 //        bool rmdir(std::string path);
 
-        bool exists(std::string path);
+        bool exists(std::string path) override;
 
 //        bool rename(std::string oldpath, std::string newpath);
 
         // TODO: Shouldn't be public, write API later
-        bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode);
+        bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode) override;
 
 
     private:
+        std::string m_mount_point;
+
         std::map<int, Inode *> m_inodes;// Inode number -> Inode *
         // TODO: Maybe store the actual inode here?
 
         Inode *m_root;
         DirectoryEntry m_root_directory_entry;
 
-        Inode *_find_inode(std::string path);
-        Inode *_find_inode_by_inode_num(int num);
+        Inode *_find_inode(std::string path) override;
+        Inode *_find_inode_by_inode_num(int num) override;
 
-        DirectoryEntry *_find_directory_entry(std::string path);
+        DirectoryEntry *_find_directory_entry(std::string path) override;
 
         int _create_inode(std::string path, int uid, int gid, int mode);
 

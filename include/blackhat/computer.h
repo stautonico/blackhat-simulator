@@ -418,8 +418,7 @@ namespace Blackhat {
         std::string m_hostname = "localhost";// Fallback, will be overwritten by
                                              // something post-init
 
-        Ext4 *m_fs = nullptr;
-        std::vector<BaseFS *>m_mount_points = {};
+        std::map<std::string, BaseFS *>m_mount_points = {};
 
         std::map<int, User> m_users;
 

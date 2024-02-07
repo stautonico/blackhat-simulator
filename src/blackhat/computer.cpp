@@ -1,6 +1,7 @@
 #include <blackhat/computer.h>
 #include <blackhat/fs/ext4.h>
 #include <blackhat/fs/basefs.h>
+#include <blackhat/fs/procfs.h>
 #include <blackhat/fs/file_descriptor.h>
 
 #include <util/errno.h>
@@ -30,11 +31,14 @@ namespace Blackhat {
 
         if (!has_filesystem) {
             // TODO: Load the filesystem
-            m_fs = Ext4::make_standard_fs();
+            m_mount_points["/"] = Ext4::make_standard_fs("/");
 
             // Create some important files
             _create_system_files();
         }
+
+        // Spin up our procfs
+        m_mount_points["/proc"] = (BaseFS*)new Blackhat::ProcFS("/proc");
 
 
         this->_new_computer_kinit();
@@ -44,7 +48,7 @@ namespace Blackhat {
 
     void Computer::_create_system_files() {
         // TODO: Unneeded when we have saving and loading
-        m_fs->create("/etc/passwd", 0, 0, 0644);
+        m_mount_points["/"]->open("/etc/passwd", O::CREAT, 0);
     }
 
     void Computer::_create_root_user() {
@@ -67,8 +71,8 @@ namespace Blackhat {
     void Computer::_post_fs_kinit() {
         // TODO: Implement
         // Create a test tmp file that is unreadable to anyone but root
-        m_fs->create("/tmp/unreadable", 0, 0, 0);
-        flush_users();// TODO: SYNC USERS WHEN WE HAVE SAVING, NOT FLUSH
+        m_mount_points["/"]->open("/tmp/unreadable", O::CREAT, 0);
+        flush_users();// TODO: SYNC USERS WHEN WE HAVE SAVING, NOT FLUSH (??)
     }
 
     void Computer::_new_computer_kinit() {
@@ -94,11 +98,11 @@ namespace Blackhat {
 
         // Create the /etc/os-release file
         // TODO: Should be a link to /usr/lib/os-release
-        if (m_fs->create("/etc/os-release", 0, 0, 0644 | S::IFREG) < 0) {
+        if (m_mount_points["/"]->open("/etc/os-release", O::CREAT, 0) == nullptr) {
             _kernel_panic("Failed to create /etc/os-release");
         }
 
-        if (m_fs->write("/etc/os-release", "NAME=\"Blackhat Linux\"\nVERSION=\"0.0.0\"\nPRETTY_NAME=\"Blackhat Linux 0.0.0\"") < 0) {
+        if (m_mount_points["/"]->write("/etc/os-release", "NAME=\"Blackhat Linux\"\nVERSION=\"0.0.0\"\nPRETTY_NAME=\"Blackhat Linux 0.0.0\"") < 0) {
             _kernel_panic("Failed to write to /etc/os-release");
         }
 
@@ -112,7 +116,7 @@ namespace Blackhat {
     void Computer::call_userland_init() {
         // TODO: Load the /sbin/init from filesystem
 
-        auto result = m_fs->read("/sbin/init");
+        auto result = m_mount_points["/"]->read("/sbin/init");
 
         // Null value, aka doesn't exist, not empty string
         if (result == std::string(1, '\0')) {
@@ -142,13 +146,13 @@ namespace Blackhat {
                         entry.path().generic_string().substr(basepath.length());
                 if (std::filesystem::is_directory(entry.status())) {
                     // Check if it already exists
-                    if (!m_fs->exists(relative_path))
-                        m_fs->create(relative_path, 0, 0, 0644 | S::IFDIR);
+                    if (!m_mount_points["/"]->exists(relative_path))
+                        m_mount_points["/"]->open(relative_path, O::CREAT, 0);
                     dirs.push(entry.path().generic_string());// Generic string for win/lin compatability
                 } else {
-                    m_fs->create(relative_path, 0, 0, 0755 | S::IFREG);
+                    m_mount_points["/"]->open(relative_path, O::CREAT, 0);
 
-                    m_fs->write(
+                    m_mount_points["/"]->write(
                             erase(entry.path().generic_string(), basepath),
                             std::string(
                                     std::istreambuf_iterator<char>(
@@ -171,7 +175,7 @@ namespace Blackhat {
         auto towrite = ss.str();
         towrite.erase(towrite.size() - 1, 1);
 
-        auto write_result = m_fs->write("/etc/passwd", towrite);
+        auto write_result = m_mount_points["/"]->write("/etc/passwd", towrite);
 
         if (write_result < 0) {
             _kernel_panic("failed to flush users to disk");
@@ -179,7 +183,7 @@ namespace Blackhat {
     }
 
     std::string Computer::_read(std::string path) {
-        auto result = m_fs->read(path);
+        auto result = m_mount_points["/"]->read(path);
 
         // Null value, aka doesn't exist, not empty string
         if (result == std::string(1, '\0')) {
@@ -190,7 +194,40 @@ namespace Blackhat {
     }
 
     std::vector<std::string> Computer::_readdir(std::string path) {
-        return m_fs->readdir(path);
+
+        // TODO: Make this a helper to find the proper file system
+        // Start from the longest path, and keep popping off the last chunk until we find a match in our mappings
+        std::vector<std::string> chunks;
+        std::stringstream ss(path);
+        std::string chunk;
+        while (std::getline(ss, chunk, '/')) {
+            chunks.push_back(chunk);
+        }
+
+        Blackhat::BaseFS* fs = nullptr;
+
+        while (!chunks.empty()) {
+            std::string subpath = "";
+            for (const auto& c : chunks) {
+                subpath += "/" + c;
+            }
+            if (subpath.empty()) {
+                subpath = "/";
+            }
+            if (m_mount_points.find(subpath) != m_mount_points.end()) {
+                fs  = m_mount_points[subpath];
+            }
+            chunks.pop_back();
+        }
+
+        if (fs == nullptr) {
+            // TODO: ERROR
+            return {};
+        }
+
+        printf("%s\n", fs->get_mount_point().c_str());
+
+        return fs->readdir(path);
     }
 
     int Computer::sys$open(std::string path, int flags, int mode, int caller) {
@@ -203,11 +240,11 @@ namespace Blackhat {
         // TODO: Implement permissions for this
         if (flags & O::CREAT) {
             // TODO: Set mode and uid/gid and stuff
-            auto result = m_fs->create(path, 0, 0, mode);
+            auto result = m_mount_points["/"]->open(path, O::CREAT, 0);
             if (!result) return -1;
         }
 
-        auto inode = m_fs->_find_inode(path);
+        auto inode = m_mount_points["/"]->_find_inode(path);
 
         // ENOENT check comes first
         if (inode == nullptr) {
@@ -294,7 +331,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(path);
+        auto inode = m_mount_points["/"]->_find_inode(path);
 
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
@@ -316,7 +353,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(pathname);
+        auto inode = m_mount_points["/"]->_find_inode(pathname);
 
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
@@ -328,7 +365,7 @@ namespace Blackhat {
             return -1;
         }
 
-        auto file_content = m_fs->read(pathname);
+        auto file_content = m_mount_points["/"]->read(pathname);
 
         //         Try to read the file content
         //        auto file_content = inode->read();
@@ -366,7 +403,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(pathname);
+        auto inode = m_mount_points["/"]->_find_inode(pathname);
 
         if (inode != nullptr) {
             caller_obj->set_errno(E::EXIST);
@@ -374,7 +411,7 @@ namespace Blackhat {
         }
 
         // TODO: Set proper perms and owner
-        if (m_fs->create(pathname, 0, 0, mode | S::IFDIR)) return true;
+        if (m_mount_points["/"]->open(pathname, O::CREAT, 0) != nullptr) return true;
 
         return false;
     }
@@ -383,14 +420,14 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(pathname);
+        auto inode = m_mount_points["/"]->_find_inode(pathname);
 
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return -1;
         }
 
-        auto result = m_fs->rmdir(pathname);
+        auto result = m_mount_points["/"]->rmdir(pathname);
 
         // TODO: Set errno
         if (result) return 0;
@@ -402,14 +439,14 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(pathname);
+        auto inode = m_mount_points["/"]->_find_inode(pathname);
 
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return -1;
         }
 
-        auto result = m_fs->unlink(pathname);
+        auto result = m_mount_points["/"]->unlink(pathname);
 
         // TODO: Set errno
 
@@ -420,7 +457,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto result = m_fs->rename(oldpath, newpath);
+        auto result = m_mount_points["/"]->rename(oldpath, newpath);
         // TODO: Check better
         // TODO: If the newpath is a directory, set errno to EISDIR
 
@@ -496,14 +533,14 @@ namespace Blackhat {
         GETCALLER();
 
         // Make sure both oldpath exists and newpath doesn't
-        auto oldent = m_fs->_find_directory_entry(oldpath);
+        auto oldent = m_mount_points["/"]->_find_directory_entry(oldpath);
 
         if (oldent == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return -1;
         }
 
-        auto newent = m_fs->_find_directory_entry(newpath);
+        auto newent = m_mount_points["/"]->_find_directory_entry(newpath);
 
         if (newent != nullptr) {
             caller_obj->set_errno(E::EXIST);
@@ -518,7 +555,7 @@ namespace Blackhat {
         split_path_components.pop_back();
 
 
-        auto result = m_fs->add_inode_to_path(join(split_path_components, '/'), filename, origInode);
+        auto result = m_mount_points["/"]->add_inode_to_path(join(split_path_components, '/'), filename, origInode);
         origInode->increment_link_count();
         // TODO: Set errno?
         return result;
@@ -529,27 +566,27 @@ namespace Blackhat {
         GETCALLER();
 
         // Make sure both oldpath exists and newpath doesn't
-        auto oldent = m_fs->_find_directory_entry(oldpath);
+        auto oldent = m_mount_points["/"]->_find_directory_entry(oldpath);
 
         if (oldent == nullptr) {
             caller_obj->set_errno(E::NOENT);
             return -1;
         }
 
-        auto newent = m_fs->_find_directory_entry(newpath);
+        auto newent = m_mount_points["/"]->_find_directory_entry(newpath);
 
         if (newent != nullptr) {
             caller_obj->set_errno(E::EXIST);
             return -1;
         }
 
-        auto new_inode_number = m_fs->create(newpath, oldent->get_inode()->get_uid(), oldent->get_inode()->get_gid(), (oldent->get_inode()->get_mode() & 777) | S::IFLNK);
+        auto new_inode_number = m_mount_points["/"]->open(newpath, O::CREAT, 0);
 
-        if (new_inode_number < 0) {
+        if (new_inode_number == nullptr) {
             // TODO: Set some errno
             return -1;
         } else {
-            auto new_inode = m_fs->_find_inode_by_inode_num(new_inode_number);
+            auto new_inode = m_mount_points["/"]->_find_directory_entry(newpath)->get_inode();
             // Should never fail since we checked it above
             new_inode->make_symlink(oldpath);
         }
@@ -562,7 +599,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_fs->_find_inode(pathname);
+        auto inode = m_mount_points["/"]->_find_inode(pathname);
 
         if (inode == nullptr) {
             caller_obj->set_errno(E::NOENT);
@@ -582,7 +619,7 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto dirent = m_fs->_find_directory_entry(pathname);
+        auto dirent = m_mount_points["/"]->_find_directory_entry(pathname);
 
         if (dirent == nullptr) {
             caller_obj->set_errno(E::NOENT);
@@ -621,7 +658,7 @@ namespace Blackhat {
         GETCALLER();
 
         // Check that the path exists
-        auto dirent = m_fs->_find_directory_entry(pathname);
+        auto dirent = m_mount_points["/"]->_find_directory_entry(pathname);
 
 
         if (dirent == nullptr) {

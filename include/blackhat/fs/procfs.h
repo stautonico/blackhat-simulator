@@ -10,9 +10,13 @@
 namespace Blackhat {
     class ProcFS : private BaseFS {
     public:
+        ProcFS(std::string mount_point);
+
+        std::vector<std::string> readdir(std::string path) override;
 
 
     private:
+        std::string m_mount_point;
 
     };
 }// namespace Blackhat

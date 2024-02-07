@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <util/string.h>
 
-namespace Blackhat{
+namespace Blackhat {
     DirectoryEntry::DirectoryEntry(std::string name, Blackhat::Inode *inode) {
         m_name = name;
         m_inode = inode;
@@ -113,7 +113,7 @@ namespace Blackhat{
     }
 
 
-    Ext4::Ext4() : m_root_directory_entry("/", m_root) {
+    Ext4::Ext4(std::string mount_point) : m_root_directory_entry("/", m_root) {
         m_root = new Inode();
         m_root->m_name = "/";
         m_root->m_mode = 0755 | S::IFDIR;
@@ -123,10 +123,12 @@ namespace Blackhat{
         // We have to set our directory entries root again because it didn't exist at the top of this func
         m_root_directory_entry.m_inode = m_root;
         m_root_directory_entry.m_name = "/";
+
+        m_mount_point = mount_point;
     }
 
-    Ext4 *Ext4::make_standard_fs() {
-        Ext4 *fs = new Ext4();
+    Ext4 *Ext4::make_standard_fs(std::string mount_point) {
+        Ext4 *fs = new Ext4(mount_point);
 
         // TODO: Add more here like /boot and /dev
         for (auto dir: {"/bin", "/etc", "/home", "/lib", "/root", "/run", "/sbin",
@@ -419,12 +421,25 @@ namespace Blackhat{
     FileDescriptor *Ext4::open(std::string path, int flags, int mode) {
         auto dirent = _find_directory_entry(path);
 
-        if (dirent == nullptr && flags & O::CREAT != O::CREAT) {
+        if (dirent == nullptr && !(flags & O::CREAT)) {
             // TODO: Find a way to return an error message (something calling open can't tell what went wrong)
             return nullptr;
         }
 
-        return nullptr;
+        if (dirent == nullptr && flags & O::CREAT) {
+            // TODO: Put proper options
+            if (create(path, 0, 0, 777 | S::IFREG)) {
+                dirent = _find_directory_entry(path);
+
+                if (dirent == nullptr) return nullptr;
+            } else {
+                return nullptr;
+            }
+        }
+
+        auto fd = new FileDescriptor(-1, path, dirent->get_inode());
+
+        return fd;
 
     }
 

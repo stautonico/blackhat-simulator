@@ -54,7 +54,7 @@ namespace Blackhat {
     private:
         int m_fd;
         std::string m_path;
-        Inode *m_inode;
+        Inode *m_inode; // TODO: Maybe point to the dirent, not the inode
 
         int f_mode;
         int f_pos;

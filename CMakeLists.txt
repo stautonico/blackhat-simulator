@@ -20,7 +20,8 @@ set(SOURCES
         src/blackhat/fs/file_descriptor.cpp
 
         src/util/string.cpp
-        )
+        src/blackhat/fs/procfs.cpp
+)
 
 # Add some settings for pocketpy
 set(PK_USE_BOX2D OFF CACHE BOOL "Don't compile box2D")
