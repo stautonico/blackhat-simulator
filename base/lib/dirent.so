@@ -1,2 +1,0 @@
-def readdir(path: str) -> list[str]:
-    return _syscall(78, path)

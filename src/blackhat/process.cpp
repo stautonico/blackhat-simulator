@@ -81,4 +81,11 @@ namespace Blackhat {
 
         return nullptr;
     }
+
+    void Process::delete_file_descriptor(int fd) {
+        auto fd_obj = get_file_descriptor(fd);
+
+        delete fd_obj;
+    }
+
 }// namespace Blackhat

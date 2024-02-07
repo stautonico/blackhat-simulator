@@ -10,9 +10,13 @@
 
 
 namespace Blackhat {
+    class ProcFS;
+
+    // TODO: Move this to its own folder
     class Inode {
     public:
         friend class Ext4;
+        friend class ProcFS;
 
         std::string read();
 
@@ -110,38 +114,36 @@ namespace Blackhat {
     public:
         friend class Computer;
 
-        Ext4(std::string mount_point);
+        Ext4(std::string mount_point, Computer* computer);
 
-        static Ext4 *make_standard_fs(std::string mount_point);
+        static Ext4 *make_standard_fs(std::string mount_point, Computer *computer);
 
+        // Public API
         FileDescriptor *open(std::string path, int flags, int mode) override;
+        int close(Blackhat::FileDescriptor *fd) override;
         int unlink(std::string path) override;
+        int rename(std::string oldpath, std::string newpath) override;
+        int rmdir(std::string path) override;
+        std::vector<std::string> getdents(std::string path) override;
 
 
         int create(std::string path, int uid, int gid, int mode);
 
         int write(std::string path, std::string data);
 
-        std::string read(std::string path);
+        std::string read(FileDescriptor *fd);
 
-        std::vector<std::string> readdir(std::string path);
+//        std::vector<std::string> readdir(std::string path);
 
-//        bool unlink(std::string path);
-
-//        bool rmdir(std::string path);
 
         bool exists(std::string path) override;
-
-//        bool rename(std::string oldpath, std::string newpath);
 
         // TODO: Shouldn't be public, write API later
         bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode) override;
 
 
     private:
-        std::string m_mount_point;
-
-        std::map<int, Inode *> m_inodes;// Inode number -> Inode *
+        std::map<int, Inode *> m_inodes; // Inode number -> Inode *
         // TODO: Maybe store the actual inode here?
 
         Inode *m_root;

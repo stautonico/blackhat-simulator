@@ -1,0 +1,26 @@
+require("stdio")
+require("unistd")
+require("fcntl")
+
+def main(args):
+    if len(args) != 1:
+        print(f"usage: cat <path>")
+        return 1
+
+    for x in range(100000000000):
+        fd = open(args[0], O_RDONLY)
+
+        if fd < 0:
+            perror("Unable to read file")
+            return 1
+
+        result = read(fd)
+
+        if result is None:
+            perror("Unable to read file")
+        else:
+            print(result)
+
+        close(fd)
+
+    return 0

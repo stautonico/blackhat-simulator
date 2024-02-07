@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <map>
 #include <vector>
+#include <chrono>
 
 
 // Forward declaration
@@ -404,6 +405,7 @@ namespace Blackhat {
         std::string sys$readlink(std::string pathname, int caller);
         std::vector<std::string> sys$stat(std::string pathname, int caller);
         std::vector<std::string> sys$getdents(std::string pathname, int caller);
+        int sys$close(int fd, int caller);
 
 
 
@@ -412,9 +414,11 @@ namespace Blackhat {
         // Flush takes the data from the computer object and puts them into the filesystem
         void flush_users();
 
+        double get_boot_time();
+
 
     private:
-        // TODO: boot time
+        std::chrono::steady_clock::time_point m_boot_time = std::chrono::steady_clock::now();
         std::string m_hostname = "localhost";// Fallback, will be overwritten by
                                              // something post-init
 
@@ -434,5 +438,7 @@ namespace Blackhat {
 
         void _create_fs_from_base(const std::string &basepath, const std::string current_path);
         void _create_system_files();
+
+        BaseFS*_find_fs_from_path(std::string path);
     };
 }// namespace Blackhat

@@ -1,13 +1,14 @@
 #pragma once
 
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <stdexcept>
 
 namespace Blackhat {
     class DirectoryEntry;
-}
+    class Computer;
+}// namespace Blackhat
 
 
 #include <blackhat/fs/file_descriptor.h>
@@ -91,9 +92,9 @@ namespace Blackhat {
 
     class BaseFS {
     public:
-        BaseFS() {};
+        BaseFS(){};
 
-        ~BaseFS() {};
+        ~BaseFS(){};
 
         inline std::string get_mount_point() {
             return m_mount_point;
@@ -102,35 +103,36 @@ namespace Blackhat {
         // https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201001/homework/fuse/fuse_doc.html
         virtual int getattr(std::string path) {
             throw std::runtime_error("getattr() is not implemented!");
-        }; // the 'stat' command basically // TODO: set the return value properly
+        };// the 'stat' command basically // TODO: set the return value properly
         virtual void readlink() {
             throw std::runtime_error("readlink() is not implemented!");
-        }; // Read a symbolic link TODO: set the return value properly
-        virtual std::vector<std::string> readdir(std::string path) {
-            throw std::runtime_error("readdir() is not implemented!");
+        };// Read a symbolic link TODO: set the return value properly
+        virtual std::vector<std::string> getdents(std::string path) {
+            throw std::runtime_error("getdents() is not implemented!");
         };
 
         // TODO: Implement opendir? Find out what its used for first
         // TODO: Maybe do getdir? its apparently deprecated
         // TODO: mknod, I have no reason for this (yet)
-        virtual int mkdir(std::string path, int mode) { throw std::runtime_error("mkdir() is not implemented!"); };;
+        virtual int mkdir(std::string path, int mode) { throw std::runtime_error("mkdir() is not implemented!"); };
+        ;
 
         virtual int unlink(std::string path) {
             throw std::runtime_error("unlink() is not implemented!");
-        }; // Remove a node
+        };// Remove a node
         virtual int rmdir(std::string path) {
             throw std::runtime_error("rmdir() is not implemented!");
-        }; // Remove a (empty) directory
+        };// Remove a (empty) directory
         virtual int symlink(std::string target, std::string linkpath) {
             throw std::runtime_error("symlink() is not implemented!");
-        }; // Make a symbolic link
+        };// Make a symbolic link
         virtual int rename(std::string oldpath, std::string newpath) {
             throw std::runtime_error("rename() is not implemented!");
         };
 
         virtual int link(std::string oldpath, std::string newpath) {
             throw std::runtime_error("link() is not implemented!");
-        }; // Make a hardlink
+        };// Make a hardlink
         virtual int chmod(std::string path, int mode) { throw std::runtime_error("chmod() is not implemented!"); };
 
         virtual int chown(std::string path, int uid, int gid) {
@@ -139,24 +141,29 @@ namespace Blackhat {
 
         virtual int truncate(std::string path, int size) {
             throw std::runtime_error("truncate() is not implemented!");
-        }; // Change the size of a file
+        };// Change the size of a file
         virtual int utime(std::string path, void *ubuf) {
             throw std::runtime_error("utime() is not implemented!");
-        }; // Change the timestamps of a file // TODO: Set the ubuf argument type
+        };// Change the timestamps of a file // TODO: Set the ubuf argument type
+
         virtual FileDescriptor *open(std::string path, int flags, int mode) {
             throw std::runtime_error("open() is not implemented!");
         };
 
-        virtual std::string read(std::string path) {
+        virtual int close(FileDescriptor *fd) {
+            throw std::runtime_error("close() is not implemented!");
+        };
+
+        virtual std::string read(FileDescriptor *fd) {
             throw std::runtime_error("read() is not implemented!");
-        }; // TODO: Maybe implement offset?
+        };// TODO: Maybe implement amount to read?
         virtual int write(std::string path, std::string data) {
             throw std::runtime_error("write() is not implemented!");
         };
 
         virtual void statfs(std::string path) {
             throw std::runtime_error("statfs() is not implemented!");
-        }; // Get filesystem stats // TODO: Set the return value properly
+        };// Get filesystem stats // TODO: Set the return value properly
         // TODO: Maybe do flush? We don't really need this (maybe)
         // TODO: Maybe do fsync? Do we need?
         virtual std::string getxattr(std::string path, std::string name) {
@@ -165,10 +172,10 @@ namespace Blackhat {
 
         virtual void listxattr(std::string path) {
             throw std::runtime_error("listxattr() is not implemented!");
-        }; // TODO: Set the return value properly (either vector or map)
+        };// TODO: Set the return value properly (either vector or map)
         virtual void removexattr(std::string path) {
             throw std::runtime_error("removexattr() is not implemented!");
-        }; // TODO: Set return value properly
+        };// TODO: Set return value properly
 
 
         // TODO: THESE ARE ONLY TEMPORARY, REMOVE THEM ONCE I HAVE STUFF PROPERLY IMPLEMENTED
@@ -187,19 +194,7 @@ namespace Blackhat {
         };
 
     protected:
-        inline std::string _strip_mount_point(std::string path) {
-            if (m_mount_point == path.substr(0, m_mount_point.length()))
-                path.erase(0, m_mount_point.length());
-
-            // Make sure we still have a '/' at the beginning
-            if (path.substr(0, 1) != "/")
-                path = "/" + path;
-
-            return path;
-        }
-
-    private:
         std::string m_mount_point;
-
+        Computer *m_computer;
     };
-}
+}// namespace Blackhat

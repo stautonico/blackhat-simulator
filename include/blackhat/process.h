@@ -74,6 +74,7 @@ namespace Blackhat {
 
         void add_file_descriptor(FileDescriptor* fd);
         FileDescriptor *get_file_descriptor(int fd);
+        void delete_file_descriptor(int fd);
 
     private:
         Blackhat::Computer *m_computer = nullptr;

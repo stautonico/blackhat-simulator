@@ -1,5 +1,4 @@
 require("stdlib")
-require("dirent")
 require("unistd")
 require("stdio")
 require("pwd")
@@ -59,7 +58,7 @@ def main(argv):
                 found_command = False
 
                 for piece in pieces:
-                    entries = readdir(piece)
+                    entries = getdents(piece)
                     for entry in entries:
                         if entry == args[0]:
                             if execve(f"{piece}/{args[0]}", args[1:], {}) < 0:

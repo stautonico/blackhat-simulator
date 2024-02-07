@@ -8,6 +8,7 @@ namespace Blackhat {
 }
 
 #include <blackhat/fs/ext4.h>
+#include <blackhat/fs/procfs.h>
 
 // https://www.oreilly.com/library/view/linux-device-drivers/0596000081/ch03s04.html
 
@@ -40,6 +41,10 @@ namespace Blackhat {
 
     class FileDescriptor {
     public:
+        friend class Computer;
+        friend class Ext4;
+        friend class ProcFS;
+
         FileDescriptor(int fd, std::string path, Inode* inode);
 
         int get_fd() {return m_fd;}
@@ -50,6 +55,8 @@ namespace Blackhat {
 
         void set_append(bool enabled) {m_append = enabled;}
         bool is_append_enabled() {return m_append;}
+
+        inline std::string get_path() {return m_path;}
 
     private:
         int m_fd;

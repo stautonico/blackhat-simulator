@@ -11,3 +11,6 @@ std::string join(std::vector<std::string> components, char delim, int start,
 std::string join(std::vector<std::string> components, char delim);
 
 std::string erase(std::string str, std::string substr);
+
+
+std::string strip_mount_point(std::string path, std::string mount_point);

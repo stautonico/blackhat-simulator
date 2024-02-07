@@ -1,8 +1,8 @@
 #include <blackhat/computer.h>
-#include <blackhat/fs/ext4.h>
 #include <blackhat/fs/basefs.h>
-#include <blackhat/fs/procfs.h>
+#include <blackhat/fs/ext4.h>
 #include <blackhat/fs/file_descriptor.h>
+#include <blackhat/fs/procfs.h>
 
 #include <util/errno.h>
 #include <util/string.h>
@@ -31,14 +31,14 @@ namespace Blackhat {
 
         if (!has_filesystem) {
             // TODO: Load the filesystem
-            m_mount_points["/"] = Ext4::make_standard_fs("/");
+            m_mount_points["/"] = Ext4::make_standard_fs("/", this);
 
             // Create some important files
             _create_system_files();
         }
 
         // Spin up our procfs
-        m_mount_points["/proc"] = (BaseFS*)new Blackhat::ProcFS("/proc");
+        m_mount_points["/proc"] = (BaseFS *) new Blackhat::ProcFS("/proc", this);
 
 
         this->_new_computer_kinit();
@@ -105,7 +105,6 @@ namespace Blackhat {
         if (m_mount_points["/"]->write("/etc/os-release", "NAME=\"Blackhat Linux\"\nVERSION=\"0.0.0\"\nPRETTY_NAME=\"Blackhat Linux 0.0.0\"") < 0) {
             _kernel_panic("Failed to write to /etc/os-release");
         }
-
     }
 
     void Computer::_kernel_panic(std::string message) {
@@ -116,7 +115,8 @@ namespace Blackhat {
     void Computer::call_userland_init() {
         // TODO: Load the /sbin/init from filesystem
 
-        auto result = m_mount_points["/"]->read("/sbin/init");
+        auto fd = m_mount_points["/"]->open("/sbin/init", O_RDONLY, 0);
+        auto result = m_mount_points["/"]->read(fd);
 
         // Null value, aka doesn't exist, not empty string
         if (result == std::string(1, '\0')) {
@@ -164,6 +164,14 @@ namespace Blackhat {
         }
     }
 
+    double Computer::get_boot_time() {
+        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+        std::chrono::duration<double> duration = now - m_boot_time;
+        double seconds = duration.count();
+
+        return seconds;
+    }
+
     void Computer::flush_users() {
         std::stringstream ss;
 
@@ -183,7 +191,9 @@ namespace Blackhat {
     }
 
     std::string Computer::_read(std::string path) {
-        auto result = m_mount_points["/"]->read(path);
+        // TODO: THIS IS BAD
+        auto fd = m_mount_points["/"]->open(path, O_RDONLY, 0);
+        auto result = m_mount_points["/"]->read(fd);
 
         // Null value, aka doesn't exist, not empty string
         if (result == std::string(1, '\0')) {
@@ -204,18 +214,18 @@ namespace Blackhat {
             chunks.push_back(chunk);
         }
 
-        Blackhat::BaseFS* fs = nullptr;
+        Blackhat::BaseFS *fs = nullptr;
 
         while (!chunks.empty()) {
             std::string subpath = "";
-            for (const auto& c : chunks) {
+            for (const auto &c: chunks) {
                 subpath += "/" + c;
             }
             if (subpath.empty()) {
                 subpath = "/";
             }
             if (m_mount_points.find(subpath) != m_mount_points.end()) {
-                fs  = m_mount_points[subpath];
+                fs = m_mount_points[subpath];
             }
             chunks.pop_back();
         }
@@ -227,58 +237,82 @@ namespace Blackhat {
 
         printf("%s\n", fs->get_mount_point().c_str());
 
-        return fs->readdir(path);
+        return fs->getdents(path);
+    }
+
+    BaseFS *Computer::_find_fs_from_path(std::string path) {
+        // Start from the longest path, and keep popping off the last chunk until we find a match in our mappings
+        std::vector<std::string> chunks;
+        std::stringstream ss(path);
+        std::string chunk;
+        while (std::getline(ss, chunk, '/')) {
+            chunks.push_back(chunk);
+        }
+
+        Blackhat::BaseFS *fs = nullptr;
+
+        while (!chunks.empty()) {
+            std::string subpath = "";
+            for (const auto &c: chunks) {
+                subpath += "/" + c;
+            }
+            if (subpath.empty()) {
+                subpath = "/";
+            }
+
+            // Remove double "//"
+            size_t pos = subpath.find_first_not_of('/');
+            if (pos != std::string::npos && pos > 1) {
+                subpath = "/" + subpath.substr(pos);
+            }
+
+            // TODO: Find out why calling `ls` looks for `/bin` in mount points
+            //            printf("We're looking for %s in our mountpoints...\n", subpath.c_str());
+
+            if (m_mount_points.find(subpath) != m_mount_points.end()) {
+                fs = m_mount_points[subpath];
+                break;
+            }
+            chunks.pop_back();
+        }
+
+        return fs;
     }
 
     int Computer::sys$open(std::string path, int flags, int mode, int caller) {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        // We have to get our open modes and check the permissions before we
-        // create a file descriptor
+        auto fs = _find_fs_from_path(path);
 
-        // TODO: Implement permissions for this
-        if (flags & O::CREAT) {
-            // TODO: Set mode and uid/gid and stuff
-            auto result = m_mount_points["/"]->open(path, O::CREAT, 0);
-            if (!result) return -1;
-        }
-
-        auto inode = m_mount_points["/"]->_find_inode(path);
-
-        // ENOENT check comes first
-        if (inode == nullptr) {
-            caller_obj->set_errno(E::NOENT);
+        if (fs == nullptr) {
+            // TODO: Set error
             return -1;
         }
 
-        // Then permission checks
-        if (flags & O::RDWR) {
-            // Check if we have read and write permissions
-            if (!inode->check_perm(Inode::Permission::READ, caller_obj) ||
-                !inode->check_perm(Inode::Permission::WRITE, caller_obj)) {
-                caller_obj->set_errno(E::PERM);
-                return -1;
-            }
-        } else if (flags & O::WRONLY) {
-            if (!inode->check_perm(Inode::Permission::WRITE, caller_obj)) {
-                caller_obj->set_errno(E::PERM);
-                return -1;
-            }
-        } else {
-            // We can't check flags & O::RDONLY since RDONLY = 0
-            if (!inode->check_perm(Inode::Permission::READ, caller_obj)) {
-                caller_obj->set_errno(E::PERM);
-                return -1;
-            }
+
+        auto stripped_path = strip_mount_point(path, fs->get_mount_point());
+
+        // TODO: Implement permission checking (the fs's open function should do it)
+        auto fd = fs->open(stripped_path, flags, mode);
+
+
+        if (fd == nullptr) {
+            // TODO: Set errno
+            return -1;
         }
 
-        // Now, in theory, we should have the correct permissions, so we can just make a fd
+        // We want the full path, not the stripped path
+        fd->m_path = path;
 
+
+        // We have to get our open modes and check the permissions before we
+        // create a file descriptor
 
         auto fd_num = caller_obj->get_fd_accumulator();
 
-        auto fd = new FileDescriptor(fd_num, path, inode);
+        fd->m_fd = fd_num;
+
         caller_obj->add_file_descriptor(fd);
 
         // TODO: Check our flags
@@ -287,6 +321,27 @@ namespace Blackhat {
         }
 
         return fd_num;// We have to do this bc add_file_descriptor increments the accumulator
+    }
+
+    int Computer::sys$close(int fd, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto fd_obj = caller_obj->get_file_descriptor(fd);
+
+        if (fd_obj != nullptr) {
+            caller_obj->set_errno(E::BADFD);
+            return -1;
+        }
+
+        auto fs = _find_fs_from_path(fd_obj->get_path());
+
+        // Let the filesystem clean up whatever it needs to
+        fs->close(fd_obj);
+
+        caller_obj->delete_file_descriptor(fd);
+
+        return 0;
     }
 
     std::string Computer::sys$read(int fd, int caller) {
@@ -300,7 +355,11 @@ namespace Blackhat {
             return std::string(1, '\0');
         }
 
-        return fd_obj->read();
+        // This should never fail since we can't open without the path existing
+        // TODO: See what happens if this does fail
+        auto fs = _find_fs_from_path(fd_obj->m_path);
+
+        return fs->read(fd_obj);
     }
 
     int Computer::sys$write(int fd, std::string data, int caller) {
@@ -365,7 +424,8 @@ namespace Blackhat {
             return -1;
         }
 
-        auto file_content = m_mount_points["/"]->read(pathname);
+        auto fd = m_mount_points["/"]->open(pathname, O_RDONLY, 0);
+        auto file_content = m_mount_points["/"]->read(fd);
 
         //         Try to read the file content
         //        auto file_content = inode->read();
@@ -385,17 +445,22 @@ namespace Blackhat {
 
 
         // TODO: Implement process spawner function
-        Process *proc = new Process(file_content, this, uid, gid);
-        proc->set_pid(m_pid_accumulator);
-        m_processes[m_pid_accumulator] = proc;
-        m_pid_accumulator++;
+        for (int i = 0; i < 10000000; i++) {
+            Process *proc = new Process(file_content, this, uid, gid);
+            proc->set_pid(m_pid_accumulator);
+            m_processes[m_pid_accumulator] = proc;
+            m_pid_accumulator++;
 
-        proc->set_cwd(caller_obj->get_cwd());
-        proc->set_env_from_parent(caller_obj->get_entire_environment());
+            proc->set_cwd(caller_obj->get_cwd());
+            proc->set_env_from_parent(caller_obj->get_entire_environment());
 
 
-        // TODO: Pass the environment
-        proc->start_sync(argv);
+            // TODO: Pass the environment
+            proc->start_sync(argv);
+
+            delete proc;
+        }
+
         return 0;// TODO: Get the return value
     }
 
@@ -654,19 +719,14 @@ namespace Blackhat {
     }
 
     std::vector<std::string> Computer::sys$getdents(std::string pathname, int caller) {
-        // TODO: Write a helper to validate the caller pid
-        GETCALLER();
+        auto fs = _find_fs_from_path(pathname);
 
-        // Check that the path exists
-        auto dirent = m_mount_points["/"]->_find_directory_entry(pathname);
-
-
-        if (dirent == nullptr) {
-            caller_obj->set_errno(E::NOENT);
+        if (fs == nullptr) {
+            // TODO: Throw an error maybe? Errno maybe?
             return {};
         }
 
-        return dirent->get_children_names();
+        return fs->getdents(strip_mount_point(pathname, fs->get_mount_point()));
     }
 
 }// namespace Blackhat

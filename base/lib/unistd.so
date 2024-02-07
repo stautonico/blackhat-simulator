@@ -48,3 +48,9 @@ def getuid():
 
 def geteuid():
     return _syscall(107)
+
+def getdents(path: str) -> list[str]:
+    return _syscall(78, path)
+
+def close(fd: int) -> int:
+    return _syscall(3, fd)

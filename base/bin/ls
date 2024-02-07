@@ -1,4 +1,3 @@
-require("dirent")
 require("unistd")
 
 def main(argv):
@@ -9,7 +8,7 @@ def main(argv):
 
     # TODO: Support errno for directory not found
     # TODO: Support multiple args
-    entries = readdir(path)
+    entries = getdents(path)
 
     for entry in entries:
         print(entry + " ", False)

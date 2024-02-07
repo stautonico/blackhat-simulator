@@ -29,7 +29,7 @@ std::string join(std::vector<std::string> components, char delim, int start,
 
 std::string join(std::vector<std::string> components, char delim) {
     std::string result = "";
-    for(auto i : components)
+    for (auto i: components)
         result += i + delim;
 
     return result;
@@ -46,4 +46,16 @@ std::string erase(std::string str, std::string substr) {
         }
     }
     return result;
+}
+std::string strip_mount_point(std::string path, std::string mount_point) {
+    {
+        if (mount_point == path.substr(0, mount_point.length()))
+            path.erase(0, mount_point.length());
+
+        // Make sure we still have a '/' at the beginning
+        if (path.substr(0, 1) != "/")
+            path = "/" + path;
+
+        return path;
+    }
 }

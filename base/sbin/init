@@ -1,5 +1,4 @@
 require("stdlib")
-require("dirent")
 require("unistd")
 require("stdio")
 require("pwd")

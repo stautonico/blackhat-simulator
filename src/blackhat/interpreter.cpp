@@ -117,6 +117,13 @@ namespace Blackhat {
                             return VAR(result);
                         }
 
+                        case SYSCALL_ID::SYS_CLOSE: {
+                            auto fd = CAST(int, cmd_args[0]);
+
+                            auto result = t->m_process->m_computer->sys$close(fd, PID());
+                            return VAR(result);
+                        }
+
                         case SYSCALL_ID::SYS_WRITE: {
                             auto fd = CAST(int, cmd_args[0]);
                             auto data = CAST(Str &, cmd_args[1]).c_str();
