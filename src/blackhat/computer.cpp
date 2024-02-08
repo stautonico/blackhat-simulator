@@ -329,7 +329,7 @@ namespace Blackhat {
 
         auto fd_obj = caller_obj->get_file_descriptor(fd);
 
-        if (fd_obj != nullptr) {
+        if (fd_obj == nullptr) {
             caller_obj->set_errno(E::BADFD);
             return -1;
         }
@@ -445,22 +445,19 @@ namespace Blackhat {
 
 
         // TODO: Implement process spawner function
-        for (int i = 0; i < 10000000; i++) {
-            Process *proc = new Process(file_content, this, uid, gid);
-            proc->set_pid(m_pid_accumulator);
-            m_processes[m_pid_accumulator] = proc;
-            m_pid_accumulator++;
+        Process *proc = new Process(file_content, this, uid, gid);
+        proc->set_pid(m_pid_accumulator);
+        m_processes[m_pid_accumulator] = proc;
+        m_pid_accumulator++;
 
-            proc->set_cwd(caller_obj->get_cwd());
-            proc->set_env_from_parent(caller_obj->get_entire_environment());
+        proc->set_cwd(caller_obj->get_cwd());
+        proc->set_env_from_parent(caller_obj->get_entire_environment());
 
 
-            // TODO: Pass the environment
-            proc->start_sync(argv);
+        // TODO: Pass the environment
+        proc->start_sync(argv);
 
-            delete proc;
-        }
-
+        delete proc;
         return 0;// TODO: Get the return value
     }
 

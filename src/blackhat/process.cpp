@@ -17,6 +17,14 @@ namespace Blackhat {
         m_fsgid = gid;
     }
 
+    Process::~Process() {
+        // Clean up all the file descriptors
+        for (auto const &x: m_file_descriptors) {
+            delete x.second;
+        }
+    }
+
+
     void Process::start_sync(std::vector<std::string> args) {
         m_cmdline = join(args, ' ');
         _run(args);
@@ -57,21 +65,20 @@ namespace Blackhat {
         m_interpreter.set_errno(errnum);
     }
 
-    void Process::add_file_descriptor(Blackhat::FileDescriptor* fd) {
+    void Process::add_file_descriptor(Blackhat::FileDescriptor *fd) {
         m_file_descriptors.insert({fd->get_fd(), fd});
         // Increment our fd accumulator
         _increment_fd_accumulator();
     }
 
     std::map<std::string, std::string> Process::get_entire_environment() {
-        std::map<std::string, std::string> env_copy(m_environ); // Uses copy-construction
+        std::map<std::string, std::string> env_copy(m_environ);// Uses copy-construction
         return std::move(env_copy);
     }
 
     void Process::set_env_from_parent(std::map<std::string, std::string> env) {
         m_environ = std::move(env);
     }
-
 
 
     FileDescriptor *Process::get_file_descriptor(int fd) {
@@ -85,7 +92,14 @@ namespace Blackhat {
     void Process::delete_file_descriptor(int fd) {
         auto fd_obj = get_file_descriptor(fd);
 
-        delete fd_obj;
+        if (fd_obj != nullptr) {
+            delete fd_obj;
+            auto it = m_file_descriptors.find(fd);
+            m_file_descriptors.erase(it);
+        }
+
+
+
     }
 
 }// namespace Blackhat

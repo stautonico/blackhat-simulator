@@ -20,4 +20,7 @@ def main(args):
     else:
         print(result)
 
+    if close(fd) < 0:
+        perror("close")
+
     return 0

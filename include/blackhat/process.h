@@ -22,6 +22,7 @@ namespace Blackhat {
         friend class Interpreter;
 
         Process(std::string code, Blackhat::Computer *computer, int uid, int gid);
+        ~Process();
 
         // TODO: Maybe not public?
         int set_exit_code(int exit_code);
