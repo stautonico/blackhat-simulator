@@ -37,7 +37,7 @@ def main(args):
     else:
         OS_NAME = "OS Information not available!"
 
-    #close(fd) TODO: Implement
+    close(fd)
 
     print(OS_NAME)
 
@@ -46,5 +46,34 @@ def main(args):
 
     shell = getenv("SHELL")
     print(f"shell: {shell}")
+
+    term = getenv("TERM")
+    print(f"term: {term}")
+
+    fd = open("/proc/uptime", O_RDONLY)
+    
+    if fd < 0:
+        perror("Failed to open /proc/uptime")
+        return 1
+
+    read_result = read(fd)
+
+    if read_result is None:
+        perror("Failed to read /proc/uptime")
+        close(fd)
+        return 1
+
+    close(fd)
+
+    # Due to limitations of pocketpy, we need to remove the decimal place manually
+    parsed_seconds = int(read_result.split(".")[0])
+    
+    hours = int(parsed_seconds/3600)
+    minutes = int((parsed_seconds % 3600) / 60)
+    # seconds = int((parsed_seconds % 3600) % 3600)
+    
+    # TODO: Implement seconds correctly (rn it goes > 60 seconds)
+    # print(f"uptime: {hours} hour{'s' if hours != 1 else ''}, {minutes} minute{'s' if minutes != 1 else ''}, {seconds} second{'s' if seconds != 1 else ''}")
+    print(f"uptime: {hours} hour{'s' if hours != 1 else ''}, {minutes} minute{'s' if minutes != 1 else ''}")
 
     return 0

@@ -10,6 +10,7 @@ class utsname:
 def uname():
     result = _syscall(63)
 
+
     # Populate the utsname object
     # TODO: Catch errors
     if len(result) != 6:

@@ -1,0 +1,15 @@
+require("sys/utsname")
+require("stdio")
+
+
+def main(args):
+    uname_res = uname()
+
+    # Should never fail but check anyway
+    if uname_res is None:
+        perror("Something went wrong retrieving hostname")
+        return 1
+
+    print(f"{uname_res.nodename}")
+
+    return 0

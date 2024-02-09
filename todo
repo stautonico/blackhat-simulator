@@ -27,8 +27,6 @@ du – checks a file or directory’s storage consumption.
 top – displays running processes and the system’s resource usage.
 htop – works like top but with an interactive user interface.
 ps – creates a snapshot of all running processes.
-uname – prints information about your machine’s kernel, name, and hardware.
-hostname – shows your system’s hostname.
 time – calculates commands’ execution time.
 systemctl – manages system services.
 watch – runs another command continuously.
@@ -48,7 +46,6 @@ dig – displays DNS information, including record types.
 history – lists previously run commands.
 man – shows a command’s manual.
 echo – prints a message as a standard output.
-ln – links files or directories.
 alias and unalias – sets and removes an alias for a file or command.
 cal – displays a calendar in Terminal.
 apt-get – manages Debian-based distros package libraries
