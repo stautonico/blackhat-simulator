@@ -298,7 +298,37 @@ namespace Blackhat {
                             }
 
                             return VAR(std::move(ents));
+                        }
 
+                        case SYSCALL_ID::SYS_CHOWN: {
+                            auto pathname = CAST(Str &, cmd_args[0]).c_str();
+
+                            auto owner = CAST(int, cmd_args[1]);
+                            auto group = CAST(int, cmd_args[2]);
+
+                            auto result = t->m_process->m_computer->sys$chown(pathname, owner, group, PID());
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_CHMOD: {
+                            auto pathname = CAST(Str &, cmd_args[0]).c_str();
+                            auto mode = CAST(int, cmd_args[1]);
+
+                            auto result = t->m_process->m_computer->sys$chmod(pathname, mode, PID());
+
+                            return VAR(result);
+                        }
+
+                        case SYSCALL_ID::SYS_KILL: {
+                            printf("Our args are: [0]: %d, [1]: %d\n", cmd_args[0], cmd_args[1]);
+
+                            auto pid = CAST(int, cmd_args[0]);
+                            auto signal = CAST(int, cmd_args[1]);
+
+                            auto result = t->m_process->m_computer->sys$kill(pid, signal, PID());
+
+                            return VAR(result);
                         }
 
                         default:

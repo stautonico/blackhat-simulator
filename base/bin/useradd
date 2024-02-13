@@ -24,7 +24,6 @@ def main(args):
     else:
         new_uid = highest_uid + 1
 
-
     fd = open("/etc/passwd", O_WRONLY | O_APPEND)
 
     if fd < 0:
@@ -33,13 +32,10 @@ def main(args):
 
     # TODO: Seek in file?
 
-
-
     passwd_entry = passwd(args[0], "", new_uid, new_uid, "", f"/home/{args[0]}", "/bin/sh")
 
     putpwent(passwd_entry, fd)
 
-    # TODO: Implement
-    # close(fd)
+    close(fd)
 
     return 0

@@ -5,6 +5,16 @@
 #include <string>
 #include <vector>
 
+#define NOT_IMPL()                                     \
+    {                                                  \
+        std::stringstream ss;                          \
+        ss << __FUNCTION__;                            \
+        ss << "() is not implemented in filesystem '"; \
+        ss << m_fs_name;                               \
+        ss << "'!";                                    \
+        throw std::runtime_error(ss.str());            \
+    }
+
 namespace Blackhat {
     class DirectoryEntry;
     class Computer;
@@ -92,7 +102,9 @@ namespace Blackhat {
 
     class BaseFS {
     public:
-        BaseFS(){};
+        BaseFS(std::string fs_name) {
+            m_fs_name = fs_name;
+        };
 
         ~BaseFS(){};
 
@@ -101,100 +113,48 @@ namespace Blackhat {
         }
 
         // https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201001/homework/fuse/fuse_doc.html
-        virtual int getattr(std::string path) {
-            throw std::runtime_error("getattr() is not implemented!");
-        };// the 'stat' command basically // TODO: set the return value properly
-        virtual void readlink() {
-            throw std::runtime_error("readlink() is not implemented!");
-        };// Read a symbolic link TODO: set the return value properly
-        virtual std::vector<std::string> getdents(std::string path) {
-            throw std::runtime_error("getdents() is not implemented!");
-        };
-
+        virtual int getattr(std::string path){NOT_IMPL()};// the 'stat' command basically // TODO: set the return value properly
+        virtual void readlink(){NOT_IMPL()};              // Read a symbolic link TODO: set the return value properly
+        virtual std::vector<std::string> getdents(std::string path){NOT_IMPL()};
         // TODO: Implement opendir? Find out what its used for first
         // TODO: Maybe do getdir? its apparently deprecated
         // TODO: mknod, I have no reason for this (yet)
-        virtual int mkdir(std::string path, int mode) { throw std::runtime_error("mkdir() is not implemented!"); };
-        ;
-
-        virtual int unlink(std::string path) {
-            throw std::runtime_error("unlink() is not implemented!");
-        };// Remove a node
-        virtual int rmdir(std::string path) {
-            throw std::runtime_error("rmdir() is not implemented!");
-        };// Remove a (empty) directory
-        virtual int symlink(std::string target, std::string linkpath) {
-            throw std::runtime_error("symlink() is not implemented!");
-        };// Make a symbolic link
-        virtual int rename(std::string oldpath, std::string newpath) {
-            throw std::runtime_error("rename() is not implemented!");
-        };
-
-        virtual int link(std::string oldpath, std::string newpath) {
-            throw std::runtime_error("link() is not implemented!");
-        };// Make a hardlink
-        virtual int chmod(std::string path, int mode) { throw std::runtime_error("chmod() is not implemented!"); };
-
-        virtual int chown(std::string path, int uid, int gid) {
-            throw std::runtime_error("chown() is not implemented!");
-        };
-
-        virtual int truncate(std::string path, int size) {
-            throw std::runtime_error("truncate() is not implemented!");
-        };// Change the size of a file
-        virtual int utime(std::string path, void *ubuf) {
-            throw std::runtime_error("utime() is not implemented!");
-        };// Change the timestamps of a file // TODO: Set the ubuf argument type
-
-        virtual FileDescriptor *open(std::string path, int flags, int mode) {
-            throw std::runtime_error("open() is not implemented!");
-        };
-
-        virtual int close(FileDescriptor *fd) {
-            throw std::runtime_error("close() is not implemented!");
-        };
-
-        virtual std::string read(FileDescriptor *fd) {
-            throw std::runtime_error("read() is not implemented!");
-        };// TODO: Maybe implement amount to read?
-        virtual int write(std::string path, std::string data) {
-            throw std::runtime_error("write() is not implemented!");
-        };
-
-        virtual void statfs(std::string path) {
-            throw std::runtime_error("statfs() is not implemented!");
-        };// Get filesystem stats // TODO: Set the return value properly
+        virtual int mkdir(std::string path, int mode){NOT_IMPL()};
+        virtual int unlink(std::string path){NOT_IMPL()};                         // Remove a node
+        virtual int rmdir(std::string path){NOT_IMPL()};                          // Remove a (empty) directory
+        virtual int symlink(std::string target, std::string linkpath){NOT_IMPL()};// Make a symbolic link
+        virtual int rename(std::string oldpath, std::string newpath){NOT_IMPL()};
+        virtual int link(std::string oldpath, std::string newpath){NOT_IMPL()};// Make a hardlink
+        virtual int chmod(std::string path, int mode){NOT_IMPL()};
+        virtual int chown(std::string path, int uid, int gid) { NOT_IMPL(); };
+        virtual int truncate(std::string path, int size){NOT_IMPL()};// Change the size of a file
+        virtual int utime(std::string path, void *ubuf){NOT_IMPL()}; // Change the timestamps of a file // TODO: Set the ubuf argument type
+        virtual FileDescriptor *open(std::string path, int flags, int mode){NOT_IMPL()};
+        virtual int close(FileDescriptor *fd){NOT_IMPL()};
+        virtual std::string read(FileDescriptor *fd){NOT_IMPL()};// TODO: Maybe implement amount to read?
+        virtual int write(std::string path, std::string data){NOT_IMPL()};
+        virtual void statfs(std::string path){NOT_IMPL()};// Get filesystem stats // TODO: Set the return value properly
         // TODO: Maybe do flush? We don't really need this (maybe)
         // TODO: Maybe do fsync? Do we need?
-        virtual std::string getxattr(std::string path, std::string name) {
-            throw std::runtime_error("getxattr() is not implemented!");
-        };
-
-        virtual void listxattr(std::string path) {
-            throw std::runtime_error("listxattr() is not implemented!");
-        };// TODO: Set the return value properly (either vector or map)
-        virtual void removexattr(std::string path) {
-            throw std::runtime_error("removexattr() is not implemented!");
-        };// TODO: Set return value properly
+        virtual std::string getxattr(std::string path, std::string name){NOT_IMPL()};
+        virtual void listxattr(std::string path){NOT_IMPL()};  // TODO: Set the return value properly (either vector or map)
+        virtual void removexattr(std::string path){NOT_IMPL()};// TODO: Set return value properly
 
 
         // TODO: THESE ARE ONLY TEMPORARY, REMOVE THEM ONCE I HAVE STUFF PROPERLY IMPLEMENTED
-        virtual Inode *_find_inode(std::string path) { throw std::runtime_error("Not implemented!"); };
+        virtual Inode *_find_inode(std::string path){NOT_IMPL()};
 
-        virtual Inode *_find_inode_by_inode_num(int num) { throw std::runtime_error("Not implemented!"); };
+        virtual Inode *_find_inode_by_inode_num(int num){NOT_IMPL()};
 
-        virtual DirectoryEntry *_find_directory_entry(std::string path) {
-            throw std::runtime_error("Not implemented!");
-        };
+        virtual DirectoryEntry *_find_directory_entry(std::string path){NOT_IMPL()};
 
-        virtual bool exists(std::string path) { throw std::runtime_error("Not implemented!"); };
+        virtual bool exists(std::string path){NOT_IMPL()};
 
-        virtual bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode) {
-            throw std::runtime_error("Not implemented!");
-        };
+        virtual bool add_inode_to_path(std::string parent_path, std::string filename, Inode *inode){NOT_IMPL()};
 
     protected:
         std::string m_mount_point;
         Computer *m_computer;
+        std::string m_fs_name = "???";
     };
 }// namespace Blackhat

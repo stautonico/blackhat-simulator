@@ -93,3 +93,7 @@ def S_ISDIR(mode):
 
 def S_ISLNK(mode):
     return int(mode) & S_IFLNK == S_IFLNK
+
+
+def chmod(pathname: str, mode: int) -> int:
+    return _syscall(90, pathname, mode)

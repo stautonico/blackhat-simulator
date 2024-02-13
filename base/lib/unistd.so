@@ -54,3 +54,6 @@ def getdents(path: str) -> list[str]:
 
 def close(fd: int) -> int:
     return _syscall(3, fd)
+
+def chown(pathname: str, owner: int, group: int) -> int:
+    return _syscall(92, pathname, owner, group)

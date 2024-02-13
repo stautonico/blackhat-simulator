@@ -4,6 +4,12 @@
 - Implement statx
 - Implement relative path (only absolute works right now)
 - Stat resolve links, implement lstat to stat the link itself
+- Implement readline with tab completion for shell input
+
+sudo
+userdel
+shutdown - Not quite sure how to make this one work since I can't force kill the interpreter to stop
+echo
 
 file – checks a file’s type.
 zip and unzip – creates and extracts a ZIP archive.
@@ -18,10 +24,6 @@ diff – compares two files’ content and their differences.
 tee – prints command outputs in Terminal and a file.
 locate – finds files in a system’s database.
 find – outputs a file or folder’s location.
-sudo – runs a command as a superuser.
-chmod – modifies a file’s read, write, and execute permissions.
-chown – changes a file, directory, or symbolic link’s ownership.
-useradd and userdel – creates and removes a user account.
 df – displays the system’s overall disk space usage.
 du – checks a file or directory’s storage consumption.
 top – displays running processes and the system’s resource usage.
@@ -32,7 +34,6 @@ systemctl – manages system services.
 watch – runs another command continuously.
 jobs – displays a shell’s running processes with their statuses.
 kill – terminates a running process.
-shutdown – turns off or restarts the system.
 ping – checks the system’s network connectivity.
 wget – downloads files from a URL.
 curl – transmits data between servers using URLs.
@@ -45,7 +46,5 @@ nslookup – queries a domain’s IP address and vice versa.
 dig – displays DNS information, including record types.
 history – lists previously run commands.
 man – shows a command’s manual.
-echo – prints a message as a standard output.
-alias and unalias – sets and removes an alias for a file or command.
 cal – displays a calendar in Terminal.
 apt-get – manages Debian-based distros package libraries

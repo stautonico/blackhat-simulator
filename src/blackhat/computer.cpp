@@ -147,10 +147,10 @@ namespace Blackhat {
                 if (std::filesystem::is_directory(entry.status())) {
                     // Check if it already exists
                     if (!m_mount_points["/"]->exists(relative_path))
-                        m_mount_points["/"]->open(relative_path, O::CREAT, 0);
+                        m_mount_points["/"]->open(relative_path, O::CREAT, 0644 | IFDIR);
                     dirs.push(entry.path().generic_string());// Generic string for win/lin compatability
                 } else {
-                    m_mount_points["/"]->open(relative_path, O::CREAT, 0);
+                    m_mount_points["/"]->open(relative_path, O::CREAT, 0755 | IFREG);
 
                     m_mount_points["/"]->write(
                             erase(entry.path().generic_string(), basepath),
@@ -724,6 +724,63 @@ namespace Blackhat {
         }
 
         return fs->getdents(strip_mount_point(pathname, fs->get_mount_point()));
+    }
+
+    int Computer::sys$chown(std::string pathname, int owner, int group, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto fs = _find_fs_from_path(pathname);
+
+        if (fs == nullptr) {
+            SETERRNO(E::NOENT);
+            return -1;
+        }
+
+        // TODO: Permission check
+        auto result = fs->chown(pathname, owner, group);
+        SETERRNO(result);
+
+        if (result > 0) return -1;
+        else return 0;
+    }
+
+    int Computer::sys$chmod(std::string pathname, int mode, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        auto fs = _find_fs_from_path(pathname);
+
+        if (fs == nullptr) {
+            SETERRNO(E::NOENT);
+            return -1;
+        }
+
+        // TODO: Permission check
+        auto result = fs->chmod(pathname, mode);
+        SETERRNO(result);
+
+        if (result > 0) return -1;
+        else return 0;
+    }
+
+    int Computer::sys$kill(int pid, int signal, int caller) {
+        // TODO: Write a helper to validate the caller pid
+        GETCALLER();
+
+        // Find the processes by pid, if exists
+        if (m_processes.find(pid) == m_processes.end()) {
+            SETERRNO(E::INVAL);
+            return -1;
+        }
+
+        auto proc = m_processes[pid];
+
+        proc->stop();
+
+        delete proc;
+
+        return 0;
     }
 
 }// namespace Blackhat

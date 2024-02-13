@@ -27,13 +27,24 @@ namespace Blackhat {
 
     void Process::start_sync(std::vector<std::string> args) {
         m_cmdline = join(args, ' ');
-        _run(args);
+        _run(args, this);
     }
-    void Process::_run(std::vector<std::string> args) {
+
+    void Process::start(std::vector<std::string> args) {
+        m_cmdline = join(args, ' ');
+
+        m_thread = std::jthread(_run, args, this);
+    }
+
+    void Process::stop() {
+        m_thread.request_stop();
+    }
+
+    void Process::_run(std::vector<std::string> args, Process* self) {
         // This is the function that runs in the thread
         //    m_state = ProcessState::TASK_RUNNING;
 
-        int exit_code = m_interpreter.run(args);
+        int exit_code = self->m_interpreter.run(args);
 
         // set_exit_code(exit_code);
 

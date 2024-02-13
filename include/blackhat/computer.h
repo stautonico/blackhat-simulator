@@ -383,7 +383,6 @@ namespace Blackhat {
         void start();
 
         // TODO: Implement open flags and mode
-        int sys$open(std::string path, int flags, int caller);
         int sys$open(std::string path, int flags, int mode, int caller);
         std::string sys$read(int fd, int caller);
         int sys$write(int fd, std::string data, int caller);
@@ -406,6 +405,9 @@ namespace Blackhat {
         std::vector<std::string> sys$stat(std::string pathname, int caller);
         std::vector<std::string> sys$getdents(std::string pathname, int caller);
         int sys$close(int fd, int caller);
+        int sys$chown(std::string pathname, int owner, int group, int caller);
+        int sys$chmod(std::string pathname, int mode, int caller);
+        int sys$kill(int pid, int signal, int caller);
 
 
 

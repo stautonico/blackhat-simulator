@@ -125,6 +125,8 @@ namespace Blackhat {
         int rename(std::string oldpath, std::string newpath) override;
         int rmdir(std::string path) override;
         std::vector<std::string> getdents(std::string path) override;
+        int chown(std::string path, int uid, int gid) override;
+        int chmod(std::string path, int mode) override;
 
 
         int create(std::string path, int uid, int gid, int mode);

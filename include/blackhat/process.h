@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <thread>
 
 // Forward declaration
 namespace Blackhat {
@@ -28,8 +29,9 @@ namespace Blackhat {
         int set_exit_code(int exit_code);
 
         void start(std::vector<std::string> args);
-
         void start_sync(std::vector<std::string> args);
+        // TODO: Include signal?
+        void stop();
 
         int get_pid() { return m_pid; }
 
@@ -106,6 +108,7 @@ namespace Blackhat {
         int m_egid = 0;
         int m_fsgid = 0;
 
+        std::jthread m_thread;
 
         std::map<std::string, std::string> m_environ;// Environment variables
 
@@ -114,7 +117,7 @@ namespace Blackhat {
         int m_fd_accumulator = 3;                        // 0, 1, 2 reserved for stdin, stdout, and stderr
         std::map<int, FileDescriptor*> m_file_descriptors;// FD# -> FileDescriptor
 
-        void _run(std::vector<std::string> args);
+        static void _run(std::vector<std::string> args, Process* self);
 
         void _increment_fd_accumulator() { m_fd_accumulator++; }
         void _decrement_fd_accumulator() { m_fd_accumulator--; }

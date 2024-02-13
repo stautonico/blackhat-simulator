@@ -1,0 +1,15 @@
+SIGINT = 2  # Interactive attention signal.
+SIGILL = 4  # Illegal instruction.
+SIGABRT = 6  # Abnormal termination.
+SIGFPE = 8  # Erroneous arithmetic operation.
+SIGSEGV = 11  # Invalid access to storage.
+SIGTERM = 15  # Termination request.
+SIGHUP = 1  # Hangup.
+SIGQUIT = 3  # Quit.
+SIGTRAP = 5  # Trace/breakpoint trap.
+SIGKILL = 9  # Killed.
+SIGPIPE = 13  # Broken pipe.
+SIGALRM = 14  # Alarm clock.
+
+def kill(pid: int, signal: int) -> int:
+    return _syscall(62, pid, signal)

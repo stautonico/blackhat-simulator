@@ -1,0 +1,7 @@
+# I can't get a straight answer on how `shutdown` works, so I'll just kill init
+require("signal")
+
+def main(args):
+    kill(1, SIGKILL)
+
+    return 0

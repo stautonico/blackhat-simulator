@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "util/errno.h"
 #include <blackhat/fs/ext4.h>
 #include <stdexcept>
 #include <util/string.h>
@@ -104,15 +105,15 @@ namespace Blackhat {
     int Inode::get_mode() {
         uint16_t mode = m_mode;
 
-        if (m_is_symlink) {
-            mode = mode | S::IFLNK;
-        }
+//        if (m_is_symlink) {
+//            mode = mode | S::IFLNK;
+//        }
 
         return mode;
     }
 
 
-    Ext4::Ext4(std::string mount_point, Computer *computer) : m_root_directory_entry("/", m_root) {
+    Ext4::Ext4(std::string mount_point, Computer *computer) : m_root_directory_entry("/", m_root), BaseFS("ext4") {
         m_root = new Inode();
         m_root->m_name = "/";
         m_root->m_mode = 0755 | S::IFDIR;
@@ -284,7 +285,7 @@ namespace Blackhat {
 
         if (dirent == nullptr && flags & O::CREAT) {
             // TODO: Put proper options
-            if (create(path, 0, 0, 777 | S::IFREG)) {
+            if (create(path, 0, 0, mode)) {
                 dirent = _find_directory_entry(path);
 
                 if (dirent == nullptr) return nullptr;
@@ -432,6 +433,36 @@ namespace Blackhat {
         for (auto e: entries) names.push_back(e.first);
 
         return names;
+    }
+
+    int Ext4::chown(std::string path, int uid, int gid) {
+        auto inode =  _find_inode(path);
+
+        if (inode == nullptr) {
+            return E::NOENT;
+        }
+
+        inode->m_owner = uid;
+        inode->m_group_owner = gid;
+
+        return 0;
+    }
+
+    int Ext4::chmod(std::string path, int mode) {
+        auto inode =  _find_inode(path);
+
+        if (inode == nullptr) {
+            return E::NOENT;
+        }
+
+
+        int cleaned = inode->m_mode & ~0777;
+
+        int result = cleaned | (mode & 0777);
+
+        inode->m_mode = result;
+
+        return 0;
     }
 
 

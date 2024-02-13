@@ -1,13 +1,12 @@
 #pragma once
 
-
 // Forward declaration
 namespace Blackhat {
     class Process;
 }
 
 #include <pocketpy.h>
-using namespace pkpy;// idk about this, maybe change later
+using namespace pkpy; // idk about this, maybe change later
 
 #include <string>
 #include <vector>

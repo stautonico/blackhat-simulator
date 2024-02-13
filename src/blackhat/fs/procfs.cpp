@@ -1,8 +1,8 @@
-
 #include <blackhat/fs/procfs.h>
+#include <util/errno.h>
 
 namespace Blackhat {
-    ProcFS::ProcFS(std::string mount_point, Computer *computer) {
+    ProcFS::ProcFS(std::string mount_point, Computer *computer) : BaseFS("procfs") {
         m_mount_point = mount_point;
         m_computer = computer;
     }
@@ -46,5 +46,11 @@ namespace Blackhat {
 
         return "";
     }
+
+    int ProcFS::unlink(std::string path) { return E::PERM; }
+    int ProcFS::rename(std::string oldpath, std::string newpath) { return E::PERM; }
+    int ProcFS::rmdir(std::string path) { return E::PERM; }
+    int ProcFS::chown(std::string path, int uid, int gid) { return E::PERM; }
+    int ProcFS::chmod(std::string path, int mode) { return E::PERM; }
 
 }// namespace Blackhat
