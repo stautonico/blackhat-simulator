@@ -6,7 +6,6 @@
 - Stat resolve links, implement lstat to stat the link itself
 - Implement readline with tab completion for shell input
 
-sudo
 userdel
 shutdown - Not quite sure how to make this one work since I can't force kill the interpreter to stop
 echo

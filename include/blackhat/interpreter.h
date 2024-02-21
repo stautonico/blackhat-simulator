@@ -5,11 +5,13 @@ namespace Blackhat {
     class Process;
 }
 
-#include <pocketpy.h>
-using namespace pkpy; // idk about this, maybe change later
+//#include <pocketpy.h>
+//using namespace pkpy; // idk about this, maybe change later
 
 #include <string>
 #include <vector>
+
+#include <blackhat/vm.h>
 
 namespace Blackhat {
     class Interpreter {
@@ -19,12 +21,14 @@ namespace Blackhat {
         ~Interpreter();
 
         int run(const std::vector<std::string> &args);
+        void stop();
 
         void set_errno(int errnum);
 
 
     private:
-        VM *m_vm = nullptr;
+        MyVM *m_vm = nullptr;
+
         Blackhat::Process *m_process = nullptr;
 
         std::string m_code;

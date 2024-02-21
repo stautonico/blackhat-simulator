@@ -1,0 +1,54 @@
+require("stdio")
+require("pwd")
+require("unistd")
+require("stdlib")
+require("sys/utsname")
+
+
+def main(args):
+    if len(args) < 1:
+        print("usage: sudo <command> [args]")
+        return 1
+
+    entry = getpwnam(getenv("USER"))
+
+    if entry is None:
+        print("Unable to find passwd entry!")
+        return 1
+
+    for _ in range(3):
+        user_password = input(f"[sudo] password for {getenv('USER')}: ")
+
+        if user_password != entry.pw_passwd:
+            print("Sorry, try again.")
+        else:
+            break
+    else:
+        print("sudo: 3 incorrect password attempts")
+        return 1
+
+    setuid(0)
+
+    if len(args) == 1:
+        params = []
+    else:
+        params = args[1:]
+
+    # CODE COPIED FROM /bin/sh
+
+    path = getenv("PATH") or "/bin"
+    pieces = path.split(":")
+
+    found_command = False
+
+    for piece in pieces:
+        entries = getdents(piece)
+        for entry in entries:
+            if entry == args[0]:
+                return execve(f"{piece}/{args[0]}", args[1:], {})
+
+    if not found_command:
+        print(f"sudo: command not found '{args[0]}")
+        return 1
+
+    return execve(args[0], params, {})

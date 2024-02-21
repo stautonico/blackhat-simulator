@@ -10,7 +10,7 @@
 namespace Blackhat {
     Interpreter::Interpreter(std::string code, Process *process) {
         m_code = std::move(code);
-        m_vm = new VM(false);
+        m_vm = new MyVM(false);
         m_process = process;
     }
 
@@ -352,6 +352,7 @@ namespace Blackhat {
     int Interpreter::run(const std::vector<std::string> &args) {
         _init_builtins();
 
+
         m_vm->exec(m_code);
 
         auto python_args = _vector_to_python_string(args);
@@ -362,6 +363,10 @@ namespace Blackhat {
         auto return_code = py_cast<int>(m_vm, return_code_obj);
 
         return 0;
+    }
+
+    void Interpreter::stop() {
+        m_vm->_flag = true;
     }
 
     std::string Interpreter::_input(std::string prompt) {

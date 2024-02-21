@@ -1,0 +1,6 @@
+require("unistd")
+
+def main(args):
+    print(f"{getuid()}")
+
+    return 0

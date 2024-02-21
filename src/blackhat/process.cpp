@@ -37,10 +37,11 @@ namespace Blackhat {
     }
 
     void Process::stop() {
-        m_thread.request_stop();
+        m_interpreter.stop();
+        //        m_thread.request_stop();
     }
 
-    void Process::_run(std::vector<std::string> args, Process* self) {
+    void Process::_run(std::vector<std::string> args, Process *self) {
         // This is the function that runs in the thread
         //    m_state = ProcessState::TASK_RUNNING;
 
@@ -108,9 +109,6 @@ namespace Blackhat {
             auto it = m_file_descriptors.find(fd);
             m_file_descriptors.erase(it);
         }
-
-
-
     }
 
 }// namespace Blackhat

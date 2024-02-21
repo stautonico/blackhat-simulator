@@ -1,0 +1,47 @@
+require("pwd")
+require("unistd")
+require("fcntl")
+
+
+def main(args):
+    # TODO: Check uid (must be 0)
+
+    if len(args) == 0:
+        print("usage: userdel <username>")
+        return 0
+
+    # Check if the user exists
+    ent = getpwnam(args[0])
+
+    if ent is None:
+        print(f"usedel: user '{args[0]}' does not exist")
+        return 1
+
+    fd = open("/etc/passwd", O_RDWR)
+
+    if fd < 0:
+        perror("failed to open /etc/passwd")
+        return 1
+
+    lines = read(fd).split("\n")
+
+
+    output = []
+
+    for line in lines:
+        elements = line.split(":")
+        if len(elements) < 1:
+            continue
+        else:
+            if elements[0] != args[0]:
+                output.append(line)
+
+    # At this point, we should have every line except for the line with the user we're excluding
+    if write(fd, "\n".join(output)) < 0:
+        perror("failed to write to /etc/passwd")
+        close(fd)
+        return 1
+
+    close(fd)
+
+    return 0
