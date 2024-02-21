@@ -321,8 +321,6 @@ namespace Blackhat {
                         }
 
                         case SYSCALL_ID::SYS_KILL: {
-                            printf("Our args are: [0]: %d, [1]: %d\n", cmd_args[0], cmd_args[1]);
-
                             auto pid = CAST(int, cmd_args[0]);
                             auto signal = CAST(int, cmd_args[1]);
 

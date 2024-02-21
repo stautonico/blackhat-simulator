@@ -5,8 +5,72 @@ require("pwd")
 require("sys/utsname")
 require("stdlib")
 
-
 aliases = {}
+
+
+# Define the functions for the builtins
+def export(args):
+    if len(args) < 1:
+        print("TODO: Print the environ (just like how 'env' does)")
+        pass
+    else:
+        key, value = args[0].split("=")
+        setenv(key, value)
+
+
+def cd(args):
+    if len(args) < 1:
+        # TODO: Don't assume '$HOME' is set
+        args = [getenv("HOME")]
+
+    if chdir(args[0]) != 0:
+        perror("cd")
+
+
+def alias(args):
+    if len(args) < 1:
+        print("TODO: Print all of the aliases")
+        return
+
+    argstr = " ".join(args[0:])
+    if "=" not in argstr:
+        print("sh: invalid alias")
+
+    split_args = argstr.split("=")
+
+    if len(split_args) < 2:
+        print("sh: invalid alias")
+
+    alias_name = split_args.pop(0)
+    alias_cmd = " ".join(split_args)
+    # TODO: ik that if the alias content isn't in quotes, it only takes the first
+    #       word before the space, but I'm too lazy to implement that right now
+    aliases[alias_name] = alias_cmd
+
+
+def unalias(args):
+    if len(args) < 1:
+        print("unalias: not enough arguments")
+        return
+
+    if args[0] not in aliases:
+        print(f"unalias: no such hash table element: {args[0]}")
+    else:
+        aliases.pop(args[0])
+
+
+def echo(args):
+    print(" ".join(args))
+
+
+builtins = {
+    "export": export,
+    "cd": cd,
+    "alias": alias,
+    "unalias": unalias,
+    "echo": echo
+}
+
 
 def main(argv):
     uid = geteuid()
@@ -25,11 +89,10 @@ def main(argv):
     else:
         username = entry.pw_name
         setenv("USER", username)
-
+        setenv("HOME", entry.pw_dir)
 
     setenv("SHELL", "sh")
-    setenv("TERM", "tty0") # TODO: Don't set this here, just for testing
-
+    setenv("TERM", "tty0")  # TODO: Don't set this here, just for testing
 
     while True:
         prompt = getenv("PS1") or f"{username}@{hostname}{'#' if uid == 0 else '$'} "
@@ -42,37 +105,15 @@ def main(argv):
         # Split the result
         args = result.split(" ")
 
-        # Built-ins
-        if args[0] == "export":
-            key, value = args[1].split("=")
-            setenv(key, value)
-        elif args[0] == "cd":
-            if chdir(args[1]) != 0:
-                perror("cd")
-        elif args[0] == "alias":
-            argstr = " ".join(args[1:])
-            if "=" not in argstr:
-                print("sh: invalid alias")
-                continue
+        # Check for aliases first
+        if args[0] in aliases:
+            args[0] = aliases[args[0]]
 
-            split_args = argstr.split("=")
+        # Check for built-ins
+        if args[0] in builtins:
+            builtins[args[0]](args[1:])
 
-            if len(split_args) < 2:
-                print("sh: invalid alias")
-                continue
-
-            alias_name = split_args.pop(0)
-            alias_cmd = " ".join(split_args)
-
-            # TODO: ik that if the alias content isn't in quotes, it only takes the first
-            #       word before the space, but I'm too lazy to implement that right now
-            aliases[alias_name] = alias_cmd
-        elif args[0] == "unalias":
-            if args[1] not in aliases:
-                print(f"unalias: no such hash table element: {args[1]}")
-            else:
-                aliases.pop(args[1])
-
+        # Finally, just try to execute a binary
         else:
             if result[0] == "/":
                 # Abs path to executable

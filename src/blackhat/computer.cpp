@@ -390,18 +390,25 @@ namespace Blackhat {
         // TODO: Write a helper to validate the caller pid
         GETCALLER();
 
-        auto inode = m_mount_points["/"]->_find_inode(path);
+        auto fs = _find_fs_from_path(path);
 
-        if (inode == nullptr) {
-            caller_obj->set_errno(E::NOENT);
+        if (fs == nullptr) {
+            SETERRNO(E::NOENT);
             return -1;
         }
 
+
+        // TODO: This sucks
+
+        if (!fs->exists(path)) {
+            SETERRNO(E::NOENT);
+            return -1;
+        }
+
+        caller_obj->set_cwd(path);
         // TODO: Check for perms (EACCESS)
         // TODO: Check if inode is a directory (ENOTDIR)
         // TODO: Check name limit (ENAMETOOLONG)
-
-        caller_obj->set_cwd(path);
 
         return 0;
     }
