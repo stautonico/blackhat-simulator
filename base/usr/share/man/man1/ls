@@ -1,0 +1,29 @@
+LS(1)					   User Commands				     LS(1)
+
+NAME
+       ls - list directory contents
+
+SYNOPSIS
+       ls [OPTION]... [FILE]...
+
+DESCRIPTION
+       List  information  about the FILEs (the current directory by default).  Sort entries alpha‐
+       betically.
+
+       Mandatory arguments to long options are mandatory for short options too.
+
+       -a, --all
+	      do not ignore entries starting with .
+
+
+   Exit status:
+       0      if OK,
+
+       1      if minor problems (e.g., cannot access subdirectory),
+
+       2      if serious trouble (e.g., cannot access command-line argument).
+
+AUTHOR
+       Written by Steve Tautonico.
+
+blackhat coreutils 0.0.0			   February 2024				     LS(1)

@@ -265,8 +265,6 @@ namespace Blackhat {
     }
 
     std::string Ext4::read(FileDescriptor *fd) {
-        // TODO: This this thoroughly
-        // TODO: See if any of the old code is needed
         return fd->read();
     }
 

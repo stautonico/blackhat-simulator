@@ -13,6 +13,6 @@ def main(args):
         perror("Unable to touch file")
         return 1
 
-    # TODO: Implement close
+    close(fd)
 
     return 0

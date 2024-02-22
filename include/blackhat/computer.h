@@ -376,7 +376,6 @@ namespace Blackhat {
         void _create_root_user();
 
         int _exec(std::string path, std::vector<std::string> args);
-        std::string _read(std::string path);
 
         std::vector<std::string> _readdir(std::string path);
 
@@ -442,5 +441,10 @@ namespace Blackhat {
         void _create_system_files();
 
         BaseFS*_find_fs_from_path(std::string path);
+
+        int _validate_pid(int pid);
+
+        // TODO: Pass the executable path
+        int _spawn_process(std::string code, int uid, int gid, std::string cwd, std::map<std::string, std::string> env);
     };
 }// namespace Blackhat

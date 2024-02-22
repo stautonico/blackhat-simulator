@@ -1,6 +1,20 @@
 require("unistd")
 
 def main(argv):
+    options = {
+        "all": False,
+    }
+
+    # TODO: Write a library for argparsing
+    if "-a" in argv:
+        options["all"] = True
+        argv.remove("-a")
+
+    if "--all" in argv:
+        options["all"] = True
+        argv.remove("--all")
+
+
     if len(argv) == 0:
         path = getcwd()
     else:
@@ -10,7 +24,16 @@ def main(argv):
     # TODO: Support multiple args
     entries = getdents(path)
 
-    for entry in entries:
+    output = []
+
+    if not options["all"]:
+        for ent in entries:
+            if not ent.startswith("."):
+                output.append(ent)
+    else:
+        output = entries
+
+    for entry in output:
         print(entry + " ", False)
 
     print("") # newline

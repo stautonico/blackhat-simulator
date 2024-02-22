@@ -5,8 +5,6 @@
 - Implement relative path (only absolute works right now)
 - Stat resolve links, implement lstat to stat the link itself
 - Implement readline with tab completion for shell input
-- Improve the way the shell builtins are defined (its just a big if statement right now)
-- cd-ing into "" (empty string) actually cds you into nowhere?
 
 shutdown - Not quite sure how to make this one work since I can't force kill the interpreter to stop
 

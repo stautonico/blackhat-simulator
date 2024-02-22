@@ -1,0 +1,59 @@
+require("unistd")
+require("fcntl")
+require("stdio")
+
+def main(argv):
+    if len(argv) == 0:
+        print("usage: man [[section] page]")
+        return 1
+
+    section = None
+    page = None
+
+    if len(argv) == 2:
+        section = argv[0]
+        page = argv[1]
+    else:
+        page = argv[0]
+
+
+    if not section:
+        # Loop through all the sections and find the first instance
+        for sect in "123456789":
+            entries = getdents(f"/usr/share/man/man{sect}")
+            if page in entries:
+                fd = open(f"/usr/share/man/man{sect}/{page}", O_RDONLY)
+
+                if fd < 0:
+                    perror("open")
+                    return 2
+
+                result = read(fd)
+
+                if result is None:
+                    perror("read")
+                    return 2
+
+                print(result)
+                close(fd)
+
+                return 0
+        else:
+            # We couldn't find it
+            print(f"No manual entry for {page}")
+            return 16
+    else:
+        path = argv[0]
+
+    return 0
+
+    # TODO: Support errno for directory not found
+    # TODO: Support multiple args
+    entries = getdents(path)
+
+    for entry in entries:
+        print(entry + " ", False)
+
+    print("") # newline
+
+    return 0

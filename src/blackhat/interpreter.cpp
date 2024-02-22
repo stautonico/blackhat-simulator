@@ -378,15 +378,24 @@ namespace Blackhat {
         // Only import if we didn't already
         if (!(std::find(m_imported_modules.begin(), m_imported_modules.end(), module_name) !=
               m_imported_modules.end())) {
-            auto result = m_process->m_computer->_read("/lib/" + module_name + ".so");
+            auto fd = m_process->m_computer->sys$open("/lib/" + module_name + ".so", O::RDONLY, 0, m_process->m_pid);
 
+            if (fd < 0) {
+                // TODO: Throw an error if import failed
+                m_vm->exec("print('FAILED TO IMPORT " + module_name + "!')");
+                return;
+            }
+
+            auto result = m_process->m_computer->sys$read(fd, m_process->m_pid);
+
+            if (result == std::string(1, '\0')) {
+                // TODO: Throw an error if import failed
+                m_vm->exec("print('FAILED TO IMPORT " + module_name + "!')");
+                return;
+            }
             m_vm->exec(result);
 
             m_imported_modules.push_back(module_name);
-
-            // If we're importing errno, set it appropriately
-            if (module_name == "errno")
-                m_vm->exec("errno = " + std::to_string(m_process->get_errno()));
         }
     }
 
