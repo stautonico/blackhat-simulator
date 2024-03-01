@@ -1,3 +1,6 @@
 [submodule "vendor/pocketpy"]
 	path = vendor/pocketpy
 	url = https://github.com/blueloveTH/pocketpy
+[submodule "vendor/cereal"]
+	path = vendor/cereal
+	url = https://github.com/USCiLab/cereal

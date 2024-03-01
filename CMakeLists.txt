@@ -23,6 +23,10 @@ set(SOURCES
         src/blackhat/fs/procfs.cpp
 )
 
+# Compile and include cereal
+add_subdirectory(vendor/cereal)
+include_directories(vendor/cereal/include)
+
 # Add some settings for pocketpy
 set(PK_USE_BOX2D OFF CACHE BOOL "Don't compile box2D")
 set(PK_BUILD_STATIC_LIB ON CACHE BOOL "Compile the static library for pocketpy")
